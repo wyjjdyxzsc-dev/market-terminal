@@ -861,6 +861,23 @@
     else if (currentView === 'supply') { if (scLoadedFor) loadSupplyChain(scLoadedFor); }
     else if (currentView === 'analyze') { if (ddLoadedFor) loadDeepDive(ddLoadedFor); }
   }
+
+  // Auto-refresh intelligence views while they're open.
+  let autoRefreshTimer = null;
+  function setAutoRefresh() {
+    if (autoRefreshTimer) clearInterval(autoRefreshTimer);
+    if (currentView === 'news') {
+      autoRefreshTimer = setInterval(() => loadNews(), 5 * 60_000); // 5 min
+    } else if (currentView === 'sectors') {
+      autoRefreshTimer = setInterval(() => loadAnalysis(), 10 * 60_000); // 10 min
+    } else if (currentView === 'watchlist') {
+      autoRefreshTimer = setInterval(() => refreshAllCompanies(), 3 * 60_000); // 3 min
+    } else if (currentView === 'analyze') {
+      if (ddLoadedFor) autoRefreshTimer = setInterval(() => loadDeepDive(ddLoadedFor), 15 * 60_000); // 15 min
+    } else {
+      if (autoRefreshTimer) clearInterval(autoRefreshTimer);
+    }
+  }
   if (refreshBtn) {
     refreshBtn.addEventListener('click', () => {
       refreshBtn.classList.add('spinning');
@@ -874,10 +891,10 @@
     const intelView = view !== 'terminal';
     if (refreshBtn) refreshBtn.hidden = !intelView;
 
-    if (view === 'news') { if (!loaded.news) { loaded.news = true; loadNews(); } }
-    else if (view === 'sectors') { if (!loaded.sectors) { loaded.sectors = true; loadAnalysis(); } }
-    else if (view === 'watchlist') { loadAllCompanies(); }
-    else if (view === 'alerts') { reflectAlertState(); loadAlerts(); }
+    if (view === 'news') { if (!loaded.news) { loaded.news = true; loadNews(); } setAutoRefresh(); }
+    else if (view === 'sectors') { if (!loaded.sectors) { loaded.sectors = true; loadAnalysis(); } setAutoRefresh(); }
+    else if (view === 'watchlist') { loadAllCompanies(); setAutoRefresh(); }
+    else if (view === 'alerts') { reflectAlertState(); loadAlerts(); if (autoRefreshTimer) clearInterval(autoRefreshTimer); }
     else if (view === 'supply') {
       if (!scLoadedFor) {
         const sym = (typeof state !== 'undefined' && state.symbol) ? state.symbol : 'AAPL';
@@ -885,13 +902,16 @@
       } else {
         renderActiveMode(); // keep the displayed mode consistent on re-open
       }
+      if (autoRefreshTimer) clearInterval(autoRefreshTimer);
     }
     else if (view === 'analyze') {
       if (!ddLoadedFor) {
         const sym = (typeof state !== 'undefined' && state.symbol) ? state.symbol : 'NVDA';
         loadDeepDive(sym);
       }
+      setAutoRefresh();
     }
+    else if (autoRefreshTimer) clearInterval(autoRefreshTimer); // stop auto-refresh on terminal view
   });
 
   // ---------- Initial setup ----------
