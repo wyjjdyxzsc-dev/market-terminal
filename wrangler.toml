@@ -1,0 +1,33 @@
+name = "market-terminal"
+main = "worker.js"
+compatibility_date = "2024-11-01"
+compatibility_flags = ["nodejs_compat"]
+account_id = "cb11f9a0badfec31bfa791c99935834a"
+
+# Serve the vanilla frontend straight from /public.
+[assets]
+directory = "./public"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+
+# Cache (news/analysis/company/supplychain), push subscriptions, and alert state.
+[[kv_namespaces]]
+binding = "MT_KV"
+id = "96230e0354694e90b6ecd95c9041c2ef"
+
+# Hourly: refresh the live market-news cache and push any new breaking alerts.
+[triggers]
+crons = ["0 * * * *"]
+
+# Cloudflare Workers AI — free, no key needed, billed to this account.
+[ai]
+binding = "AI"
+
+[vars]
+GROQ_MODEL = "llama-3.3-70b-versatile"
+VAPID_SUBJECT = "mailto:krishivjain20000@gmail.com"
+
+# Secrets — set with `wrangler secret put`, never committed:
+#   FINNHUB_API_KEY, GROQ_API_KEY, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY
+#   GEMINI_API_KEY     (optional: Google AI Studio free key — 1M tokens/day)
+#   OPENROUTER_API_KEY (optional: openrouter.ai free key — free OSS models)
