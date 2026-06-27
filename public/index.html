@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="dark" />
+  <title>Market Terminal</title>
+  <meta name="description" content="A Bloomberg-Terminal-inspired live market dashboard — real-time quotes, charts, news, AI sector analysis, watchlist sentiment and breaking-news alerts." />
+  <meta name="theme-color" content="#0a0a0a" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="MktTerminal" />
+  <link rel="stylesheet" href="style.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%230a0a0a'/><text x='8' y='12' font-size='11' text-anchor='middle' fill='%23ffa028' font-family='monospace'>M</text></svg>" />
+</head>
+<body>
+  <!-- ───────────── Top bar ───────────── -->
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">▌</span>MARKET<span class="brand-amber">TERMINAL</span>
+    </div>
+    <div class="topbar-right">
+      <button id="intelRefresh" class="intel-refresh" type="button" title="Refresh this view" hidden>⟳</button>
+      <div class="market-status" id="marketStatus">
+        <span class="dot" id="statusDot"></span>
+        <span id="statusText">—</span>
+      </div>
+      <div class="clock" id="clock">--:--:-- ET</div>
+    </div>
+  </header>
+
+  <!-- ───────────── Ticker tape ───────────── -->
+  <div class="tape" aria-label="Market ticker">
+    <div class="tape-track" id="tapeTrack"><span class="tape-loading">Loading market data…</span></div>
+  </div>
+
+  <!-- ───────────── Tab bar ───────────── -->
+  <nav class="ttabs" id="ttabs" role="tablist">
+    <button class="ttab active" data-view="terminal" role="tab">TERMINAL</button>
+    <button class="ttab" data-view="news" role="tab">NEWS</button>
+    <button class="ttab" data-view="sectors" role="tab">SECTORS</button>
+    <button class="ttab" data-view="supply" role="tab">SUPPLY&nbsp;CHAIN</button>
+    <button class="ttab" data-view="watchlist" role="tab">WATCHLIST</button>
+    <button class="ttab" data-view="alerts" role="tab">ALERTS</button>
+  </nav>
+
+  <main class="views">
+    <!-- ═══════════ TERMINAL VIEW ═══════════ -->
+    <section id="view-terminal" class="view active">
+      <!-- Command bar -->
+      <div class="commandbar">
+        <span class="prompt">&gt;</span>
+        <div class="cmd-input-wrap">
+          <input
+            id="symbolInput" class="cmd-input" type="text" autocomplete="off" spellcheck="false"
+            placeholder="ENTER SYMBOL (e.g. AAPL, MSFT, NVDA) — press GO"
+            aria-label="Symbol search" aria-autocomplete="list" aria-controls="autocomplete" />
+          <span class="cmd-cursor" id="cmdCursor" aria-hidden="true"></span>
+          <ul class="autocomplete" id="autocomplete" role="listbox" hidden></ul>
+        </div>
+        <button class="go-btn" id="goBtn" type="button">GO</button>
+      </div>
+
+      <div class="grid">
+        <!-- LEFT COLUMN -->
+        <section class="col col-left">
+          <div class="panel panel-quote" id="quotePanel">
+            <div class="panel-head">QUOTE</div>
+            <div class="panel-body" id="quoteBody">
+              <div class="quote-id">
+                <div class="quote-symbol" id="qSymbol">—</div>
+                <div class="quote-meta">
+                  <span class="quote-name" id="qName">—</span>
+                  <span class="quote-exch" id="qExch"></span>
+                </div>
+              </div>
+              <div class="quote-price-block">
+                <div class="quote-price" id="qPrice">—</div>
+                <div class="quote-change" id="qChange">—</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel" id="snapPanel">
+            <div class="panel-head">SNAPSHOT</div>
+            <div class="panel-body">
+              <div class="stat-grid" id="statGrid">
+                <div class="stat"><span class="stat-label">OPEN</span><span class="stat-val" id="sOpen">—</span></div>
+                <div class="stat"><span class="stat-label">PREV CLOSE</span><span class="stat-val" id="sPrev">—</span></div>
+                <div class="stat"><span class="stat-label">DAY HIGH</span><span class="stat-val" id="sHigh">—</span></div>
+                <div class="stat"><span class="stat-label">DAY LOW</span><span class="stat-val" id="sLow">—</span></div>
+                <div class="stat"><span class="stat-label">52W HIGH</span><span class="stat-val" id="s52h">—</span></div>
+                <div class="stat"><span class="stat-label">52W LOW</span><span class="stat-val" id="s52l">—</span></div>
+                <div class="stat"><span class="stat-label">MKT CAP</span><span class="stat-val" id="sCap">—</span></div>
+                <div class="stat"><span class="stat-label">P/E</span><span class="stat-val" id="sPE">—</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel panel-chart" id="chartPanel">
+            <div class="panel-head">
+              <span>PRICE</span>
+              <div class="range-buttons" id="rangeButtons" role="tablist">
+                <button data-range="1D" class="range-btn active" type="button">1D</button>
+                <button data-range="5D" class="range-btn" type="button">5D</button>
+                <button data-range="1M" class="range-btn" type="button">1M</button>
+                <button data-range="6M" class="range-btn" type="button">6M</button>
+                <button data-range="1Y" class="range-btn" type="button">1Y</button>
+                <button data-range="5Y" class="range-btn" type="button">5Y</button>
+              </div>
+            </div>
+            <div class="panel-body chart-body">
+              <div class="chart-msg" id="chartMsg" hidden></div>
+              <canvas id="chartCanvas"></canvas>
+            </div>
+          </div>
+        </section>
+
+        <!-- RIGHT COLUMN -->
+        <section class="col col-right">
+          <div class="panel" id="companyPanel">
+            <div class="panel-head">COMPANY</div>
+            <div class="panel-body">
+              <div class="company">
+                <img class="company-logo" id="cLogo" alt="" hidden />
+                <div class="company-info">
+                  <div class="company-row"><span class="stat-label">INDUSTRY</span><span class="stat-val" id="cIndustry">—</span></div>
+                  <div class="company-row"><span class="stat-label">COUNTRY</span><span class="stat-val" id="cCountry">—</span></div>
+                  <div class="company-row"><span class="stat-label">IPO</span><span class="stat-val" id="cIpo">—</span></div>
+                  <div class="company-row"><span class="stat-label">WEB</span><a class="stat-val link" id="cWeb" target="_blank" rel="noopener noreferrer">—</a></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel panel-news" id="companyNewsPanel">
+            <div class="panel-head">NEWS</div>
+            <div class="panel-body news-body" id="newsBody">
+              <div class="news-loading">—</div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <!-- ═══════════ NEWS VIEW (AI market wire) ═══════════ -->
+    <section id="view-news" class="view intel">
+      <div class="intel-head">
+        <h2 class="intel-title">MARKET WIRE</h2>
+        <span class="intel-sub">AI-structured live headlines · Google News + Groq</span>
+      </div>
+
+      <section id="breaking" class="breaking hidden">
+        <h3 class="section-label breaking-label">● BREAKING</h3>
+        <div id="breakingList" class="card-list"></div>
+      </section>
+
+      <div id="filterChips" class="chips"></div>
+      <div id="newsStatus" class="status">Loading live market news…</div>
+      <div id="newsList" class="card-list"></div>
+    </section>
+
+    <!-- ═══════════ SECTORS VIEW ═══════════ -->
+    <section id="view-sectors" class="view intel">
+      <div class="intel-head">
+        <h2 class="intel-title">SECTOR ANALYSIS</h2>
+        <span class="intel-sub">11 GICS sectors ranked · AI strategist view</span>
+      </div>
+
+      <div id="sentimentBanner" class="sentiment-banner hidden"></div>
+
+      <section id="topPicks" class="top-picks hidden">
+        <h3 class="section-label">★ TOP STOCK IDEAS TO INVEST IN NOW</h3>
+        <div id="topPicksList" class="picks-list"></div>
+      </section>
+
+      <div class="toggle-row">
+        <div class="seg-toggle">
+          <button class="seg active" data-mode="invest" type="button">BEST TO INVEST (STOCKS)</button>
+          <button class="seg" data-mode="options" type="button">BEST FOR OPTIONS</button>
+        </div>
+      </div>
+
+      <div id="analysisStatus" class="status">Open this tab to load sector analysis…</div>
+      <div id="industryList" class="card-list"></div>
+    </section>
+
+    <!-- ═══════════ SUPPLY CHAIN VIEW ═══════════ -->
+    <section id="view-supply" class="view intel">
+      <div class="intel-head">
+        <h2 class="intel-title">SUPPLY CHAIN</h2>
+        <span class="intel-sub">Publicly-listed suppliers &amp; customers · AI-mapped, live-priced · click any ticker to open it</span>
+      </div>
+
+      <form id="scForm" class="watch-form">
+        <input id="scInput" class="watch-input" type="text" autocomplete="off"
+          placeholder="Company or ticker — e.g. GM, Apple, TSMC, Boeing…" />
+        <button type="submit" class="watch-add">MAP</button>
+      </form>
+
+      <div id="scFocal" class="sc-focal hidden"></div>
+
+      <div class="toggle-row sc-toggle" id="scToggle" hidden>
+        <div class="seg-toggle">
+          <button class="sc-mode-btn active" data-mode="graph" type="button">◇ GRAPH</button>
+          <button class="sc-mode-btn" data-mode="list" type="button">≣ LIST</button>
+        </div>
+      </div>
+
+      <div id="scStatus" class="status">Enter a company above to map its supply chain.</div>
+      <div id="scGraph" class="sc-graph"></div>
+      <div id="scGrid" class="sc-grid"></div>
+      <div id="scPeers" class="sc-peers"></div>
+    </section>
+
+    <!-- ═══════════ WATCHLIST VIEW ═══════════ -->
+    <section id="view-watchlist" class="view intel">
+      <div class="intel-head">
+        <h2 class="intel-title">WATCHLIST</h2>
+        <span class="intel-sub">Per-company news with positive / negative impact</span>
+      </div>
+
+      <form id="watchForm" class="watch-form">
+        <input id="watchInput" class="watch-input" type="text" autocomplete="off"
+          placeholder="Add a company or ticker — e.g. Apple, NVDA, Tesla…" />
+        <button type="submit" class="watch-add">+ ADD</button>
+      </form>
+      <div id="watchEmpty" class="status">Your watchlist is empty. Add a company above to track every bit of news about it — or tap a ticker chip anywhere in the app.</div>
+      <div id="watchList" class="watch-companies"></div>
+    </section>
+
+    <!-- ═══════════ ALERTS VIEW ═══════════ -->
+    <section id="view-alerts" class="view intel">
+      <div class="intel-head">
+        <h2 class="intel-title">BREAKING ALERTS</h2>
+        <span class="intel-sub">Market-moving headlines, pushed to this device</span>
+      </div>
+
+      <div id="alertCta" class="alert-cta">
+        <div class="alert-cta-text">
+          <div class="alert-cta-title">🔔 Get notified the moment big news breaks</div>
+          <div class="alert-cta-sub">Presidential addresses & posts, the Fed, markets — pushed to this device even when the app is closed.</div>
+        </div>
+        <button id="enableAlertsBtn" class="alert-enable" type="button">Enable Alerts</button>
+      </div>
+      <div id="alertHint" class="alert-hint hidden"></div>
+
+      <div id="alertsStatus" class="status">Loading alerts…</div>
+      <div id="alertsList" class="card-list"></div>
+    </section>
+  </main>
+
+  <!-- ───────────── Status bar ───────────── -->
+  <footer class="statusbar">
+    <span id="statusMsg">Ready.</span>
+    <span class="status-disclaimer">
+      Data: Finnhub · Yahoo/Nasdaq · Google News + Groq — educational use, not investment advice, not affiliated with Bloomberg L.P.
+    </span>
+  </footer>
+
+  <script src="app.js"></script>
+  <script src="intel.js"></script>
+</body>
+</html>

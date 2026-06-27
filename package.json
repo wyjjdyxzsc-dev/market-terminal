@@ -1,0 +1,30 @@
+{
+  "name": "market-terminal",
+  "version": "1.0.0",
+  "description": "A Bloomberg-Terminal-inspired live market dashboard — real-time quotes, charts, company data, plus an AI market-intelligence wing (news, sector analysis, watchlist sentiment, breaking-news push alerts). Vanilla JS frontend, Express proxy backend.",
+  "type": "commonjs",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "stocks",
+    "market",
+    "finance",
+    "dashboard",
+    "terminal",
+    "finnhub"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "groq-sdk": "^1.3.0",
+    "rss-parser": "^3.13.0",
+    "web-push": "^3.6.7"
+  }
+}
