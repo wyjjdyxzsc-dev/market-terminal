@@ -553,6 +553,44 @@ Strongly prefer companies listed on US exchanges (NYSE/Nasdaq) and give their co
 Only include real, currently-traded companies. Omit a relationship rather than invent a fake ticker.
 Return ONLY the JSON object. No markdown, no commentary.`;
 
+const DEEPDIVE_SYSTEM = `You are a senior buy-side analyst and derivatives strategist. You will be given a
+company's LIVE market data (price, fundamentals, 52-week range, valuation, analyst recommendation
+trend) and REAL, current news headlines about it pulled live moments ago. Combine this hard data
+with the news flow and your market knowledge to produce a rigorous deep-dive with two distinct,
+actionable ratings: (1) whether to INVEST in the stock, and (2) whether/how to trade OPTIONS on it.
+
+Ground every claim in the data and headlines provided. Be decisive but honest about uncertainty.
+
+Return ONE JSON object:
+{
+  "ticker": primary US ticker in caps,
+  "company": official company name,
+  "summary": 2-3 sentence executive summary of the situation right now,
+  "newsSentiment": "positive" | "negative" | "neutral" | "mixed",
+  "keyDrivers": 1-2 sentences on what is actually moving the stock now,
+  "investment": {
+    "rating": "Strong Buy" | "Buy" | "Hold" | "Sell" | "Strong Sell",
+    "score": integer 1-100 (higher = more attractive to BUY/own the stock now),
+    "conviction": "High" | "Medium" | "Low",
+    "horizon": short string (e.g. "6-12 months"),
+    "fairValue": short string price or range (e.g. "$300-330") or "N/A",
+    "thesis": 1-2 sentence core investment thesis
+  },
+  "options": {
+    "recommendation": one concrete options idea (e.g. "Bull call spread, 30-45 DTE, slightly OTM"),
+    "bias": "Calls" | "Puts" | "Straddle" | "Avoid",
+    "score": integer 1-100 (higher = more attractive OPTIONS opportunity now),
+    "impliedVolatility": "Low" | "Medium" | "High",
+    "timeframe": "Weekly" | "Monthly" | "LEAPS",
+    "rationale": 1-2 sentence reason grounded in IV/catalysts/news
+  },
+  "bullCase": array of EXACTLY 3 short strings,
+  "bearCase": array of EXACTLY 3 short strings,
+  "catalysts": array of 2-4 short strings (upcoming events/triggers to watch),
+  "risks": array of 2-4 short strings
+}
+Return ONLY the JSON object. No markdown, no commentary.`;
+
 // ───────────────────────── fetchers ─────────────────────────
 
 async function fetchIntelNews(env) {
@@ -635,6 +673,64 @@ async function fetchSupplyChain(env, query) {
   data.ticker = focal || data.ticker || '';
   data.company = data.company || focalName;
   data.focalQuote = focal ? quotes[focal] || null : null;
+  return data;
+}
+
+// Deep-dive: combine live Finnhub fundamentals + analyst consensus + current
+// headlines, then have the AI pool produce stock + options ratings.
+async function fetchDeepDive(env, query) {
+  let ticker = /^[A-Z.]{1,6}$/.test(query) ? query.toUpperCase() : '';
+  let profile = null;
+  if (!ticker) {
+    try {
+      const s = await finnhub(env, '/search', { q: query });
+      const hit = (s.result || []).find((r) => r.symbol && !r.symbol.includes('.'));
+      if (hit) ticker = hit.symbol.toUpperCase();
+    } catch {}
+  }
+  if (!ticker) throw new Error('Could not resolve a US-listed ticker for that company.');
+
+  // Pull everything in parallel.
+  const [prof, quote, metricData, recs, headlines] = await Promise.all([
+    finnhub(env, '/stock/profile2', { symbol: ticker }).catch(() => ({})),
+    finnhub(env, '/quote', { symbol: ticker }).catch(() => ({})),
+    finnhub(env, '/stock/metric', { symbol: ticker, metric: 'all' }).catch(() => ({})),
+    finnhub(env, '/stock/recommendation', { symbol: ticker }).catch(() => []),
+    fetchCompanyHeadlines(query || ticker, 16),
+  ]);
+  profile = prof || {};
+  const m = (metricData && metricData.metric) || {};
+  const rec = Array.isArray(recs) && recs.length ? recs[0] : null;
+
+  const fmtCap = (v) => (v ? (v >= 1e6 ? `$${(v / 1e6).toFixed(2)}T` : v >= 1e3 ? `$${(v / 1e3).toFixed(1)}B` : `$${v}M`) : 'N/A');
+  const dataBlock =
+    `LIVE DATA for ${profile.name || ticker} (${ticker}):\n` +
+    `- Price: ${quote.c ?? 'N/A'} (change ${quote.d ?? 'N/A'}, ${quote.dp ?? 'N/A'}% today)\n` +
+    `- Day range: ${quote.l ?? '?'}–${quote.h ?? '?'}; Prev close ${quote.pc ?? '?'}\n` +
+    `- 52-week range: ${m['52WeekLow'] ?? '?'}–${m['52WeekHigh'] ?? '?'}\n` +
+    `- P/E (TTM): ${m.peTTM ?? m.peNormalizedAnnual ?? 'N/A'}; P/B: ${m.pbAnnual ?? 'N/A'}; Beta: ${m.beta ?? 'N/A'}\n` +
+    `- Market cap: ${fmtCap(profile.marketCapitalization)}; Industry: ${profile.finnhubIndustry || 'N/A'}\n` +
+    `- 52w price return: ${m['52WeekPriceReturnDaily'] ?? 'N/A'}%; Div yield: ${m.dividendYieldIndicatedAnnual ?? m.currentDividendYieldTTM ?? 'N/A'}%\n` +
+    (rec ? `- Analyst consensus (${rec.period}): strongBuy ${rec.strongBuy}, buy ${rec.buy}, hold ${rec.hold}, sell ${rec.sell}, strongSell ${rec.strongSell}\n` : '');
+
+  const userPrompt =
+    `Current time: ${new Date().toUTCString()}.\n\n${dataBlock}\n` +
+    `Real, current headlines about ${profile.name || ticker} pulled live moments ago:\n\n${headlineBlock(headlines)}\n\n` +
+    `Produce the deep-dive JSON now.`;
+
+  const data = await runAIJson(env, DEEPDIVE_SYSTEM, userPrompt, (d) => d && d.investment && d.options && Array.isArray(d.bullCase));
+
+  // Attach the hard data so the UI can show real numbers next to the AI view.
+  data.ticker = ticker;
+  data.company = data.company || profile.name || ticker;
+  data.quote = (quote && (quote.c || quote.pc)) ? { price: quote.c, change: quote.d, percent: quote.dp } : null;
+  data.stats = {
+    high52: m['52WeekHigh'] ?? null, low52: m['52WeekLow'] ?? null,
+    pe: m.peTTM ?? m.peNormalizedAnnual ?? null, beta: m.beta ?? null,
+    marketCap: fmtCap(profile.marketCapitalization), industry: profile.finnhubIndustry || null,
+    logo: profile.logo || null,
+  };
+  data.analystConsensus = rec ? { strongBuy: rec.strongBuy, buy: rec.buy, hold: rec.hold, sell: rec.sell, strongSell: rec.strongSell, period: rec.period } : null;
   return data;
 }
 
@@ -786,20 +882,28 @@ const subKey = async (endpoint) => {
   return 'sub:' + bytesToB64url(h).slice(0, 32);
 };
 
-async function sendPush(env, payload) {
-  if (!pushEnabled(env)) return 0;
+async function sendPush(env, payload, opts = {}) {
+  if (!pushEnabled(env)) return opts.diag ? { sent: 0, results: [{ error: 'push disabled (no VAPID keys)' }] } : 0;
   const subs = await listSubs(env);
-  if (!subs.length) return 0;
+  if (!subs.length) return opts.diag ? { sent: 0, results: [] } : 0;
   const body = JSON.stringify(payload);
   let sent = 0;
+  const results = [];
   await Promise.all(subs.map(async (sub) => {
+    const host = (() => { try { return new URL(sub.endpoint).host; } catch { return '?'; } })();
     try {
       const res = await pushOne(env, sub, body);
       if (res.ok || res.status === 201) sent++;
-      else if (res.status === 404 || res.status === 410) await env.MT_KV.delete(await subKey(sub.endpoint));
-    } catch {}
+      let rbody = '';
+      if (opts.diag && !(res.ok || res.status === 201)) rbody = (await res.text().catch(() => '')).slice(0, 200);
+      results.push({ host, status: res.status, body: rbody });
+      // Purge dead subscriptions (but not while diagnosing, so we can inspect).
+      if (!opts.diag && (res.status === 404 || res.status === 410)) await env.MT_KV.delete(await subKey(sub.endpoint));
+    } catch (e) {
+      results.push({ host, error: String(e && e.message).slice(0, 200) });
+    }
   }));
-  return sent;
+  return opts.diag ? { sent, results } : sent;
 }
 
 // ───────────────────────── breaking-alert detection ─────────────────────────
@@ -935,6 +1039,12 @@ async function handleApi(request, env, ctx, url) {
     try { const { data, fresh } = await getData(env, ctx, 'supplychain:' + query.toLowerCase(), () => fetchSupplyChain(env, query)); return json({ cached: !fresh, ...data }); }
     catch (err) { return json({ error: true, message: friendlyError(err) }, 500); }
   }
+  if (p === '/api/intel/deepdive') {
+    const query = (qs.get('q') || '').trim().slice(0, 60);
+    if (!query) return json({ error: true, message: 'Missing company name or ticker.' }, 400);
+    try { const { data, fresh } = await getData(env, ctx, 'deepdive:' + query.toLowerCase(), () => fetchDeepDive(env, query)); return json({ cached: !fresh, ...data }); }
+    catch (err) { return json({ error: true, message: friendlyError(err) }, 500); }
+  }
   if (p === '/api/ai-status') {
     const pool = providerPool(env);
     const cd = await readCooldowns(env);
@@ -970,8 +1080,8 @@ async function handleApi(request, env, ctx, url) {
     return json({ ok: true });
   }
   if (p === '/api/test-push' && request.method === 'POST') {
-    const n = await sendPush(env, { title: '✅ Alerts are on', body: 'You’ll get a notification here when major market news breaks.', url: '/?tab=alerts' });
-    return json({ ok: true, devices: n });
+    const diag = await sendPush(env, { title: '✅ Alerts are on', body: 'You’ll get a notification here when major market news breaks.', url: '/?tab=alerts' }, { diag: true });
+    return json({ ok: true, devices: diag.sent, results: diag.results });
   }
 
   return json({ error: 'Not found' }, 404);

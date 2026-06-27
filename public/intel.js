@@ -722,6 +722,132 @@
 
   $('#scForm').addEventListener('submit', (e) => { e.preventDefault(); loadSupplyChain($('#scInput').value); });
 
+  // ---------- Deep Dive (full AI analyst report) ----------
+  let ddLoadedFor = null;
+
+  const RATING_CLASS = (r) => {
+    const k = String(r || '').toLowerCase();
+    if (k.includes('strong buy')) return 'rate-strongbuy';
+    if (k.includes('buy')) return 'rate-buy';
+    if (k.includes('strong sell')) return 'rate-strongsell';
+    if (k.includes('sell')) return 'rate-sell';
+    return 'rate-hold';
+  };
+  const BIAS_CLASS = (b) => {
+    const k = String(b || '').toLowerCase();
+    if (k === 'calls') return 'bias-calls';
+    if (k === 'puts') return 'bias-puts';
+    if (k === 'avoid') return 'bias-avoid';
+    return 'bias-straddle';
+  };
+  const pctChangeHtml = (q) => {
+    if (!q || q.price == null) return '';
+    const up = (q.change || 0) >= 0;
+    return `<span class="dd-price">$${Number(q.price).toFixed(2)}</span>` +
+      `<span class="dd-chg ${up ? 'up' : 'down'}">${up ? '▲' : '▼'} ${Math.abs(q.change || 0).toFixed(2)} (${Math.abs(q.percent || 0).toFixed(2)}%)</span>`;
+  };
+
+  function consensusBar(c) {
+    if (!c) return '';
+    const segs = [
+      ['strongBuy', c.strongBuy || 0, '#16c784'], ['buy', c.buy || 0, '#3fb950'],
+      ['hold', c.hold || 0, '#d8a657'], ['sell', c.sell || 0, '#f0883e'], ['strongSell', c.strongSell || 0, '#f85149'],
+    ];
+    const total = segs.reduce((n, s) => n + s[1], 0) || 1;
+    const bars = segs.map(([, v, col]) => v ? `<span style="width:${(v / total) * 100}%;background:${col}" title="${v}"></span>` : '').join('');
+    return `<div class="dd-consensus"><div class="dd-consensus-label">ANALYST CONSENSUS <span>(${total} ratings · ${esc(c.period || '')})</span></div>` +
+      `<div class="dd-consensus-bar">${bars}</div>` +
+      `<div class="dd-consensus-legend"><span>${c.strongBuy || 0} Strong Buy</span><span>${c.buy || 0} Buy</span><span>${c.hold || 0} Hold</span><span>${c.sell || 0} Sell</span><span>${c.strongSell || 0} Strong Sell</span></div></div>`;
+  }
+
+  const liList = (arr) => (Array.isArray(arr) ? arr : []).map((x) => `<li>${esc(x)}</li>`).join('');
+
+  function renderDeepDive(d) {
+    const inv = d.investment || {}, opt = d.options || {}, st = d.stats || {};
+    const html = `
+      <div class="dd-card">
+        <div class="dd-head">
+          ${st.logo ? `<img class="dd-logo" src="${esc(st.logo)}" alt="" onerror="this.style.display='none'">` : ''}
+          <div class="dd-id">
+            <div class="dd-ticker" data-ticker="${esc(d.ticker)}">${esc(d.ticker)}</div>
+            <div class="dd-name">${esc(d.company)}${st.industry ? ` · ${esc(st.industry)}` : ''}</div>
+          </div>
+          <div class="dd-quote">${pctChangeHtml(d.quote)}</div>
+        </div>
+
+        <p class="dd-summary">${esc(d.summary)}</p>
+
+        <div class="dd-ratings">
+          <div class="dd-rating ${RATING_CLASS(inv.rating)}">
+            <div class="dd-rating-top"><span class="dd-rating-kind">STOCK</span><span class="dd-rating-score">${inv.score != null ? inv.score : '—'}<i>/100</i></span></div>
+            <div class="dd-rating-badge">${esc(inv.rating || '—')}</div>
+            <div class="dd-rating-meta">${esc(inv.conviction || '')} conviction · ${esc(inv.horizon || '')}</div>
+            <div class="dd-rating-thesis">${esc(inv.thesis || '')}</div>
+            ${inv.fairValue && inv.fairValue !== 'N/A' ? `<div class="dd-fair">Fair value: <b>${esc(inv.fairValue)}</b></div>` : ''}
+          </div>
+          <div class="dd-rating ${BIAS_CLASS(opt.bias)}">
+            <div class="dd-rating-top"><span class="dd-rating-kind">OPTIONS</span><span class="dd-rating-score">${opt.score != null ? opt.score : '—'}<i>/100</i></span></div>
+            <div class="dd-rating-badge">${esc(opt.bias || '—')}</div>
+            <div class="dd-rating-meta">IV ${esc(opt.impliedVolatility || '?')} · ${esc(opt.timeframe || '')}</div>
+            <div class="dd-rating-thesis"><b>${esc(opt.recommendation || '')}</b><br>${esc(opt.rationale || '')}</div>
+          </div>
+        </div>
+
+        ${d.keyDrivers ? `<div class="dd-drivers"><span class="dd-drivers-label">WHAT'S MOVING IT</span> ${esc(d.keyDrivers)}</div>` : ''}
+
+        <div class="dd-cases">
+          <div class="dd-case dd-bull"><h4>▲ BULL CASE</h4><ul>${liList(d.bullCase)}</ul></div>
+          <div class="dd-case dd-bear"><h4>▼ BEAR CASE</h4><ul>${liList(d.bearCase)}</ul></div>
+        </div>
+
+        <div class="dd-cases">
+          <div class="dd-case dd-cat"><h4>⚡ CATALYSTS</h4><ul>${liList(d.catalysts)}</ul></div>
+          <div class="dd-case dd-risk"><h4>⚠ RISKS</h4><ul>${liList(d.risks)}</ul></div>
+        </div>
+
+        <div class="dd-stats">
+          ${st.marketCap ? `<div class="dd-stat"><span>MKT CAP</span><b>${esc(st.marketCap)}</b></div>` : ''}
+          ${st.pe != null ? `<div class="dd-stat"><span>P/E</span><b>${Number(st.pe).toFixed(1)}</b></div>` : ''}
+          ${st.beta != null ? `<div class="dd-stat"><span>BETA</span><b>${Number(st.beta).toFixed(2)}</b></div>` : ''}
+          ${st.high52 != null ? `<div class="dd-stat"><span>52W HIGH</span><b>$${Number(st.high52).toFixed(2)}</b></div>` : ''}
+          ${st.low52 != null ? `<div class="dd-stat"><span>52W LOW</span><b>$${Number(st.low52).toFixed(2)}</b></div>` : ''}
+          <div class="dd-stat news-tone"><span>NEWS TONE</span><b class="tone-${esc(d.newsSentiment || 'neutral')}">${esc((d.newsSentiment || 'neutral').toUpperCase())}</b></div>
+        </div>
+
+        ${consensusBar(d.analystConsensus)}
+
+        <button class="dd-open" data-ticker="${esc(d.ticker)}">Open ${esc(d.ticker)} in Terminal →</button>
+        <p class="dd-disclaimer">AI-generated analysis from live data — educational only, not investment advice.</p>
+      </div>`;
+    const wrap = $('#ddResult');
+    wrap.innerHTML = html;
+    wrap.querySelectorAll('[data-ticker]').forEach((el) => {
+      el.style.cursor = 'pointer';
+      el.addEventListener('click', () => drillTo(el.dataset.ticker));
+    });
+  }
+
+  async function loadDeepDive(query) {
+    const q = String(query || '').trim();
+    if (!q) return;
+    ddLoadedFor = q;
+    $('#ddInput').value = q;
+    $('#ddStatus').className = 'status';
+    $('#ddStatus').innerHTML = '<span class="spinner"></span>Running deep analysis on ' + esc(q.toUpperCase()) + '… (gathering live news, fundamentals & analyst views, then reasoning)';
+    $('#ddResult').innerHTML = '';
+    try {
+      const data = await fetchJSON('/api/intel/deepdive?q=' + encodeURIComponent(q));
+      if (data.error) throw new Error(data.message);
+      $('#ddStatus').textContent = '';
+      renderDeepDive(data);
+    } catch (err) {
+      $('#ddStatus').className = 'status error';
+      $('#ddStatus').textContent = 'Could not analyze that stock: ' + err.message;
+    }
+  }
+
+  $('#ddForm').addEventListener('submit', (e) => { e.preventDefault(); loadDeepDive($('#ddInput').value); });
+
   // ---------- View lifecycle (driven by app.js `tabshown`) ----------
   const loaded = { news: false, sectors: false };
   let currentView = 'terminal';
@@ -733,6 +859,7 @@
     else if (currentView === 'watchlist') refreshAllCompanies();
     else if (currentView === 'alerts') loadAlerts();
     else if (currentView === 'supply') { if (scLoadedFor) loadSupplyChain(scLoadedFor); }
+    else if (currentView === 'analyze') { if (ddLoadedFor) loadDeepDive(ddLoadedFor); }
   }
   if (refreshBtn) {
     refreshBtn.addEventListener('click', () => {
@@ -757,6 +884,12 @@
         loadSupplyChain(sym);
       } else {
         renderActiveMode(); // keep the displayed mode consistent on re-open
+      }
+    }
+    else if (view === 'analyze') {
+      if (!ddLoadedFor) {
+        const sym = (typeof state !== 'undefined' && state.symbol) ? state.symbol : 'NVDA';
+        loadDeepDive(sym);
       }
     }
   });

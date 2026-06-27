@@ -917,3 +917,73 @@ a { color: inherit; }
   .intel-refresh.spinning, .spinner { animation: none !important; }
   * { scroll-behavior: auto !important; }
 }
+
+/* ═══════════ DEEP DIVE ═══════════ */
+.dd-result { margin-top: var(--gap); }
+.dd-card {
+  background: var(--panel); border: 1px solid var(--border-bright);
+  border-radius: 10px; padding: 18px; max-width: 1000px;
+}
+.dd-head { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.dd-logo { width: 44px; height: 44px; border-radius: 8px; background: #fff; object-fit: contain; padding: 3px; }
+.dd-id { flex: 1; min-width: 160px; }
+.dd-ticker { font-family: var(--mono); font-size: 26px; font-weight: 700; color: var(--amber); letter-spacing: 1px; }
+.dd-name { color: var(--muted); font-size: 13px; margin-top: 2px; }
+.dd-quote { text-align: right; font-family: var(--mono); }
+.dd-price { font-size: 22px; font-weight: 700; color: var(--text); }
+.dd-chg { display: block; font-size: 13px; margin-top: 2px; }
+.dd-chg.up { color: var(--green); } .dd-chg.down { color: var(--red); }
+.dd-summary { color: var(--text); line-height: 1.55; margin: 14px 0 4px; font-size: 14.5px; }
+
+.dd-ratings { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 14px 0; }
+.dd-rating { border: 1px solid var(--border-bright); border-radius: 9px; padding: 14px; position: relative; overflow: hidden; }
+.dd-rating::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 4px; background: var(--muted); }
+.dd-rating-top { display: flex; justify-content: space-between; align-items: baseline; }
+.dd-rating-kind { font-family: var(--mono); font-size: 11px; letter-spacing: 1.5px; color: var(--muted); }
+.dd-rating-score { font-family: var(--mono); font-size: 28px; font-weight: 700; color: var(--text); }
+.dd-rating-score i { font-size: 13px; color: var(--muted); font-style: normal; }
+.dd-rating-badge { display: inline-block; margin: 8px 0; padding: 4px 12px; border-radius: 6px; font-weight: 700; font-size: 16px; letter-spacing: .5px; }
+.dd-rating-meta { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+.dd-rating-thesis { font-size: 13px; color: var(--text); line-height: 1.5; }
+.dd-fair { margin-top: 8px; font-size: 12.5px; color: var(--muted); } .dd-fair b { color: var(--amber); }
+
+.rate-strongbuy::before, .rate-buy::before, .bias-calls::before { background: var(--green); }
+.rate-strongsell::before, .rate-sell::before, .bias-puts::before { background: var(--red); }
+.rate-hold::before, .bias-straddle::before { background: var(--amber); }
+.bias-avoid::before { background: var(--muted); }
+.rate-strongbuy .dd-rating-badge, .rate-buy .dd-rating-badge, .bias-calls .dd-rating-badge { background: rgba(43,217,124,.15); color: var(--green); }
+.rate-strongsell .dd-rating-badge, .rate-sell .dd-rating-badge, .bias-puts .dd-rating-badge { background: rgba(255,69,58,.15); color: var(--red); }
+.rate-hold .dd-rating-badge, .bias-straddle .dd-rating-badge { background: rgba(255,160,40,.15); color: var(--amber); }
+.bias-avoid .dd-rating-badge { background: rgba(122,130,144,.18); color: var(--muted); }
+
+.dd-drivers { background: var(--panel-2); border: 1px solid var(--border); border-radius: 7px; padding: 10px 12px; font-size: 13.5px; color: var(--text); line-height: 1.5; margin-bottom: 14px; }
+.dd-drivers-label { font-family: var(--mono); font-size: 10.5px; letter-spacing: 1.5px; color: var(--amber); margin-right: 6px; }
+
+.dd-cases { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+.dd-case { border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; background: var(--panel-2); }
+.dd-case h4 { font-family: var(--mono); font-size: 11px; letter-spacing: 1px; margin: 0 0 8px; }
+.dd-bull h4 { color: var(--green); } .dd-bear h4 { color: var(--red); }
+.dd-cat h4 { color: var(--cyan); } .dd-risk h4 { color: var(--amber); }
+.dd-case ul { margin: 0; padding-left: 16px; } .dd-case li { font-size: 13px; color: var(--text); line-height: 1.5; margin-bottom: 5px; }
+
+.dd-stats { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.dd-stat { flex: 1; min-width: 90px; background: var(--panel-2); border: 1px solid var(--border); border-radius: 7px; padding: 8px 10px; text-align: center; }
+.dd-stat span { display: block; font-family: var(--mono); font-size: 10px; letter-spacing: 1px; color: var(--muted); }
+.dd-stat b { font-family: var(--mono); font-size: 15px; color: var(--text); }
+.tone-positive { color: var(--green); } .tone-negative { color: var(--red); } .tone-mixed { color: var(--amber); } .tone-neutral { color: var(--muted); }
+
+.dd-consensus { margin-bottom: 14px; }
+.dd-consensus-label { font-family: var(--mono); font-size: 10.5px; letter-spacing: 1.5px; color: var(--muted); margin-bottom: 6px; }
+.dd-consensus-label span { color: var(--muted); opacity: .7; }
+.dd-consensus-bar { display: flex; height: 12px; border-radius: 6px; overflow: hidden; background: var(--panel-2); }
+.dd-consensus-bar span { height: 100%; }
+.dd-consensus-legend { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 6px; }
+.dd-consensus-legend span { font-size: 11px; color: var(--muted); }
+
+.dd-open { margin-top: 4px; background: transparent; border: 1px solid var(--amber); color: var(--amber); font-family: var(--mono); font-size: 12px; padding: 8px 14px; border-radius: 7px; cursor: pointer; letter-spacing: .5px; }
+.dd-open:hover { background: rgba(255,160,40,.12); }
+.dd-disclaimer { font-size: 11px; color: var(--muted); margin: 10px 0 0; }
+
+@media (max-width: 720px) {
+  .dd-ratings, .dd-cases { grid-template-columns: 1fr; }
+}

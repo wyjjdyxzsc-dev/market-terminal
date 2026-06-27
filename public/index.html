@@ -41,6 +41,7 @@
     <button class="ttab active" data-view="terminal" role="tab">TERMINAL</button>
     <button class="ttab" data-view="news" role="tab">NEWS</button>
     <button class="ttab" data-view="sectors" role="tab">SECTORS</button>
+    <button class="ttab" data-view="analyze" role="tab">DEEP&nbsp;DIVE</button>
     <button class="ttab" data-view="supply" role="tab">SUPPLY&nbsp;CHAIN</button>
     <button class="ttab" data-view="watchlist" role="tab">WATCHLIST</button>
     <button class="ttab" data-view="alerts" role="tab">ALERTS</button>
@@ -185,6 +186,23 @@
 
       <div id="analysisStatus" class="status">Open this tab to load sector analysis…</div>
       <div id="industryList" class="card-list"></div>
+    </section>
+
+    <!-- ═══════════ DEEP DIVE VIEW ═══════════ -->
+    <section id="view-analyze" class="view intel">
+      <div class="intel-head">
+        <h2 class="intel-title">DEEP DIVE</h2>
+        <span class="intel-sub">Full AI analyst report on any stock · live news + fundamentals + analyst consensus → invest &amp; options ratings</span>
+      </div>
+
+      <form id="ddForm" class="watch-form">
+        <input id="ddInput" class="watch-input" type="text" autocomplete="off"
+          placeholder="Enter a stock or company — e.g. NVDA, Apple, Tesla, Palantir…" />
+        <button type="submit" class="watch-add">ANALYZE</button>
+      </form>
+
+      <div id="ddStatus" class="status">Enter a stock above for a deep AI analysis — a buy/sell rating, an options play, the bull &amp; bear case, catalysts and risks.</div>
+      <div id="ddResult" class="dd-result"></div>
     </section>
 
     <!-- ═══════════ SUPPLY CHAIN VIEW ═══════════ -->
