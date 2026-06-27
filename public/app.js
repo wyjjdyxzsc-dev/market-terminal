@@ -669,7 +669,6 @@ function boot() {
   loadTape();
   setInterval(loadTape, TAPE_REFRESH_MS);
 
-  loadSymbol(DEFAULT_SYMBOL);
   setInterval(() => {
     if (state.symbol) loadQuote(state.symbol); // auto-refresh quote
   }, QUOTE_REFRESH_MS);
