@@ -672,6 +672,10 @@ flag where they CONVERGE (e.g. a conflict driving an energy spike driving an inf
 Return ONE JSON object:
 {
   "threatLevel": "Low" | "Guarded" | "Elevated" | "High" | "Severe",
+  "defcon": integer 1-5 readiness estimate (5 = peacetime/relaxed, 1 = maximum readiness / imminent conflict), inferred from the geopolitical picture,
+  "defconLabel": short phrase for the DEFCON level (e.g. "Heightened readiness"),
+  "pizzaIndex": "Quiet" | "Normal" | "Elevated" | "Spiking" — a tongue-in-cheek 'Pentagon Pizza Index' read on how busy national-security decision-makers likely are right now,
+  "pizzaNote": one short witty-but-grounded sentence explaining the pizza read,
   "overview": 2-3 sentence top-line situational summary,
   "domains": array of EXACTLY these 5, each {
     "domain": one of "Military","Economic","Political","Disaster","Cyber/Energy",
@@ -729,7 +733,8 @@ async function fetchSituation(env) {
     `Current time: ${new Date().toUTCString()}.\n\n` +
     `Real, current world headlines pulled live moments ago:\n\n${headlineBlock(headlines)}\n\n` +
     `Produce the situational brief JSON now.`;
-  return runAIJson(env, SITUATION_SYSTEM, userPrompt, (d) => d && Array.isArray(d.domains) && d.domains.length >= 3);
+  return runAIJson(env, SITUATION_SYSTEM, userPrompt,
+    (d) => d && Array.isArray(d.domains) && d.domains.length >= 3 && d.defcon != null && d.pizzaIndex != null);
 }
 
 async function fetchInstability(env) {
@@ -1391,8 +1396,10 @@ async function handleApi(request, env, ctx, url) {
     catch (err) { return json({ error: true, message: friendlyError(err) }, 500); }
   }
   if (p === '/api/intel/situation') {
-    try { const { data, fresh } = await getData(env, ctx, 'situation', () => fetchSituation(env)); return json({ cached: !fresh, ...data }); }
-    catch (err) { return json({ error: true, message: friendlyError(err) }, 500); }
+    try {
+      if (qs.get('nocache')) return json({ cached: false, ...(await fetchSituation(env)) });
+      const { data, fresh } = await getData(env, ctx, 'situation', () => fetchSituation(env)); return json({ cached: !fresh, ...data });
+    } catch (err) { return json({ error: true, message: friendlyError(err) }, 500); }
   }
   if (p === '/api/intel/instability') {
     try { const { data, fresh } = await getData(env, ctx, 'instability', () => fetchInstability(env)); return json({ cached: !fresh, ...data }); }

@@ -954,12 +954,31 @@
         <div><div class="sit-dom-name">${esc(x.domain)} <span class="sit-lvl">${esc(x.level || '')}</span></div>
         <div class="sit-dom-sum">${esc(x.summary || '')}</div></div>
       </div>`).join('');
+    const defcon = Math.min(5, Math.max(1, parseInt(d.defcon, 10) || 5));
+    const DEFCON_COL = ['#ff453a', '#ff453a', '#ff8c00', '#ffd23f', '#45c8dc', '#2bd97c'][defcon];
+    const pizza = String(d.pizzaIndex || 'Normal');
+    const PIZZA_COL = { Quiet: '#2bd97c', Normal: '#45c8dc', Elevated: '#ff8c00', Spiking: '#ff453a' }[pizza] || '#45c8dc';
+    const gauges = `
+      <div class="gauges">
+        <div class="gauge defcon">
+          <div class="gauge-lbl">DEFCON</div>
+          <div class="gauge-val" style="color:${DEFCON_COL}">${defcon}</div>
+          <div class="defcon-pips">${[1, 2, 3, 4, 5].map((n) => `<span class="${n >= defcon ? 'on' : ''}" style="${n >= defcon ? 'background:' + DEFCON_COL : ''}"></span>`).join('')}</div>
+          <div class="gauge-sub">${esc(d.defconLabel || '')}</div>
+        </div>
+        <div class="gauge pizza">
+          <div class="gauge-lbl">🍕 PENTAGON PIZZA INDEX</div>
+          <div class="gauge-val" style="color:${PIZZA_COL};font-size:20px">${esc(pizza)}</div>
+          <div class="gauge-sub">${esc(d.pizzaNote || '')}</div>
+        </div>
+      </div>`;
     $('#situationBody').innerHTML = `
       <div class="sit-card">
         <div class="sit-head ${THREAT_CLASS(d.threatLevel)}">
           <span class="sit-threat">THREAT: ${esc(d.threatLevel || '—')}</span>
           <span class="sit-over">${esc(d.overview || '')}</span>
         </div>
+        ${gauges}
         <div class="sit-domains">${domains}</div>
         <div class="sit-conv"><span class="sit-lbl">⊕ CONVERGENCE</span> ${esc(d.convergence || '')}</div>
         <div class="sit-conv"><span class="sit-lbl">📈 MARKET IMPLICATION</span> ${esc(d.marketImplication || '')}</div>
