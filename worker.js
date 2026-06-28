@@ -55,6 +55,58 @@ async function finnhub(env, endpoint, params = {}) {
   return res.json();
 }
 
+// ───────────────────── market-data quote pool ─────────────────────
+// Finnhub is primary; AlphaVantage / Twelve Data / FMP back it up and each
+// activates when its key is present. getQuotePooled tries them in order and
+// returns the first that yields a real price, so a single provider's rate
+// limit or outage never blanks a quote. All return the Finnhub quote shape:
+//   { c: current, d: change, dp: %change, h: high, l: low, o: open, pc: prevClose, src }
+const qnum = (v) => { const n = parseFloat(v); return Number.isFinite(n) ? n : null; };
+
+async function quoteFinnhub(env, sym) {
+  const q = await finnhub(env, '/quote', { symbol: sym });
+  if (!q || (!q.c && !q.pc)) return null;
+  return { c: q.c, d: q.d, dp: q.dp, h: q.h, l: q.l, o: q.o, pc: q.pc, src: 'finnhub' };
+}
+async function quoteTwelve(env, sym) {
+  const r = await fetchWithTimeout(`https://api.twelvedata.com/quote?symbol=${encodeURIComponent(sym)}&apikey=${env.TWELVEDATA_KEY}`, {}, 10000);
+  const j = await r.json();
+  if (!j || j.status === 'error' || j.close == null) return null;
+  const c = qnum(j.close), pc = qnum(j.previous_close);
+  return { c, d: qnum(j.change), dp: qnum(j.percent_change), h: qnum(j.high), l: qnum(j.low), o: qnum(j.open), pc, src: 'twelvedata' };
+}
+async function quoteFMP(env, sym) {
+  const r = await fetchWithTimeout(`https://financialmodelingprep.com/api/v3/quote/${encodeURIComponent(sym)}?apikey=${env.FMP_KEY}`, {}, 10000);
+  const j = await r.json();
+  const q = Array.isArray(j) && j[0];
+  if (!q || q.price == null) return null;
+  return { c: qnum(q.price), d: qnum(q.change), dp: qnum(q.changesPercentage), h: qnum(q.dayHigh), l: qnum(q.dayLow), o: qnum(q.open), pc: qnum(q.previousClose), src: 'fmp' };
+}
+async function quoteAlpha(env, sym) {
+  const r = await fetchWithTimeout(`https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${encodeURIComponent(sym)}&apikey=${env.ALPHAVANTAGE_KEY}`, {}, 10000);
+  const j = await r.json();
+  const q = j && j['Global Quote'];
+  if (!q || !q['05. price']) return null;
+  return { c: qnum(q['05. price']), d: qnum(q['09. change']), dp: qnum((q['10. change percent'] || '').replace('%', '')), h: qnum(q['03. high']), l: qnum(q['04. low']), o: qnum(q['02. open']), pc: qnum(q['08. previous close']), src: 'alphavantage' };
+}
+
+function quotePool(env) {
+  const pool = [];
+  if (env.FINNHUB_API_KEY) pool.push(quoteFinnhub);
+  if (env.TWELVEDATA_KEY) pool.push(quoteTwelve);
+  if (env.FMP_KEY) pool.push(quoteFMP);
+  if (env.ALPHAVANTAGE_KEY) pool.push(quoteAlpha);
+  return pool;
+}
+async function getQuotePooled(env, sym) {
+  let lastErr;
+  for (const fn of quotePool(env)) {
+    try { const q = await fn(env, sym); if (q) return q; } catch (e) { lastErr = e; }
+  }
+  if (lastErr) throw lastErr;
+  return { c: 0, d: 0, dp: 0, h: 0, l: 0, o: 0, pc: 0, src: 'none' };
+}
+
 // ───────────────────────── chart (Yahoo -> Nasdaq) ─────────────────────────
 
 const YAHOO_RANGE = {
@@ -1322,9 +1374,13 @@ async function handleApi(request, env, ctx, url) {
 
   // --- Terminal (Finnhub) ---
   if (p === '/api/quote') {
-    if (!env.FINNHUB_API_KEY) return json({ error: 'Server is missing FINNHUB_API_KEY.' }, 500);
     if (!sym()) return json({ error: 'symbol is required' }, 400);
-    return json(await finnhub(env, '/quote', { symbol: sym() }));
+    if (!quotePool(env).length) return json({ error: 'No market-data provider configured.' }, 500);
+    return json(await getQuotePooled(env, sym()));
+  }
+  if (p === '/api/data-status') {
+    const names = { quoteFinnhub: 'finnhub', quoteTwelve: 'twelvedata', quoteFMP: 'fmp', quoteAlpha: 'alphavantage' };
+    return json({ providers: quotePool(env).map((f) => names[f.name] || f.name), count: quotePool(env).length });
   }
   if (p === '/api/profile') {
     if (!sym()) return json({ error: 'symbol is required' }, 400);
