@@ -112,20 +112,35 @@
       } },
     { id: 'flights', label: 'Aircraft (live)', icon: '✈', group: 'Movement', live: true, refresh: 20000, viewport: true,
       load: async (lg) => {
-        // Fetched DIRECTLY from the browser (airplanes.live allows CORS *), so it
-        // uses the user's residential IP — sidesteps the datacenter-IP rate limit
-        // that blocks this from the Cloudflare edge.
         const c = map.getCenter();
         const b = map.getBounds();
         const km = c.distanceTo(b.getNorthEast()) / 1000;
         const dist = Math.min(250, Math.max(25, Math.round(km / 1.852)));
-        const d = await getJSON(`https://api.airplanes.live/v2/point/${c.lat.toFixed(3)}/${c.lng.toFixed(3)}/${dist}`);
-        (d.ac || []).forEach((a) => {
-          if (a.lat == null || a.lon == null || a.alt_baro === 'ground') return;
-          const altM = typeof a.alt_baro === 'number' ? Math.round(a.alt_baro * 0.3048) : null;
-          L.marker([a.lat, a.lon], { icon: planeIcon(a.track || a.true_heading || 0), interactive: true })
-            .bindPopup(`<b>${esc((a.flight || a.r || a.hex || '').trim())}</b>${a.t ? ' · ' + esc(a.t) : ''}<br><small>${a.alt_baro === 'ground' ? 'on ground' : (altM != null ? altM + ' m' : '')}${a.gs != null ? ' · ' + Math.round(a.gs) + ' kn' : ''}${a.track != null ? ' · ' + Math.round(a.track) + '°' : ''}</small>`).addTo(lg);
+        const bbox = [b.getSouth().toFixed(2), b.getWest().toFixed(2), b.getNorth().toFixed(2), b.getEast().toFixed(2)].join(',');
+        // Two paths, merged & deduped by hex: airplanes.live straight from the
+        // browser (CORS, our IP) + the worker's union of adsb.lol/adsb.fi/OpenSky.
+        const [live, merged] = await Promise.all([
+          getJSON(`https://api.airplanes.live/v2/point/${c.lat.toFixed(3)}/${c.lng.toFixed(3)}/${dist}`).then((d) => d.ac || []).catch(() => []),
+          getJSON('/api/map/flights?bbox=' + bbox).then((d) => d.points || []).catch(() => []),
+        ]);
+        const seen = new Set();
+        const planes = [];
+        for (const a of live) {
+          const hex = (a.hex || '').toLowerCase();
+          if (a.lat == null || a.lon == null || a.alt_baro === 'ground') continue;
+          seen.add(hex);
+          planes.push({ lat: a.lat, lon: a.lon, cs: (a.flight || a.r || a.hex || '').trim(), t: a.t, alt: typeof a.alt_baro === 'number' ? Math.round(a.alt_baro * 0.3048) : null, gs: a.gs, hdg: a.track != null ? a.track : a.true_heading });
+        }
+        for (const a of merged) {
+          if (a.icao && seen.has(a.icao)) continue;
+          planes.push({ lat: a.lat, lon: a.lon, cs: (a.callsign || a.reg || a.icao || '').trim(), t: a.type, alt: a.alt, gs: a.velocity != null ? a.velocity * 1.944 : null, hdg: a.heading });
+        }
+        planes.forEach((p) => {
+          L.marker([p.lat, p.lon], { icon: planeIcon(p.hdg || 0), interactive: true })
+            .bindPopup(`<b>${esc(p.cs || 'aircraft')}</b>${p.t ? ' · ' + esc(p.t) : ''}<br><small>${p.alt != null ? p.alt + ' m' : ''}${p.gs != null ? ' · ' + Math.round(p.gs) + ' kn' : ''}${p.hdg != null ? ' · ' + Math.round(p.hdg) + '°' : ''}</small>`).addTo(lg);
         });
+        const sc = document.querySelector('.mlp-row[data-id="flights"] .mlp-lbl');
+        if (sc) sc.textContent = `Aircraft · ${planes.length}`;
       } },
     { id: 'daynight', label: 'Day / Night', icon: '🌓', group: 'Overlays', compute: true, refresh: 300000,
       load: (lg) => { drawTerminator(lg); } },
