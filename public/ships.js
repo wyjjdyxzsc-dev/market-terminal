@@ -192,10 +192,13 @@
     open() {
       opened = true;
       if (!window.L) { setStat('Map library failed to load.'); return; }
+      const firstInit = !initialized;
       initMap();
       setTimeout(() => map && map.invalidateSize(), 60); // fix sizing after un-hide
       connect();
+      if (firstInit) document.dispatchEvent(new CustomEvent('shipmap:ready', { detail: { map } }));
     },
+    getMap() { return map; },
     refilter,
   };
 })();

@@ -1066,3 +1066,28 @@ a { color: inherit; }
   .themes-wrap, .report-foot { grid-template-columns: 1fr; }
   .ship-map { height: 420px; }
 }
+
+/* ═══════════ GLOBAL MAP — layer panel ═══════════ */
+.map-layer-panel { background: rgba(13,15,18,.94); border: 1px solid var(--border-bright); border-radius: 9px;
+  font-family: var(--mono); width: 210px; max-height: 480px; display: flex; flex-direction: column; box-shadow: 0 6px 24px rgba(0,0,0,.5); }
+.mlp-head { display: flex; align-items: center; gap: 6px; padding: 9px 11px; border-bottom: 1px solid var(--border);
+  font-size: 11px; letter-spacing: 1.5px; color: var(--amber); }
+.mlp-head span:first-child { flex: 0 0 auto; }
+.mlp-count { flex: 1; text-align: right; color: var(--muted); font-size: 10px; letter-spacing: .5px; }
+.mlp-collapse { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 13px; padding: 0 2px; }
+.mlp-body { overflow-y: auto; padding: 6px; }
+.map-layer-panel.collapsed .mlp-body { display: none; }
+.mlp-group { margin-bottom: 8px; }
+.mlp-gname { font-size: 9.5px; letter-spacing: 1.5px; color: var(--muted); padding: 4px 4px 3px; text-transform: uppercase; }
+.mlp-row { display: flex; align-items: center; gap: 7px; padding: 5px 6px; border-radius: 6px; cursor: pointer; font-size: 12px; color: var(--text); }
+.mlp-row:hover { background: var(--panel-2); }
+.mlp-row input { accent-color: var(--amber); cursor: pointer; margin: 0; }
+.mlp-ico { width: 16px; text-align: center; filter: saturate(1.1); }
+.mlp-lbl { flex: 1; }
+.mlp-spin { width: 10px; height: 10px; border-radius: 50%; }
+.mlp-spin.on { border: 2px solid var(--border-bright); border-top-color: var(--amber); animation: spin .7s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.plane-icon { color: #cfe8ff; font-size: 14px; line-height: 16px; text-align: center; text-shadow: 0 0 3px #000; }
+.leaflet-popup-content { margin: 10px 12px; font-family: var(--mono); font-size: 12px; line-height: 1.5; }
+.leaflet-popup-content b { color: var(--amber); }
+@media (max-width: 720px) { .map-layer-panel { width: 168px; max-height: 320px; } }

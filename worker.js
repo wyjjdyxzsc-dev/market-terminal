@@ -805,6 +805,78 @@ async function fetchDeepDive(env, query) {
   return data;
 }
 
+// ───────────────────────── GLOBAL MAP layer data ─────────────────────────
+// Each fetcher normalizes a free public feed to a flat list of points the
+// frontend can plot directly: { lat, lon, ...layer-specific fields }.
+
+// USGS — earthquakes in the last 24h (GeoJSON, no key).
+async function fetchQuakes() {
+  const res = await fetchWithTimeout('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson', {}, 12000);
+  if (!res.ok) throw new Error('USGS ' + res.status);
+  const j = await res.json();
+  return (j.features || []).map((f) => {
+    const c = f.geometry && f.geometry.coordinates;
+    const p = f.properties || {};
+    if (!c) return null;
+    return { lat: c[1], lon: c[0], depth: c[2], mag: p.mag, place: p.place, time: p.time, url: p.url, tsunami: p.tsunami };
+  }).filter(Boolean);
+}
+
+// NASA EONET v3 — open natural events: wildfires, storms, volcanoes, ice, etc.
+async function fetchNaturalEvents() {
+  const res = await fetchWithTimeout('https://eonet.gsfc.nasa.gov/api/v3/events?status=open&limit=300', {}, 12000);
+  if (!res.ok) throw new Error('EONET ' + res.status);
+  const j = await res.json();
+  return (j.events || []).map((e) => {
+    const g = e.geometry && e.geometry[e.geometry.length - 1];
+    if (!g || !g.coordinates) return null;
+    const cat = (e.categories && e.categories[0]) || {};
+    // EONET point geometry is [lon, lat]; polygons we skip to a centroid-ish first vertex.
+    let lon, lat;
+    if (typeof g.coordinates[0] === 'number') { lon = g.coordinates[0]; lat = g.coordinates[1]; }
+    else { const flat = g.coordinates.flat(Infinity); lon = flat[0]; lat = flat[1]; }
+    if (lat == null || lon == null) return null;
+    return { lat, lon, title: e.title, category: cat.id || cat.title, categoryTitle: cat.title, date: g.date, source: (e.sources && e.sources[0] && e.sources[0].url) || e.link };
+  }).filter(Boolean);
+}
+
+// OpenSky Network — live aircraft states in a bounding box (no key, rate-limited).
+async function fetchFlights(bbox) {
+  const [s, w, n, e] = bbox;
+  const url = `https://opensky-network.org/api/states/all?lamin=${s}&lomin=${w}&lamax=${n}&lomax=${e}`;
+  const res = await fetchWithTimeout(url, {}, 12000);
+  if (!res.ok) throw new Error('OpenSky ' + res.status);
+  const j = await res.json();
+  return (j.states || []).map((a) => ({
+    icao: a[0], callsign: (a[1] || '').trim(), country: a[2],
+    lon: a[5], lat: a[6], alt: a[7] != null ? a[7] : a[13], onGround: a[8],
+    velocity: a[9], heading: a[10], vertRate: a[11],
+  })).filter((a) => a.lat != null && a.lon != null && !a.onGround).slice(0, 1500);
+}
+
+// US National Weather Service — active alerts (no key; needs a UA).
+async function fetchWeatherAlerts() {
+  const res = await fetchWithTimeout('https://api.weather.gov/alerts/active?status=actual&limit=250', {
+    headers: { 'User-Agent': 'MarketTerminal/1.0 (contact: alerts@market-terminal)', Accept: 'application/geo+json' },
+  }, 12000);
+  if (!res.ok) throw new Error('NWS ' + res.status);
+  const j = await res.json();
+  const out = [];
+  for (const f of (j.features || [])) {
+    const p = f.properties || {};
+    let lat, lon;
+    const g = f.geometry;
+    if (g && g.type === 'Polygon' && g.coordinates) {
+      const ring = g.coordinates[0]; let sx = 0, sy = 0;
+      for (const pt of ring) { sx += pt[0]; sy += pt[1]; }
+      lon = sx / ring.length; lat = sy / ring.length;
+    }
+    if (lat == null) continue; // skip zone-only alerts without geometry
+    out.push({ lat, lon, event: p.event, severity: p.severity, headline: p.headline, area: p.areaDesc, urgency: p.urgency });
+  }
+  return out;
+}
+
 // ───────────────────────── KV-backed SWR cache ─────────────────────────
 
 // An empty payload is never worth serving from cache — treat it as a miss so a
@@ -817,13 +889,13 @@ function isEmptyPayload(d) {
   return false;
 }
 
-async function getData(env, ctx, key, fetcher) {
+async function getData(env, ctx, key, fetcher, ttl = CACHE_MS) {
   const now = Date.now();
   let hit = null;
   try { const raw = await env.MT_KV.get('cache:' + key); if (raw) hit = JSON.parse(raw); } catch {}
   const store = async () => {
     const data = await fetcher();
-    await env.MT_KV.put('cache:' + key, JSON.stringify({ data, freshUntil: Date.now() + CACHE_MS })).catch(() => {});
+    await env.MT_KV.put('cache:' + key, JSON.stringify({ data, freshUntil: Date.now() + ttl }), { expirationTtl: Math.max(60, Math.ceil(ttl / 1000) * 2) }).catch(() => {});
     return data;
   };
   if (hit && !isEmptyPayload(hit.data)) {
@@ -1082,6 +1154,30 @@ async function handleApi(request, env, ctx, url) {
     server.addEventListener('error', () => closeAll());
 
     return new Response(null, { status: 101, webSocket: client });
+  }
+
+  // --- GLOBAL MAP layers (free public feeds, normalized + cached) ---
+  if (p === '/api/map/earthquakes') {
+    try { const { data, fresh } = await getData(env, ctx, 'map:quakes', fetchQuakes); return json({ cached: !fresh, points: data }); }
+    catch (err) { return json({ error: true, message: friendlyError(err) }, 502); }
+  }
+  if (p === '/api/map/events') {
+    try { const { data, fresh } = await getData(env, ctx, 'map:events', fetchNaturalEvents); return json({ cached: !fresh, points: data }); }
+    catch (err) { return json({ error: true, message: friendlyError(err) }, 502); }
+  }
+  if (p === '/api/map/weather') {
+    try { const { data, fresh } = await getData(env, ctx, 'map:weather', fetchWeatherAlerts); return json({ cached: !fresh, points: data }); }
+    catch (err) { return json({ error: true, message: friendlyError(err) }, 502); }
+  }
+  if (p === '/api/map/flights') {
+    // Live aircraft are viewport-scoped and change fast — short cache keyed by bbox.
+    const b = (qs.get('bbox') || '-10,-10,60,40').split(',').map(Number);
+    if (b.length !== 4 || b.some(Number.isNaN)) return json({ error: true, message: 'bad bbox' }, 400);
+    try {
+      const key = 'map:flights:' + b.map((x) => x.toFixed(1)).join('_');
+      const { data, fresh } = await getData(env, ctx, key, () => fetchFlights(b), 30 * 1000);
+      return json({ cached: !fresh, points: data });
+    } catch (err) { return json({ error: true, message: friendlyError(err) }, 502); }
   }
 
   // --- Terminal (Finnhub) ---
