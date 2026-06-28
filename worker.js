@@ -223,15 +223,23 @@ const MARKET_FEEDS = [
   'https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=10000664', // top news
   'https://feeds.content.dowjones.io/public/rss/mw_topstories',
   'https://feeds.content.dowjones.io/public/rss/mw_marketpulse',
+  'https://www.bing.com/news/search?q=stocks+earnings+markets&format=rss',
 ];
 
 // World / geopolitical / energy / shipping feeds for the GLOBAL INTEL desk.
+// Bing News RSS gives Google-News-style aggregation + topic search and — unlike
+// Google News, which 503s every datacenter IP and exposes no CORS — it actually
+// serves the Cloudflare edge, so it's our stand-in for "Google News".
 const WORLD_FEEDS = [
   'https://feeds.bbci.co.uk/news/world/rss.xml',
   'https://feeds.bbci.co.uk/news/business/rss.xml',
   'https://www.aljazeera.com/xml/rss/all.xml',
   'https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=100727362', // energy
   'https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=15839135', // politics
+  'https://www.bing.com/news/search?q=stock+market&format=rss',
+  'https://www.bing.com/news/search?q=geopolitics+conflict&format=rss',
+  'https://www.bing.com/news/search?q=federal+reserve+economy&format=rss',
+  'https://www.bing.com/news/search?q=oil+energy+markets&format=rss',
 ];
 
 async function fetchMarketHeadlines() {

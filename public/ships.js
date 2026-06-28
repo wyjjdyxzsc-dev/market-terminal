@@ -16,7 +16,7 @@
   let initialized = false, opened = false;
   let subTimer = null, pruneTimer = null, reconnectTimer = null;
   const ships = new Map();       // MMSI -> { marker, lat, lon, type, name, last }
-  const filters = { cargo: true, cruise: true, tanker: true };
+  const filters = { cargo: true, cruise: true, tanker: true, other: true };
 
   const $ = (s) => document.querySelector(s);
   const setStat = (t) => { const el = $('#shipStat'); if (el) el.textContent = t; };
@@ -27,7 +27,10 @@
     if (type >= 80 && type <= 89) return 'tanker';
     return 'other';
   }
-  const visible = (cls) => (cls === 'other' ? false : filters[cls]);
+  // Cargo/cruise/tanker honor their toggle; everything else (tugs, pilots,
+  // fishing, and vessels that haven't broadcast their type yet) shows as a dim
+  // dot so the map reflects real traffic density instead of looking empty.
+  const visible = (cls) => (cls === 'other' ? filters.other : filters[cls]);
 
   // ---------- map ----------
   function initMap() {
@@ -117,15 +120,18 @@
       `${s.sog != null ? 'Speed ' + Number(s.sog).toFixed(1) + ' kn' : ''}${s.cog != null ? ' · Course ' + Math.round(s.cog) + '°' : ''}</div>`;
   }
 
+  const styleFor = (cls) => ({
+    renderer, weight: 0, fillColor: COLORS[cls],
+    radius: cls === 'other' ? 2.5 : cls === 'cruise' ? 5 : 4,
+    fillOpacity: cls === 'other' ? 0.3 : 0.9,
+  });
+
   function upsert(mmsi, s) {
     const cls = shipClass(s.type);
-    const show = visible(cls) || (cls === 'other' && (filters.cargo || filters.cruise || filters.tanker) && s.type == null ? false : visible(cls));
+    const show = visible(cls);
     if (!s.marker) {
       if (ships.size > MAX_SHIPS) evictOldest();
-      s.marker = L.circleMarker([s.lat, s.lon], {
-        renderer, radius: cls === 'cruise' ? 5 : 4, weight: 0,
-        fillColor: COLORS[cls], fillOpacity: cls === 'other' ? 0.35 : 0.9,
-      });
+      s.marker = L.circleMarker([s.lat, s.lon], styleFor(cls));
       s.marker.bindPopup(() => popupHtml(mmsi, s), { className: 'ship-popup' });
       if (show) s.marker.addTo(map);
     } else {
@@ -139,7 +145,7 @@
   function restyle(mmsi, s) {
     const cls = shipClass(s.type);
     if (!s.marker) return;
-    s.marker.setStyle({ fillColor: COLORS[cls], fillOpacity: cls === 'other' ? 0.35 : 0.9, radius: cls === 'cruise' ? 5 : 4 });
+    s.marker.setStyle(styleFor(cls));
     const show = visible(cls);
     if (show && !map.hasLayer(s.marker)) s.marker.addTo(map);
     else if (!show && map.hasLayer(s.marker)) map.removeLayer(s.marker);
@@ -164,7 +170,7 @@
       countTimer = null;
       let cargo = 0, cruise = 0, tanker = 0;
       for (const v of ships.values()) { const c = shipClass(v.type); if (c === 'cargo') cargo++; else if (c === 'cruise') cruise++; else if (c === 'tanker') tanker++; }
-      setStat(`● LIVE · ${cargo} cargo · ${cruise} cruise · ${tanker} tankers in view`);
+      setStat(`● LIVE · ${ships.size} vessels · ${cargo} cargo · ${cruise} cruise · ${tanker} tankers`);
     }, 500);
   }
 
