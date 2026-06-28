@@ -848,13 +848,111 @@
 
   $('#ddForm').addEventListener('submit', (e) => { e.preventDefault(); loadDeepDive($('#ddInput').value); });
 
+  // ---------- GLOBAL INTEL: AI Investment Report ----------
+  let reportLoaded = false;
+
+  const ACTION_CLASS = (a) => {
+    const k = String(a || '').toLowerCase();
+    if (k === 'buy') return 'act-buy';
+    if (k === 'short' || k === 'avoid') return 'act-sell';
+    return 'act-watch';
+  };
+  const REGIME_CLASS = (r) => {
+    const k = String(r || '').toLowerCase();
+    if (k.includes('risk-on')) return 'reg-on';
+    if (k.includes('risk-off') || k.includes('defensive')) return 'reg-off';
+    return 'reg-mixed';
+  };
+
+  function tickerChip(ticker, quotes, why, side) {
+    const t = String(ticker || '').toUpperCase();
+    const q = quotes && quotes[t];
+    const price = q ? `<span class="tc-price">$${Number(q.price).toFixed(2)}</span><span class="tc-chg ${(q.change || 0) >= 0 ? 'up' : 'down'}">${(q.change || 0) >= 0 ? '+' : ''}${(q.percent || 0).toFixed(1)}%</span>` : '';
+    return `<button class="ticker-chip ${side || ''}" data-ticker="${esc(t)}" title="${esc(why || '')}"><b>${esc(t)}</b>${price}</button>`;
+  }
+
+  function renderReport(d) {
+    const picks = (d.topPicks || []).map((p) => `
+      <div class="pick-card ${ACTION_CLASS(p.action)}">
+        <div class="pick-top">
+          <button class="pick-ticker" data-ticker="${esc(p.ticker)}">${esc(p.ticker)}</button>
+          <span class="pick-action">${esc(p.action || '')}</span>
+        </div>
+        <div class="pick-company">${esc(p.company || '')}</div>
+        ${(d.quotes && d.quotes[String(p.ticker).toUpperCase()]) ? `<div class="pick-price">$${Number(d.quotes[String(p.ticker).toUpperCase()].price).toFixed(2)} <span class="${(d.quotes[String(p.ticker).toUpperCase()].change || 0) >= 0 ? 'up' : 'down'}">${(d.quotes[String(p.ticker).toUpperCase()].percent || 0).toFixed(2)}%</span></div>` : ''}
+        <div class="pick-rationale">${esc(p.rationale || '')}</div>
+        <div class="pick-meta"><span>⚡ ${esc(p.catalyst || '')}</span><span class="pick-conv">${esc(p.conviction || '')} · ${esc(p.timeframe || '')}</span></div>
+      </div>`).join('');
+
+    const themes = (d.themes || []).map((t) => `
+      <div class="theme-card">
+        <h4>${esc(t.theme || '')}</h4>
+        <p class="theme-drivers">${esc(t.drivers || '')}</p>
+        <div class="theme-sides">
+          <div class="theme-win"><span class="theme-lbl up">▲ WINNERS</span> ${(t.winners || []).map((w) => tickerChip(w.ticker, d.quotes, w.why, 'win')).join('')}</div>
+          <div class="theme-lose"><span class="theme-lbl down">▼ LOSERS</span> ${(t.losers || []).map((w) => tickerChip(w.ticker, d.quotes, w.why, 'lose')).join('')}</div>
+        </div>
+      </div>`).join('');
+
+    const html = `
+      <div class="report-card">
+        <div class="report-banner ${REGIME_CLASS(d.marketRegime)}">
+          <span class="report-regime">${esc(d.marketRegime || '—')}</span>
+          <span class="report-headline">${esc(d.headline || '')}</span>
+        </div>
+        <p class="report-summary">${esc(d.summary || '')}</p>
+
+        <h3 class="section-label">★ TOP ACTIONABLE IDEAS</h3>
+        <div class="picks-grid">${picks}</div>
+
+        <h3 class="section-label">⊞ THEMES IN PLAY</h3>
+        <div class="themes-wrap">${themes}</div>
+
+        <div class="report-foot">
+          <div class="report-col"><h4>⚠ KEY RISKS</h4><ul>${(d.risks || []).map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>
+          <div class="report-col"><h4>📅 WATCH NEXT</h4><ul>${(d.watchEvents || []).map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>
+        </div>
+        <p class="dd-disclaimer">AI-generated from live world &amp; market headlines — educational only, not investment advice.</p>
+      </div>`;
+    const wrap = $('#reportBody');
+    wrap.innerHTML = html;
+    wrap.querySelectorAll('[data-ticker]').forEach((el) => { el.style.cursor = 'pointer'; el.addEventListener('click', () => drillTo(el.dataset.ticker)); });
+  }
+
+  async function loadReport() {
+    reportLoaded = true;
+    $('#reportStatus').className = 'status';
+    $('#reportStatus').innerHTML = '<span class="spinner"></span>Reading the live world-events feed and building your investment report…';
+    $('#reportBody').innerHTML = '';
+    try {
+      const data = await fetchJSON('/api/intel/report');
+      if (data.error) throw new Error(data.message);
+      $('#reportStatus').textContent = '';
+      renderReport(data);
+    } catch (err) {
+      $('#reportStatus').className = 'status error';
+      $('#reportStatus').textContent = 'Could not build report: ' + err.message;
+    }
+  }
+
+  // ---------- GLOBAL INTEL: sub-navigation (Briefing / Report / Map) ----------
+  let giSub = 'briefing';
+  function showGiSub(sub) {
+    giSub = sub;
+    document.querySelectorAll('.gi-subtab').forEach((b) => b.classList.toggle('active', b.dataset.sub === sub));
+    document.querySelectorAll('.gi-panel').forEach((pnl) => pnl.classList.toggle('active', pnl.id === 'gi-' + sub));
+    if (sub === 'report' && !reportLoaded) loadReport();
+    if (sub === 'map' && window.ShipMap) window.ShipMap.open();
+  }
+  document.querySelectorAll('.gi-subtab').forEach((b) => b.addEventListener('click', () => showGiSub(b.dataset.sub)));
+
   // ---------- View lifecycle (driven by app.js `tabshown`) ----------
   const loaded = { news: false, sectors: false };
   let currentView = 'terminal';
   const refreshBtn = document.getElementById('intelRefresh');
 
   function refreshCurrent() {
-    if (currentView === 'news') loadNews();
+    if (currentView === 'news') { if (giSub === 'report') loadReport(); else loadNews(); }
     else if (currentView === 'sectors') loadAnalysis();
     else if (currentView === 'watchlist') refreshAllCompanies();
     else if (currentView === 'alerts') loadAlerts();
@@ -867,7 +965,7 @@
   function setAutoRefresh() {
     if (autoRefreshTimer) clearInterval(autoRefreshTimer);
     if (currentView === 'news') {
-      autoRefreshTimer = setInterval(() => loadNews(), 5 * 60_000); // 5 min
+      autoRefreshTimer = setInterval(() => { if (giSub === 'report') loadReport(); else loadNews(); }, 5 * 60_000); // 5 min
     } else if (currentView === 'sectors') {
       autoRefreshTimer = setInterval(() => loadAnalysis(), 10 * 60_000); // 10 min
     } else if (currentView === 'watchlist') {

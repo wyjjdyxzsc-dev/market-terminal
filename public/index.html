@@ -12,6 +12,8 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="MktTerminal" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
   <link rel="stylesheet" href="style.css" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%230a0a0a'/><text x='8' y='12' font-size='11' text-anchor='middle' fill='%23ffa028' font-family='monospace'>M</text></svg>" />
 </head>
@@ -39,7 +41,7 @@
   <!-- ───────────── Tab bar ───────────── -->
   <nav class="ttabs" id="ttabs" role="tablist">
     <button class="ttab active" data-view="terminal" role="tab">TERMINAL</button>
-    <button class="ttab" data-view="news" role="tab">NEWS</button>
+    <button class="ttab" data-view="news" role="tab">GLOBAL&nbsp;INTEL</button>
     <button class="ttab" data-view="sectors" role="tab">SECTORS</button>
     <button class="ttab" data-view="analyze" role="tab">DEEP&nbsp;DIVE</button>
     <button class="ttab" data-view="supply" role="tab">SUPPLY&nbsp;CHAIN</button>
@@ -146,21 +148,53 @@
       </div>
     </section>
 
-    <!-- ═══════════ NEWS VIEW (AI market wire) ═══════════ -->
+    <!-- ═══════════ GLOBAL INTEL VIEW ═══════════ -->
     <section id="view-news" class="view intel">
       <div class="intel-head">
-        <h2 class="intel-title">MARKET WIRE</h2>
-        <span class="intel-sub">AI-structured live headlines · Google News + Groq</span>
+        <h2 class="intel-title">GLOBAL INTEL</h2>
+        <span class="intel-sub">Geopolitics · markets · maritime — live world events, AI investment reports &amp; a real-time ship map</span>
       </div>
 
-      <section id="breaking" class="breaking hidden">
-        <h3 class="section-label breaking-label">● BREAKING</h3>
-        <div id="breakingList" class="card-list"></div>
-      </section>
+      <!-- Sub-navigation -->
+      <div class="gi-subnav" id="giSubnav" role="tablist">
+        <button class="gi-subtab active" data-sub="briefing" type="button">📡 BRIEFING</button>
+        <button class="gi-subtab" data-sub="report" type="button">📈 INVESTMENT REPORT</button>
+        <button class="gi-subtab" data-sub="map" type="button">🚢 GLOBAL MAP</button>
+      </div>
 
-      <div id="filterChips" class="chips"></div>
-      <div id="newsStatus" class="status">Loading live market news…</div>
-      <div id="newsList" class="card-list"></div>
+      <!-- ── BRIEFING: live world-events feed ── -->
+      <div id="gi-briefing" class="gi-panel active">
+        <section id="breaking" class="breaking hidden">
+          <h3 class="section-label breaking-label">● BREAKING</h3>
+          <div id="breakingList" class="card-list"></div>
+        </section>
+        <div id="filterChips" class="chips"></div>
+        <div id="newsStatus" class="status">Loading live world &amp; market intelligence…</div>
+        <div id="newsList" class="card-list"></div>
+      </div>
+
+      <!-- ── INVESTMENT REPORT: continuous AI stock-picks from world events ── -->
+      <div id="gi-report" class="gi-panel">
+        <div class="gi-report-head">
+          <span class="gi-report-sub">AI continuously reads the world-events feed and produces an actionable investment brief — what's happening, who it moves, and what to buy.</span>
+        </div>
+        <div id="reportStatus" class="status">Generating the latest investment report…</div>
+        <div id="reportBody" class="report-body"></div>
+      </div>
+
+      <!-- ── GLOBAL MAP: live cargo + cruise ships ── -->
+      <div id="gi-map" class="gi-panel">
+        <div class="ship-controls">
+          <div class="ship-filters">
+            <button class="ship-filter active" data-type="cargo" type="button"><span class="dot cargo"></span> Cargo</button>
+            <button class="ship-filter active" data-type="cruise" type="button"><span class="dot cruise"></span> Cruise / Passenger</button>
+            <button class="ship-filter active" data-type="tanker" type="button"><span class="dot tanker"></span> Tankers</button>
+          </div>
+          <div class="ship-stat" id="shipStat">Connecting to live AIS feed…</div>
+        </div>
+        <div id="shipMap" class="ship-map"></div>
+        <div id="shipHint" class="ship-hint"></div>
+      </div>
     </section>
 
     <!-- ═══════════ SECTORS VIEW ═══════════ -->
@@ -278,7 +312,10 @@
     </span>
   </footer>
 
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <script src="app.js"></script>
   <script src="intel.js"></script>
+  <script src="ships.js"></script>
 </body>
 </html>

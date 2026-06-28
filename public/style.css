@@ -987,3 +987,82 @@ a { color: inherit; }
 @media (max-width: 720px) {
   .dd-ratings, .dd-cases { grid-template-columns: 1fr; }
 }
+
+/* ═══════════ GLOBAL INTEL ═══════════ */
+.gi-subnav { display: flex; gap: 6px; margin-bottom: 14px; flex-wrap: wrap; }
+.gi-subtab { background: var(--panel-2); border: 1px solid var(--border); color: var(--muted);
+  font-family: var(--mono); font-size: 12px; letter-spacing: .5px; padding: 8px 14px; border-radius: 7px; cursor: pointer; }
+.gi-subtab:hover { color: var(--text); border-color: var(--border-bright); }
+.gi-subtab.active { background: rgba(255,160,40,.12); color: var(--amber); border-color: var(--amber); }
+.gi-panel { display: none; }
+.gi-panel.active { display: block; }
+
+/* Investment report */
+.gi-report-head { margin-bottom: 10px; }
+.gi-report-sub { color: var(--muted); font-size: 13px; }
+.report-card { max-width: 1100px; }
+.report-banner { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-radius: 9px; border: 1px solid var(--border-bright); margin-bottom: 12px; flex-wrap: wrap; }
+.report-regime { font-family: var(--mono); font-weight: 700; font-size: 13px; padding: 4px 10px; border-radius: 6px; letter-spacing: 1px; white-space: nowrap; }
+.reg-on .report-regime { background: rgba(43,217,124,.18); color: var(--green); }
+.reg-off .report-regime { background: rgba(255,69,58,.18); color: var(--red); }
+.reg-mixed .report-regime { background: rgba(255,160,40,.18); color: var(--amber); }
+.reg-on { border-left: 4px solid var(--green); } .reg-off { border-left: 4px solid var(--red); } .reg-mixed { border-left: 4px solid var(--amber); }
+.report-headline { color: var(--text); font-size: 15px; font-weight: 600; }
+.report-summary { color: var(--text); line-height: 1.6; font-size: 14px; margin: 0 0 16px; }
+
+.picks-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; margin-bottom: 18px; }
+.pick-card { background: var(--panel-2); border: 1px solid var(--border); border-radius: 9px; padding: 12px; position: relative; }
+.pick-card::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 3px; border-radius: 9px 0 0 9px; }
+.act-buy::before { background: var(--green); } .act-sell::before { background: var(--red); } .act-watch::before { background: var(--amber); }
+.pick-top { display: flex; justify-content: space-between; align-items: center; }
+.pick-ticker { background: none; border: none; color: var(--amber); font-family: var(--mono); font-size: 18px; font-weight: 700; cursor: pointer; padding: 0; }
+.pick-action { font-family: var(--mono); font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 5px; }
+.act-buy .pick-action { background: rgba(43,217,124,.16); color: var(--green); }
+.act-sell .pick-action { background: rgba(255,69,58,.16); color: var(--red); }
+.act-watch .pick-action { background: rgba(255,160,40,.16); color: var(--amber); }
+.pick-company { color: var(--muted); font-size: 12px; margin: 2px 0 6px; }
+.pick-price { font-family: var(--mono); font-size: 13px; color: var(--text); margin-bottom: 6px; }
+.pick-price .up, .tc-chg.up, .pick-price .up { color: var(--green); } .pick-price .down, .tc-chg.down { color: var(--red); }
+.pick-rationale { color: var(--text); font-size: 13px; line-height: 1.45; margin-bottom: 8px; }
+.pick-meta { display: flex; flex-direction: column; gap: 3px; font-size: 11px; color: var(--muted); }
+.pick-conv { color: var(--cyan); font-family: var(--mono); }
+
+.themes-wrap { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 18px; }
+.theme-card { background: var(--panel-2); border: 1px solid var(--border); border-radius: 9px; padding: 12px 14px; }
+.theme-card h4 { margin: 0 0 4px; color: var(--amber); font-size: 14px; }
+.theme-drivers { color: var(--muted); font-size: 12.5px; line-height: 1.45; margin: 0 0 10px; }
+.theme-sides { display: flex; flex-direction: column; gap: 8px; }
+.theme-lbl { font-family: var(--mono); font-size: 10px; letter-spacing: 1px; margin-right: 6px; }
+.theme-lbl.up { color: var(--green); } .theme-lbl.down { color: var(--red); }
+.ticker-chip { display: inline-flex; align-items: center; gap: 5px; background: var(--panel); border: 1px solid var(--border-bright);
+  border-radius: 6px; padding: 3px 8px; margin: 2px 3px 2px 0; cursor: pointer; font-family: var(--mono); font-size: 12px; color: var(--text); }
+.ticker-chip:hover { border-color: var(--amber); }
+.ticker-chip.win b { color: var(--green); } .ticker-chip.lose b { color: var(--red); }
+.tc-price { color: var(--muted); font-size: 11px; } .tc-chg { font-size: 11px; }
+
+.report-foot { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.report-col { background: var(--panel-2); border: 1px solid var(--border); border-radius: 9px; padding: 12px 14px; }
+.report-col h4 { margin: 0 0 8px; font-family: var(--mono); font-size: 11px; letter-spacing: 1px; color: var(--amber); }
+.report-col ul { margin: 0; padding-left: 16px; } .report-col li { font-size: 13px; color: var(--text); line-height: 1.5; margin-bottom: 5px; }
+
+/* Ship map */
+.ship-controls { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 10px; flex-wrap: wrap; }
+.ship-filters { display: flex; gap: 6px; flex-wrap: wrap; }
+.ship-filter { display: inline-flex; align-items: center; gap: 6px; background: var(--panel-2); border: 1px solid var(--border);
+  color: var(--muted); font-size: 12px; padding: 6px 12px; border-radius: 7px; cursor: pointer; }
+.ship-filter.active { color: var(--text); border-color: var(--border-bright); }
+.ship-filter:not(.active) { opacity: .5; }
+.ship-filter .dot { width: 9px; height: 9px; border-radius: 50%; }
+.ship-filter .dot.cargo { background: #2bd97c; } .ship-filter .dot.cruise { background: #d96bff; } .ship-filter .dot.tanker { background: #ffa028; }
+.ship-stat { font-family: var(--mono); font-size: 12px; color: var(--amber); }
+.ship-map { height: 540px; border: 1px solid var(--border-bright); border-radius: 10px; overflow: hidden; background: #0a0a0a; }
+.ship-hint { font-size: 11px; color: var(--muted); margin-top: 8px; }
+.leaflet-container { background: #0a0a0a; font-family: var(--mono); }
+.ship-popup .leaflet-popup-content-wrapper { background: var(--panel); color: var(--text); border: 1px solid var(--border-bright); border-radius: 8px; }
+.ship-popup .leaflet-popup-tip { background: var(--panel); }
+.ship-pop { font-size: 12px; line-height: 1.5; }
+
+@media (max-width: 720px) {
+  .themes-wrap, .report-foot { grid-template-columns: 1fr; }
+  .ship-map { height: 420px; }
+}

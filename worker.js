@@ -225,9 +225,24 @@ const MARKET_FEEDS = [
   'https://feeds.content.dowjones.io/public/rss/mw_marketpulse',
 ];
 
+// World / geopolitical / energy / shipping feeds for the GLOBAL INTEL desk.
+const WORLD_FEEDS = [
+  'https://feeds.bbci.co.uk/news/world/rss.xml',
+  'https://feeds.bbci.co.uk/news/business/rss.xml',
+  'https://www.aljazeera.com/xml/rss/all.xml',
+  'https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=100727362', // energy
+  'https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=15839135', // politics
+];
+
 async function fetchMarketHeadlines() {
   const lists = await Promise.all(MARKET_FEEDS.map((u) => fetchFeed(u, 18)));
   return mergeHeadlines(lists).slice(0, 32);
+}
+
+// Wider net: market + world/geopolitical headlines, for GLOBAL INTEL & the report.
+async function fetchWorldHeadlines() {
+  const lists = await Promise.all([...MARKET_FEEDS, ...WORLD_FEEDS].map((u) => fetchFeed(u, 14)));
+  return mergeHeadlines(lists).slice(0, 44);
 }
 
 // Per-company headlines — Bing News RSS search (allows datacenter IPs).
@@ -591,20 +606,76 @@ Return ONE JSON object:
 }
 Return ONLY the JSON object. No markdown, no commentary.`;
 
+const REPORT_SYSTEM = `You are the chief investment strategist on a global macro desk. You will be given REAL,
+current world + market headlines (geopolitics, conflict, trade, energy, central banks, technology,
+shipping/supply-chain) pulled live moments ago. Read the whole picture like an intelligence analyst
+and produce an ACTIONABLE investment brief: connect world events to specific, real, US-listed stocks
+(and where relevant ETFs) that benefit or suffer. Be concrete and decisive; name real tickers.
+
+Ground every claim in the provided headlines + your market knowledge. Prefer liquid, well-known names.
+
+Return ONE JSON object:
+{
+  "headline": one punchy sentence on the current global market situation,
+  "marketRegime": "Risk-on" | "Risk-off" | "Mixed" | "Defensive",
+  "summary": 2-3 sentence executive brief tying the top world events to market posture,
+  "themes": array of up to 4 {
+    "theme": short name (e.g. "Middle East energy risk", "AI capex boom", "China trade friction"),
+    "drivers": one sentence on what's driving it from the headlines,
+    "winners": array of up to 3 { "ticker": US ticker in caps, "why": short phrase },
+    "losers": array of up to 3 { "ticker": US ticker in caps, "why": short phrase }
+  },
+  "topPicks": array of up to 6 MOST ACTIONABLE ideas, best first {
+    "ticker": US ticker in caps,
+    "company": company name,
+    "action": "Buy" | "Watch" | "Avoid" | "Short",
+    "conviction": "High" | "Medium" | "Low",
+    "rationale": one sentence grounded in a current event,
+    "catalyst": the specific event/trigger,
+    "timeframe": short string (e.g. "Days", "Weeks", "Months")
+  },
+  "risks": array of 2-4 short strings (what could break this view),
+  "watchEvents": array of 2-5 short strings (upcoming events to watch)
+}
+Use only real, currently-traded tickers. Return ONLY the JSON object. No markdown, no commentary.`;
+
 // ───────────────────────── fetchers ─────────────────────────
 
 async function fetchIntelNews(env) {
-  const headlines = await fetchMarketHeadlines();
+  const headlines = await fetchWorldHeadlines();
   console.log('[news] headlines fetched:', headlines.length);
   const userPrompt =
     `Current time: ${new Date().toUTCString()}.\n\n` +
-    `Real, current headlines pulled live moments ago:\n\n${headlineBlock(headlines)}\n\n` +
+    `Real, current world & market headlines pulled live moments ago:\n\n${headlineBlock(headlines)}\n\n` +
     `Produce the JSON object now.`;
   const validate = (d) => { const it = Array.isArray(d) ? d : d && d.items; return Array.isArray(it) && it.length > 0; };
   const data = await runAIJson(env, NEWS_SYSTEM, userPrompt, validate);
   const items = Array.isArray(data) ? data : data && data.items;
   if (!Array.isArray(items)) throw new Error('Expected a JSON array of news items.');
-  return items.slice(0, 12);
+  return items.slice(0, 14);
+}
+
+async function fetchInvestmentReport(env) {
+  const headlines = await fetchWorldHeadlines();
+  const userPrompt =
+    `Current time: ${new Date().toUTCString()}.\n\n` +
+    `Real, current world & market headlines pulled live moments ago:\n\n${headlineBlock(headlines)}\n\n` +
+    `Produce the investment brief JSON now.`;
+  const data = await runAIJson(env, REPORT_SYSTEM, userPrompt,
+    (d) => d && Array.isArray(d.topPicks) && d.topPicks.length > 0 && Array.isArray(d.themes));
+
+  // Attach live quotes to every ticker named in the report.
+  const tickers = [...new Set([
+    ...(data.topPicks || []).map((p) => p.ticker),
+    ...(data.themes || []).flatMap((t) => [...(t.winners || []), ...(t.losers || [])].map((x) => x.ticker)),
+  ].map((t) => String(t || '').toUpperCase()).filter((t) => /^[A-Z.]{1,6}$/.test(t)))];
+  const quotes = {};
+  await Promise.all(tickers.slice(0, 30).map(async (t) => {
+    try { const q = await finnhub(env, '/quote', { symbol: t }); if (q && (q.c || q.pc)) quotes[t] = { price: q.c, change: q.d, percent: q.dp }; } catch {}
+  }));
+  data.quotes = quotes;
+  data.asOf = new Date().toISOString();
+  return data;
 }
 
 async function fetchAnalysis(env) {
@@ -970,6 +1041,49 @@ async function handleApi(request, env, ctx, url) {
   const qs = url.searchParams;
   const sym = () => (qs.get('symbol') || '').toUpperCase();
 
+  // --- Live ship AIS stream: proxy the browser <-> aisstream.io, injecting the
+  // API key server-side so it never reaches the client. The browser sends its
+  // subscription (bounding boxes / filters); we add the key and forward. ---
+  if (p === '/api/ships/stream') {
+    if (request.headers.get('Upgrade') !== 'websocket') return new Response('Expected websocket', { status: 426 });
+    if (!env.AISSTREAM_API_KEY) return new Response('AIS not configured', { status: 503 });
+
+    const pair = new WebSocketPair();
+    const client = pair[0], server = pair[1];
+    server.accept();
+
+    let upstream = null;
+    let lastSub = null;
+    let closed = false;
+    const closeAll = () => { closed = true; try { upstream && upstream.close(); } catch {} try { server.close(); } catch {} };
+
+    // Connect to aisstream.io (Cloudflare outbound WS via fetch upgrade).
+    (async () => {
+      try {
+        const resp = await fetch('https://stream.aisstream.io/v0/stream', { headers: { Upgrade: 'websocket' } });
+        upstream = resp.webSocket;
+        if (!upstream) { server.send(JSON.stringify({ error: 'AIS upstream unavailable' })); return closeAll(); }
+        upstream.accept();
+        upstream.addEventListener('message', (e) => { if (!closed) try { server.send(e.data); } catch {} });
+        upstream.addEventListener('close', () => closeAll());
+        upstream.addEventListener('error', () => closeAll());
+        if (lastSub) upstream.send(JSON.stringify(lastSub)); // replay sub that arrived early
+      } catch { try { server.send(JSON.stringify({ error: 'AIS connect failed' })); } catch {} closeAll(); }
+    })();
+
+    // Client -> upstream: inject the API key into every subscription message.
+    server.addEventListener('message', (e) => {
+      let msg; try { msg = JSON.parse(e.data); } catch { return; }
+      msg.APIKey = env.AISSTREAM_API_KEY;
+      lastSub = msg;
+      if (upstream) try { upstream.send(JSON.stringify(msg)); } catch {}
+    });
+    server.addEventListener('close', () => closeAll());
+    server.addEventListener('error', () => closeAll());
+
+    return new Response(null, { status: 101, webSocket: client });
+  }
+
   // --- Terminal (Finnhub) ---
   if (p === '/api/quote') {
     if (!env.FINNHUB_API_KEY) return json({ error: 'Server is missing FINNHUB_API_KEY.' }, 500);
@@ -1043,6 +1157,10 @@ async function handleApi(request, env, ctx, url) {
     const query = (qs.get('q') || '').trim().slice(0, 60);
     if (!query) return json({ error: true, message: 'Missing company name or ticker.' }, 400);
     try { const { data, fresh } = await getData(env, ctx, 'deepdive:' + query.toLowerCase(), () => fetchDeepDive(env, query)); return json({ cached: !fresh, ...data }); }
+    catch (err) { return json({ error: true, message: friendlyError(err) }, 500); }
+  }
+  if (p === '/api/intel/report') {
+    try { const { data, fresh } = await getData(env, ctx, 'report', () => fetchInvestmentReport(env)); return json({ cached: !fresh, ...data }); }
     catch (err) { return json({ error: true, message: friendlyError(err) }, 500); }
   }
   if (p === '/api/ai-status') {
