@@ -647,6 +647,24 @@ Return ONE JSON object:
 }
 Use only real, currently-traded tickers. Return ONLY the JSON object. No markdown, no commentary.`;
 
+const INSTABILITY_SYSTEM = `You are a geopolitical risk analyst. From REAL, current world headlines pulled live moments ago,
+score the instability of the most newsworthy countries RIGHT NOW. Consider conflict, political crisis,
+economic stress, civil unrest, sanctions and disaster signals. Be decisive and grounded in the headlines.
+
+Return ONE JSON object:
+{
+  "countries": array of 12-22 countries, MOST UNSTABLE FIRST, each {
+    "country": name,
+    "lat": approximate country-centroid latitude (number),
+    "lon": approximate country-centroid longitude (number),
+    "score": integer 0-100 instability (100 = active war / state collapse),
+    "trend": "rising" | "stable" | "easing",
+    "drivers": one short phrase on the main driver from the headlines,
+    "marketAngle": one short phrase on the market/investment implication (commodity, FX, equities, defense, energy)
+  }
+}
+Use real country centroids (approximate is fine). Return ONLY the JSON object. No markdown, no commentary.`;
+
 // ───────────────────────── fetchers ─────────────────────────
 
 async function fetchIntelNews(env) {
@@ -683,6 +701,18 @@ async function fetchInvestmentReport(env) {
   }));
   data.quotes = quotes;
   data.asOf = new Date().toISOString();
+  return data;
+}
+
+async function fetchInstability(env) {
+  const headlines = await fetchWorldHeadlines();
+  const userPrompt =
+    `Current time: ${new Date().toUTCString()}.\n\n` +
+    `Real, current world headlines pulled live moments ago:\n\n${headlineBlock(headlines)}\n\n` +
+    `Produce the instability JSON now.`;
+  const data = await runAIJson(env, INSTABILITY_SYSTEM, userPrompt,
+    (d) => d && Array.isArray(d.countries) && d.countries.length >= 6);
+  data.countries = (data.countries || []).filter((c) => typeof c.lat === 'number' && typeof c.lon === 'number');
   return data;
 }
 
@@ -1290,6 +1320,10 @@ async function handleApi(request, env, ctx, url) {
     const query = (qs.get('q') || '').trim().slice(0, 60);
     if (!query) return json({ error: true, message: 'Missing company name or ticker.' }, 400);
     try { const { data, fresh } = await getData(env, ctx, 'deepdive:' + query.toLowerCase(), () => fetchDeepDive(env, query)); return json({ cached: !fresh, ...data }); }
+    catch (err) { return json({ error: true, message: friendlyError(err) }, 500); }
+  }
+  if (p === '/api/intel/instability') {
+    try { const { data, fresh } = await getData(env, ctx, 'instability', () => fetchInstability(env)); return json({ cached: !fresh, ...data }); }
     catch (err) { return json({ error: true, message: friendlyError(err) }, 500); }
   }
   if (p === '/api/intel/report') {

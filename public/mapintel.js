@@ -235,6 +235,18 @@
         const sc = document.querySelector('.mlp-row[data-id="flights"] .mlp-lbl');
         if (sc) sc.textContent = `Aircraft · ${planes.length}`;
       } },
+    { id: 'instability', label: 'Country Instability (AI)', icon: '🔥', group: 'Hazards', live: true, refresh: 1800000,
+      load: async (lg) => {
+        const d = await getJSON('/api/intel/instability');
+        (d.countries || []).forEach((c) => {
+          if (typeof c.lat !== 'number' || typeof c.lon !== 'number') return;
+          const s = c.score || 0;
+          const col = s >= 75 ? '#ff453a' : s >= 50 ? '#ff8c00' : s >= 30 ? '#ffd23f' : '#2bd97c';
+          const tr = c.trend === 'rising' ? '▲' : c.trend === 'easing' ? '▼' : '▬';
+          L.circleMarker([c.lat, c.lon], { renderer: r(), radius: 6 + s / 10, weight: 1.5, color: col, fillColor: col, fillOpacity: 0.35 })
+            .bindPopup(`<b>${esc(c.country)}</b> — <span style="color:${col}">CII ${s}</span> ${tr}<br>${esc(c.drivers || '')}<br><small>📈 ${esc(c.marketAngle || '')}</small>`).addTo(lg);
+        });
+      } },
     { id: 'daynight', label: 'Day / Night', icon: '🌓', group: 'Overlays', compute: true, refresh: 300000,
       load: (lg) => { drawTerminator(lg); } },
     // Curated reference layers
