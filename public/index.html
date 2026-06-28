@@ -200,7 +200,12 @@
           </div>
           <div class="ship-stat" id="shipStat">Connecting to live AIS feed…</div>
         </div>
+        <div class="map-mode-toggle">
+          <button class="mapmode-btn active" data-mode="2d" type="button">🗺 2D MAP</button>
+          <button class="mapmode-btn" data-mode="3d" type="button">🌍 3D GLOBE</button>
+        </div>
         <div id="shipMap" class="ship-map"></div>
+        <div id="globeMap" class="globe-map" hidden></div>
         <div id="shipHint" class="ship-hint"></div>
       </div>
     </section>
@@ -326,5 +331,7 @@
   <script src="intel.js"></script>
   <script src="ships.js"></script>
   <script src="mapintel.js"></script>
+  <script src="https://unpkg.com/globe.gl@2.34.0/dist/globe.gl.min.js"></script>
+  <script src="globe.js"></script>
 </body>
 </html>

@@ -459,6 +459,9 @@
     panel.addTo(map);
   }
 
+  // Expose curated + line data so the 3D globe can plot the same layers.
+  window.MapData = { DATA, LINES };
+
   // ── init when the ship map is ready ──
   document.addEventListener('shipmap:ready', (e) => {
     map = e.detail.map;

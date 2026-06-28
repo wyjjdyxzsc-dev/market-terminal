@@ -205,6 +205,14 @@
       if (firstInit) document.dispatchEvent(new CustomEvent('shipmap:ready', { detail: { map } }));
     },
     getMap() { return map; },
+    getShips() {
+      const out = [];
+      for (const s of ships.values()) {
+        if (s.lat == null || s.lon == null) continue;
+        out.push({ lat: s.lat, lon: s.lon, cls: shipClass(s.type), name: s.name });
+      }
+      return out;
+    },
     refilter,
   };
 })();
