@@ -840,17 +840,25 @@ async function fetchNaturalEvents() {
   }).filter(Boolean);
 }
 
-// OpenSky Network — live aircraft states in a bounding box (no key, rate-limited).
+// Live aircraft from adsb.lol — a free community ADS-B feed (no key, and it
+// does NOT IP-block Cloudflare like OpenSky does). Takes a viewport bbox, which
+// we convert to the center + radius (nm) form adsb.lol expects.
 async function fetchFlights(bbox) {
   const [s, w, n, e] = bbox;
-  const url = `https://opensky-network.org/api/states/all?lamin=${s}&lomin=${w}&lamax=${n}&lomax=${e}`;
-  const res = await fetchWithTimeout(url, {}, 12000);
-  if (!res.ok) throw new Error('OpenSky ' + res.status);
+  const lat = (s + n) / 2, lon = (w + e) / 2;
+  // Great-circle-ish radius to a corner, in nautical miles, capped at adsb.lol's 250.
+  const dLat = (n - s) / 2, dLon = (e - w) / 2;
+  const km = Math.sqrt((dLat * 111) ** 2 + (dLon * 111 * Math.cos((lat * Math.PI) / 180)) ** 2);
+  const dist = Math.min(250, Math.max(25, Math.round(km / 1.852)));
+  const url = `https://api.adsb.lol/v2/lat/${lat.toFixed(3)}/lon/${lon.toFixed(3)}/dist/${dist}`;
+  const res = await fetchWithTimeout(url, { headers: { Accept: 'application/json' } }, 12000);
+  if (!res.ok) throw new Error('adsb.lol ' + res.status);
   const j = await res.json();
-  return (j.states || []).map((a) => ({
-    icao: a[0], callsign: (a[1] || '').trim(), country: a[2],
-    lon: a[5], lat: a[6], alt: a[7] != null ? a[7] : a[13], onGround: a[8],
-    velocity: a[9], heading: a[10], vertRate: a[11],
+  return (j.ac || []).map((a) => ({
+    icao: a.hex, callsign: (a.flight || '').trim(), type: a.t, reg: a.r,
+    lat: a.lat, lon: a.lon, alt: typeof a.alt_baro === 'number' ? Math.round(a.alt_baro * 0.3048) : null,
+    velocity: a.gs != null ? a.gs * 0.514444 : null, heading: a.track != null ? a.track : a.true_heading,
+    onGround: a.alt_baro === 'ground',
   })).filter((a) => a.lat != null && a.lon != null && !a.onGround).slice(0, 1500);
 }
 

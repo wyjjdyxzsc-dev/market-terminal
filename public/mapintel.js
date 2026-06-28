@@ -110,14 +110,21 @@
             .bindPopup(`<b>${esc(w.event || '')}</b><br>${esc(w.area || '')}<br><small>${esc(w.severity || '')} · ${esc(w.urgency || '')}</small>`).addTo(lg);
         });
       } },
-    { id: 'flights', label: 'Aircraft (live)', icon: '✈', group: 'Movement', live: true, refresh: 45000, viewport: true,
+    { id: 'flights', label: 'Aircraft (live)', icon: '✈', group: 'Movement', live: true, refresh: 20000, viewport: true,
       load: async (lg) => {
+        // Fetched DIRECTLY from the browser (airplanes.live allows CORS *), so it
+        // uses the user's residential IP — sidesteps the datacenter-IP rate limit
+        // that blocks this from the Cloudflare edge.
+        const c = map.getCenter();
         const b = map.getBounds();
-        const bbox = [b.getSouth().toFixed(1), b.getWest().toFixed(1), b.getNorth().toFixed(1), b.getEast().toFixed(1)].join(',');
-        const d = await getJSON('/api/map/flights?bbox=' + bbox);
-        (d.points || []).forEach((a) => {
-          L.marker([a.lat, a.lon], { icon: planeIcon(a.heading || 0), interactive: true })
-            .bindPopup(`<b>${esc(a.callsign || a.icao)}</b><br>${esc(a.country || '')}<br><small>${a.alt ? Math.round(a.alt) + ' m · ' : ''}${a.velocity ? Math.round(a.velocity * 1.944) + ' kn' : ''}</small>`).addTo(lg);
+        const km = c.distanceTo(b.getNorthEast()) / 1000;
+        const dist = Math.min(250, Math.max(25, Math.round(km / 1.852)));
+        const d = await getJSON(`https://api.airplanes.live/v2/point/${c.lat.toFixed(3)}/${c.lng.toFixed(3)}/${dist}`);
+        (d.ac || []).forEach((a) => {
+          if (a.lat == null || a.lon == null || a.alt_baro === 'ground') return;
+          const altM = typeof a.alt_baro === 'number' ? Math.round(a.alt_baro * 0.3048) : null;
+          L.marker([a.lat, a.lon], { icon: planeIcon(a.track || a.true_heading || 0), interactive: true })
+            .bindPopup(`<b>${esc((a.flight || a.r || a.hex || '').trim())}</b>${a.t ? ' · ' + esc(a.t) : ''}<br><small>${a.alt_baro === 'ground' ? 'on ground' : (altM != null ? altM + ' m' : '')}${a.gs != null ? ' · ' + Math.round(a.gs) + ' kn' : ''}${a.track != null ? ' · ' + Math.round(a.track) + '°' : ''}</small>`).addTo(lg);
         });
       } },
     { id: 'daynight', label: 'Day / Night', icon: '🌓', group: 'Overlays', compute: true, refresh: 300000,
