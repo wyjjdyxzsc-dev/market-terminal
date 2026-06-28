@@ -72,6 +72,99 @@
       ['PBoC', 39.915, 116.366, "People's Bank of China"], ['SNB', 46.947, 7.444, 'Switzerland'],
       ['RBI', 18.932, 72.836, 'India'], ['BoC', 45.421, -75.704, 'Canada'],
     ],
+    militaryBases: [
+      ['Ramstein AB', 49.44, 7.60, 'US Air Force — Germany'], ['Diego Garcia', -7.31, 72.41, 'US/UK Indian Ocean base'],
+      ['Guam (Andersen)', 13.58, 144.93, 'US Pacific hub'], ['Al Udeid AB', 25.12, 51.32, 'US CENTCOM — Qatar'],
+      ['Camp Humphreys', 36.96, 127.03, 'Largest US overseas base — Korea'], ['Yokosuka', 35.29, 139.67, 'US 7th Fleet — Japan'],
+      ['Djibouti (Lemonnier)', 11.55, 43.16, 'US/Allied Horn of Africa'], ['Tartus', 34.90, 35.87, 'Russian naval base — Syria'],
+      ['Pearl Harbor', 21.36, -157.95, 'US Pacific Fleet'], ['Incirlik AB', 37.00, 35.43, 'US/NATO — Türkiye'],
+      ['Bagram (former)', 34.95, 69.27, 'Afghanistan'], ['Kaliningrad', 54.71, 20.51, 'Russian Baltic exclave'],
+    ],
+    criticalMinerals: [
+      ['Bayan Obo', 41.77, 109.97, 'China — rare earths (world\'s largest)'], ['Mountain Pass', 35.48, -115.53, 'USA — rare earths'],
+      ['Escondida', -24.27, -69.07, 'Chile — copper (largest)'], ['Grasberg', -4.06, 137.11, 'Indonesia — copper/gold'],
+      ['Cobalt (Katanga)', -10.7, 25.5, 'DR Congo — cobalt belt'], ['Greenbushes', -33.86, 116.06, 'Australia — lithium'],
+      ['Salar de Atacama', -23.5, -68.2, 'Chile — lithium brine'], ['Norilsk', 69.35, 88.20, 'Russia — nickel/palladium'],
+      ['Olympic Dam', -30.44, 136.88, 'Australia — uranium/copper'], ['Jiangxi', 28.0, 116.0, 'China — rare-earth refining'],
+    ],
+    techHQs: [
+      ['Apple', 37.335, -122.009, 'Cupertino'], ['Google', 37.422, -122.084, 'Mountain View'], ['Microsoft', 47.640, -122.129, 'Redmond'],
+      ['Nvidia', 37.371, -121.965, 'Santa Clara'], ['Meta', 37.485, -122.148, 'Menlo Park'], ['TSMC', 24.774, 121.001, 'Hsinchu, Taiwan'],
+      ['ASML', 51.41, 5.46, 'Veldhoven, NL'], ['Samsung', 37.258, 127.054, 'Suwon'], ['Tesla', 30.222, -97.617, 'Austin'],
+      ['Amazon', 47.622, -122.337, 'Seattle'], ['ARM', 52.198, 0.127, 'Cambridge UK'],
+    ],
+    cloudRegions: [
+      ['AWS us-east-1', 39.04, -77.49, 'N. Virginia — core'], ['AWS us-west-2', 45.87, -119.69, 'Oregon'],
+      ['Azure East US', 37.37, -79.16, 'Virginia'], ['GCP us-central1', 41.26, -95.86, 'Iowa'],
+      ['AWS eu-west-1', 53.41, -8.24, 'Ireland'], ['AWS ap-southeast-1', 1.32, 103.69, 'Singapore'],
+      ['Azure West Europe', 52.37, 4.90, 'Netherlands'], ['GCP asia-east1', 24.05, 120.52, 'Taiwan'],
+    ],
+    financialCenters: [
+      ['Wall Street', 40.706, -74.009, 'New York'], ['City of London', 51.515, -0.092, 'London'],
+      ['Hong Kong', 22.281, 114.158, 'HK'], ['Singapore', 1.284, 103.851, 'SG'], ['Tokyo', 35.681, 139.767, 'Marunouchi'],
+      ['Frankfurt', 50.111, 8.679, 'DE'], ['Zurich', 47.369, 8.539, 'CH'], ['Dubai (DIFC)', 25.215, 55.282, 'UAE'], ['Shanghai', 31.240, 121.499, 'Lujiazui'],
+    ],
+    refugeeHotspots: [
+      ['Syria', 35.0, 38.0, 'Largest displacement crisis'], ['Ukraine', 49.0, 32.0, 'War displacement'],
+      ['Sudan', 15.5, 30.0, 'Conflict displacement'], ['Gaza', 31.5, 34.45, 'Humanitarian crisis'],
+      ['DR Congo', -2.0, 27.0, 'Eastern conflict'], ['Myanmar', 21.0, 96.0, 'Rohingya & internal'],
+      ['Afghanistan', 34.0, 66.0, 'Protracted displacement'], ['Venezuela', 7.0, -66.0, 'Regional migration'],
+    ],
+    commodityPorts: [
+      ['Ras Tanura', 26.64, 50.16, 'Saudi — oil export'], ['Rotterdam', 51.95, 4.14, 'Europe\'s largest port'],
+      ['Shanghai', 30.62, 122.06, 'World\'s busiest container port'], ['Houston', 29.73, -95.27, 'US energy export'],
+      ['Singapore', 1.26, 103.75, 'Bunkering & transshipment'], ['Fujairah', 25.16, 56.36, 'UAE oil storage hub'],
+      ['Newcastle', -32.92, 151.80, 'Australia — coal export'], ['Santos', -23.96, -46.30, 'Brazil — soy/sugar'],
+    ],
+    conflictZones: [
+      ['Ukraine', 48.3, 37.8, 'Russia–Ukraine war (active front)'], ['Gaza', 31.45, 34.40, 'Israel–Hamas conflict'],
+      ['Sudan', 15.5, 32.5, 'Civil war (RSF vs SAF)'], ['Sahel', 14.0, 0.0, 'Jihadist insurgency belt'],
+      ['Myanmar', 21.5, 96.5, 'Civil war'], ['DR Congo (East)', -1.5, 29.0, 'M23 & militia conflict'],
+      ['Red Sea', 14.5, 42.0, 'Houthi shipping attacks'], ['Taiwan Strait', 24.5, 119.5, 'Cross-strait tensions'],
+      ['Kashmir', 34.0, 76.0, 'India–Pakistan flashpoint'], ['Korean DMZ', 38.0, 127.5, 'North–South standoff'],
+    ],
+    sanctions: [
+      ['Russia', 61.5, 100.0, 'Heavily sanctioned (West)'], ['Iran', 32.0, 53.0, 'Oil & banking sanctions'],
+      ['North Korea', 40.0, 127.0, 'UN/US sanctions'], ['Venezuela', 7.0, -66.0, 'US oil sanctions'],
+      ['Syria', 35.0, 38.0, 'Multilateral sanctions'], ['Cuba', 22.0, -79.5, 'US embargo'], ['Belarus', 53.7, 27.9, 'EU/US sanctions'],
+    ],
+    startupHubs: [
+      ['Silicon Valley', 37.39, -122.08, 'Global #1'], ['New York', 40.74, -73.99, 'Fintech & SaaS'],
+      ['London', 51.52, -0.10, 'Europe #1'], ['Bengaluru', 12.97, 77.59, 'India tech capital'],
+      ['Tel Aviv', 32.07, 34.79, 'Startup Nation'], ['Beijing', 39.98, 116.31, 'Zhongguancun'],
+      ['Berlin', 52.52, 13.40, 'EU growth hub'], ['Singapore', 1.29, 103.85, 'SEA gateway'], ['Shenzhen', 22.54, 114.06, 'Hardware capital'],
+    ],
+    gccInvestments: [
+      ['PIF (Saudi)', 24.71, 46.68, '$900B+ sovereign fund'], ['ADIA (Abu Dhabi)', 24.45, 54.38, '~$1T sovereign fund'],
+      ['QIA (Qatar)', 25.29, 51.53, '~$500B fund'], ['Mubadala', 24.50, 54.37, 'Abu Dhabi strategic fund'],
+      ['Kuwait (KIA)', 29.38, 47.99, 'Oldest sovereign fund'], ['NEOM', 28.0, 35.3, '$500B megacity project'],
+    ],
+    diseaseOutbreaks: [
+      ['DR Congo', -4.0, 21.5, 'Mpox / Ebola watch'], ['Uganda', 1.4, 32.3, 'Ebola/Marburg surveillance'],
+      ['DRC/Sudan', 12.0, 30.0, 'Cholera outbreaks'], ['SE Asia', 14.0, 101.0, 'Dengue surge'], ['Global', 30.0, 0.0, 'Avian influenza H5N1 spread'],
+    ],
+  };
+
+  // Line-based layers (great-circle-ish polylines) — [name, [[lat,lon],...], desc]
+  const LINES = {
+    tradeRoutes: [
+      ['Asia–Europe (via Suez)', [[31.2, 121.5], [1.3, 104.0], [6.9, 79.8], [12.6, 43.3], [30.0, 32.5], [37.0, 15.0], [36.1, -5.3], [51.0, 1.4]], 'Main container artery'],
+      ['Transpacific', [[31.2, 121.5], [35.5, 140.0], [40.0, 175.0], [40.0, -150.0], [37.8, -122.4]], 'Asia–US West Coast'],
+      ['Transatlantic', [[51.0, 1.4], [50.0, -20.0], [42.0, -50.0], [40.7, -74.0]], 'Europe–US East Coast'],
+      ['Gulf–Asia (oil)', [[26.6, 50.2], [26.5, 56.3], [12.6, 60.0], [6.9, 79.8], [1.3, 104.0], [31.2, 121.5]], 'Crude to Asia'],
+      ['Cape Route', [[26.6, 50.2], [12.0, 50.0], [-12.0, 45.0], [-34.4, 18.5], [0.0, -15.0], [51.0, 1.4]], 'Around Africa (Red Sea bypass)'],
+    ],
+    cables: [
+      ['Transatlantic (MAREA-ish)', [[36.7, -3.5], [38.0, -30.0], [36.8, -76.0]], 'US–Europe fiber'],
+      ['Transpacific (JUPITER-ish)', [[35.3, 139.7], [30.0, 170.0], [21.3, -157.9], [34.0, -118.5]], 'Asia–US fiber'],
+      ['SEA-ME-WE (Asia–Europe)', [[1.3, 103.8], [6.9, 79.8], [25.0, 56.0], [30.0, 32.5], [43.3, 5.4], [51.5, -0.1]], 'Asia–Mideast–Europe'],
+    ],
+    pipelines: [
+      ['Nord Stream', [[60.2, 28.0], [59.5, 22.0], [55.4, 15.0], [54.1, 13.6]], 'Russia–Germany (gas)'],
+      ['Druzhba', [[52.5, 50.0], [52.0, 35.0], [52.2, 23.0], [51.0, 15.0]], 'Russia–Europe (oil)'],
+      ['TurkStream', [[45.0, 37.0], [42.0, 33.0], [41.2, 28.0]], 'Russia–Türkiye (gas)'],
+      ['Keystone', [[56.0, -111.0], [49.0, -101.0], [40.0, -97.0], [29.7, -95.3]], 'Canada–US (oil)'],
+    ],
   };
 
   function pointLayer(items, makeMarker) {
@@ -157,7 +250,46 @@
       load: (lg) => DATA.exchanges.forEach(([n, la, lo, d]) => diamond(la, lo, '#ffa028', `<b>🏛 ${esc(n)}</b><br>${esc(d)}`).addTo(lg)) },
     { id: 'centralbanks', label: 'Central Banks', icon: '💰', group: 'Markets',
       load: (lg) => DATA.centralbanks.forEach(([n, la, lo, d]) => diamond(la, lo, '#e8c170', `<b>💰 ${esc(n)}</b><br>${esc(d)}`).addTo(lg)) },
+    { id: 'financialCenters', label: 'Financial Centers', icon: '💵', group: 'Markets',
+      load: (lg) => DATA.financialCenters.forEach(([n, la, lo, d]) => diamond(la, lo, '#ffd23f', `<b>💵 ${esc(n)}</b><br>${esc(d)}`).addTo(lg)) },
+    { id: 'commodityPorts', label: 'Commodity Ports', icon: '⚓', group: 'Markets',
+      load: (lg) => DATA.commodityPorts.forEach(([n, la, lo, d]) => diamond(la, lo, '#e8a87c', `<b>⚓ ${esc(n)}</b><br>${esc(d)}`).addTo(lg)) },
+    // Geopolitics & defense
+    { id: 'militaryBases', label: 'Military Bases', icon: '🪖', group: 'Geopolitics',
+      load: (lg) => DATA.militaryBases.forEach(([n, la, lo, d]) => diamond(la, lo, '#ff8c5a', `<b>🪖 ${esc(n)}</b><br>${esc(d)}`).addTo(lg)) },
+    { id: 'criticalMinerals', label: 'Critical Minerals', icon: '💎', group: 'Geopolitics',
+      load: (lg) => DATA.criticalMinerals.forEach(([n, la, lo, d]) => diamond(la, lo, '#6fd3c9', `<b>💎 ${esc(n)}</b><br>${esc(d)}`).addTo(lg)) },
+    { id: 'refugeeHotspots', label: 'Displacement', icon: '👥', group: 'Geopolitics',
+      load: (lg) => DATA.refugeeHotspots.forEach(([n, la, lo, d]) => diamond(la, lo, '#ff6b9d', `<b>👥 ${esc(n)}</b><br>${esc(d)}`).addTo(lg)) },
+    { id: 'conflictZones', label: 'Conflict Zones', icon: '⚔', group: 'Geopolitics',
+      load: (lg) => DATA.conflictZones.forEach(([n, la, lo, d]) => { diamond(la, lo, '#ff453a', `<b>⚔ ${esc(n)}</b><br>${esc(d)}`).addTo(lg); L.circle([la, lo], { radius: 220000, color: '#ff453a', weight: 1, fillColor: '#ff453a', fillOpacity: 0.08, interactive: false }).addTo(lg); }) },
+    { id: 'sanctions', label: 'Sanctioned States', icon: '🚫', group: 'Geopolitics',
+      load: (lg) => DATA.sanctions.forEach(([n, la, lo, d]) => diamond(la, lo, '#f0883e', `<b>🚫 ${esc(n)}</b><br>${esc(d)}`).addTo(lg)) },
+    { id: 'diseaseOutbreaks', label: 'Disease Outbreaks', icon: '🦠', group: 'Hazards',
+      load: (lg) => DATA.diseaseOutbreaks.forEach(([n, la, lo, d]) => diamond(la, lo, '#a3e635', `<b>🦠 ${esc(n)}</b><br>${esc(d)}`).addTo(lg)) },
+    // Tech & infrastructure
+    { id: 'techHQs', label: 'Tech HQs', icon: '🏢', group: 'Infrastructure',
+      load: (lg) => DATA.techHQs.forEach(([n, la, lo, d]) => diamond(la, lo, '#7aa2f7', `<b>🏢 ${esc(n)}</b><br>${esc(d)}`).addTo(lg)) },
+    { id: 'cloudRegions', label: 'Cloud Regions', icon: '☁', group: 'Infrastructure',
+      load: (lg) => DATA.cloudRegions.forEach(([n, la, lo, d]) => diamond(la, lo, '#9ece6a', `<b>☁ ${esc(n)}</b><br>${esc(d)}`).addTo(lg)) },
+    { id: 'startupHubs', label: 'Startup Hubs', icon: '🚀', group: 'Markets',
+      load: (lg) => DATA.startupHubs.forEach(([n, la, lo, d]) => diamond(la, lo, '#bb9af7', `<b>🚀 ${esc(n)}</b><br>${esc(d)}`).addTo(lg)) },
+    { id: 'gccInvestments', label: 'GCC Sovereign Funds', icon: '🛢', group: 'Markets',
+      load: (lg) => DATA.gccInvestments.forEach(([n, la, lo, d]) => diamond(la, lo, '#e0af68', `<b>🛢 ${esc(n)}</b><br>${esc(d)}`).addTo(lg)) },
+    // Line layers
+    { id: 'tradeRoutes', label: 'Trade Routes', icon: '🚢', group: 'Routes',
+      load: (lg) => lines(lg, LINES.tradeRoutes, '#45c8dc', 2) },
+    { id: 'cables', label: 'Undersea Cables', icon: '🔌', group: 'Routes',
+      load: (lg) => lines(lg, LINES.cables, '#7aa2f7', 1.5, '4 3') },
+    { id: 'pipelines', label: 'Pipelines', icon: '🛢', group: 'Routes',
+      load: (lg) => lines(lg, LINES.pipelines, '#ffa028', 2, '1 4') },
   ];
+
+  function lines(lg, set, color, weight, dash) {
+    set.forEach(([name, path, desc]) => {
+      L.polyline(path, { color, weight, opacity: 0.7, dashArray: dash || null }).bindPopup(`<b>${esc(name)}</b><br>${esc(desc)}`).addTo(lg);
+    });
+  }
 
   let _canvas = null;
   const r = () => (_canvas || (_canvas = L.canvas({ padding: 0.5 })));
@@ -237,7 +369,7 @@
       options: { position: 'topright' },
       onAdd() {
         const div = L.DomUtil.create('div', 'map-layer-panel');
-        const groupsOrder = ['Hazards', 'Movement', 'Geopolitics', 'Infrastructure', 'Markets', 'Overlays'];
+        const groupsOrder = ['Hazards', 'Movement', 'Routes', 'Geopolitics', 'Infrastructure', 'Markets', 'Overlays'];
         const byGroup = {};
         LAYERS.forEach((l) => { (byGroup[l.group] = byGroup[l.group] || []).push(l); });
         div.innerHTML =
