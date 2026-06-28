@@ -158,6 +158,21 @@
       ['Baltic / Kaliningrad', 55.0, 21.0, 'Jamming affecting aviation'], ['Persian Gulf', 26.5, 52.0, 'Strait of Hormuz interference'],
       ['Korean Peninsula', 37.8, 126.5, 'DPRK jamming events'], ['Syria/Levant', 34.5, 37.0, 'Active EW operations'],
     ],
+    // Public live webcams — popup links to a live stream. [name, lat, lon, desc, liveUrl]
+    webcams: [
+      ['Times Square', 40.758, -73.985, 'New York City', 'https://www.youtube.com/results?search_query=times+square+live+cam'],
+      ['Shibuya Crossing', 35.659, 139.700, 'Tokyo', 'https://www.youtube.com/results?search_query=shibuya+crossing+live+cam'],
+      ['Las Vegas Strip', 36.115, -115.173, 'Nevada', 'https://www.youtube.com/results?search_query=las+vegas+strip+live+cam'],
+      ['Venice — St Mark\'s', 45.434, 12.339, 'Italy', 'https://www.youtube.com/results?search_query=venice+st+marks+live+cam'],
+      ['Abbey Road', 51.532, -0.177, 'London', 'https://www.youtube.com/results?search_query=abbey+road+live+cam'],
+      ['Mount Fuji', 35.361, 138.728, 'Japan', 'https://www.youtube.com/results?search_query=mount+fuji+live+cam'],
+      ['Niagara Falls', 43.080, -79.075, 'US/Canada', 'https://www.youtube.com/results?search_query=niagara+falls+live+cam'],
+      ['Reykjavík / Aurora', 64.146, -21.942, 'Iceland', 'https://www.youtube.com/results?search_query=iceland+aurora+live+cam'],
+      ['Bondi Beach', -33.891, 151.277, 'Sydney', 'https://www.youtube.com/results?search_query=bondi+beach+live+cam'],
+      ['Dubai Marina', 25.080, 55.140, 'UAE', 'https://www.youtube.com/results?search_query=dubai+live+cam'],
+      ['Singapore Marina', 1.283, 103.860, 'Singapore', 'https://www.youtube.com/results?search_query=singapore+marina+live+cam'],
+      ['Kyiv', 50.450, 30.523, 'Ukraine', 'https://www.youtube.com/results?search_query=kyiv+live+cam'],
+    ],
   };
 
   // Line-based layers (great-circle-ish polylines) — [name, [[lat,lon],...], desc]
@@ -318,6 +333,9 @@
       load: (lg) => DATA.internetExchanges.forEach(([n, la, lo, d]) => diamond(la, lo, '#73daca', `<b>🌐 ${esc(n)}</b><br>${esc(d)}`).addTo(lg)) },
     { id: 'gpsJamming', label: 'GPS Jamming', icon: '📡', group: 'Geopolitics',
       load: (lg) => DATA.gpsJamming.forEach(([n, la, lo, d]) => { diamond(la, lo, '#f0883e', `<b>📡 ${esc(n)}</b><br>${esc(d)}`).addTo(lg); L.circle([la, lo], { radius: 300000, color: '#f0883e', weight: 1, fillColor: '#f0883e', fillOpacity: 0.06, interactive: false }).addTo(lg); }) },
+    { id: 'webcams', label: 'Live Webcams', icon: '📷', group: 'Overlays',
+      load: (lg) => DATA.webcams.forEach(([n, la, lo, d, url]) => L.circleMarker([la, lo], { renderer: r(), radius: 5, weight: 1.5, color: '#45c8dc', fillColor: '#0a0a0a', fillOpacity: 0.9 })
+        .bindPopup(`<b>📷 ${esc(n)}</b><br>${esc(d)}<br><a href="${esc(url)}" target="_blank" rel="noopener" style="color:#45c8dc">▶ Watch live</a>`).addTo(lg)) },
     // Line layers
     { id: 'tradeRoutes', label: 'Trade Routes', icon: '🚢', group: 'Routes',
       load: (lg) => lines(lg, LINES.tradeRoutes, '#45c8dc', 2) },
