@@ -9,7 +9,7 @@
    ════════════════════════════════════════════════════════════════ */
 (() => {
   let globe = null, initialized = false, rotTimer = null;
-  const active = { ships: true, earthquakes: true, instability: true, conflicts: true, routes: true, nuclear: false, military: false, exchanges: false };
+  const active = { ships: true, earthquakes: true, instability: true, conflicts: true, routes: true, webcams: false, nuclear: false, military: false, exchanges: false };
   const cache = {};
 
   const $ = (s) => document.querySelector(s);
@@ -33,6 +33,10 @@
     if (id === 'instability') {
       if (!cache.cii) cache.cii = (await getJSON('/api/intel/instability')).countries || [];
       return cache.cii.map((c) => ({ lat: c.lat, lon: c.lon, color: cii(c.score || 0), alt: (c.score || 0) / 100 * 0.4, r: 0.55, label: `${c.country}: CII ${c.score}` }));
+    }
+    if (id === 'webcams') {
+      if (!cache.cam) cache.cam = (await getJSON('/api/map/webcams-live')).points || [];
+      return cache.cam.map((w) => ({ lat: w.lat, lon: w.lon, color: '#73daca', alt: 0.01, r: 0.18, label: w.title }));
     }
     const curated = { conflicts: ['conflictZones', '#ff453a'], nuclear: ['nuclear', '#ffd23f'], military: ['militaryBases', '#ff8c5a'], exchanges: ['exchanges', '#ffa028'] };
     if (curated[id]) {
@@ -64,7 +68,7 @@
   function buildToggle(host) {
     const wrap = document.createElement('div');
     wrap.className = 'globe-panel';
-    const rows = [['ships', '🚢 Ships'], ['earthquakes', '🌐 Quakes'], ['instability', '⚠ Instability'], ['conflicts', '⚔ Conflicts'], ['routes', '🚢 Routes'], ['nuclear', '☢ Nuclear'], ['military', '🪖 Military'], ['exchanges', '🏛 Exchanges']];
+    const rows = [['ships', '🚢 Ships'], ['earthquakes', '🌐 Quakes'], ['instability', '⚠ Instability'], ['conflicts', '⚔ Conflicts'], ['routes', '🚢 Routes'], ['webcams', '📹 Webcams'], ['nuclear', '☢ Nuclear'], ['military', '🪖 Military'], ['exchanges', '🏛 Exchanges']];
     wrap.innerHTML = `<div class="globe-stat" id="globeStat">Loading…</div>` +
       rows.map(([id, lbl]) => `<label class="globe-row"><input type="checkbox" data-g="${id}" ${active[id] ? 'checked' : ''}><span>${lbl}</span></label>`).join('');
     wrap.querySelectorAll('input[data-g]').forEach((cb) => cb.addEventListener('change', () => { active[cb.dataset.g] = cb.checked; render(); }));

@@ -333,9 +333,22 @@
       load: (lg) => DATA.internetExchanges.forEach(([n, la, lo, d]) => diamond(la, lo, '#73daca', `<b>🌐 ${esc(n)}</b><br>${esc(d)}`).addTo(lg)) },
     { id: 'gpsJamming', label: 'GPS Jamming', icon: '📡', group: 'Geopolitics',
       load: (lg) => DATA.gpsJamming.forEach(([n, la, lo, d]) => { diamond(la, lo, '#f0883e', `<b>📡 ${esc(n)}</b><br>${esc(d)}`).addTo(lg); L.circle([la, lo], { radius: 300000, color: '#f0883e', weight: 1, fillColor: '#f0883e', fillOpacity: 0.06, interactive: false }).addTo(lg); }) },
-    { id: 'webcams', label: 'Live Webcams', icon: '📷', group: 'Overlays',
+    { id: 'webcams', label: 'Curated Webcams', icon: '📷', group: 'Overlays',
       load: (lg) => DATA.webcams.forEach(([n, la, lo, d, url]) => L.circleMarker([la, lo], { renderer: r(), radius: 5, weight: 1.5, color: '#45c8dc', fillColor: '#0a0a0a', fillOpacity: 0.9 })
         .bindPopup(`<b>📷 ${esc(n)}</b><br>${esc(d)}<br><a href="${esc(url)}" target="_blank" rel="noopener" style="color:#45c8dc">▶ Watch live</a>`).addTo(lg)) },
+    { id: 'webcams-live', label: 'Live Webcams (Windy)', icon: '📹', group: 'Overlays', live: true, refresh: 3600000,
+      load: async (lg) => {
+        const d = await getJSON('/api/map/webcams-live');
+        if (d.error) return;
+        (d.points || []).forEach((w) => {
+          const pop = `<b>📹 ${esc(w.title || 'Webcam')}</b>` +
+            (w.img ? `<br><img src="${esc(w.img)}" style="width:220px;border-radius:6px;margin-top:5px" loading="lazy">` : '') +
+            (w.url ? `<br><a href="${esc(w.url)}" target="_blank" rel="noopener" style="color:#73daca">▶ Watch live on Windy</a>` : '');
+          L.circleMarker([w.lat, w.lon], { renderer: r(), radius: 2.5, weight: 0.5, color: '#73daca', fillColor: '#73daca', fillOpacity: 0.5 }).bindPopup(pop).addTo(lg);
+        });
+        const sc = document.querySelector('.mlp-row[data-id="webcams-live"] .mlp-lbl');
+        if (sc) sc.textContent = `Live Webcams · ${(d.points || []).length}`;
+      } },
     // Line layers
     { id: 'tradeRoutes', label: 'Trade Routes', icon: '🚢', group: 'Routes',
       load: (lg) => lines(lg, LINES.tradeRoutes, '#45c8dc', 2) },

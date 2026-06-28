@@ -1092,18 +1092,32 @@ async function fetchFires(env) {
     .filter((x) => !Number.isNaN(x.lat) && !Number.isNaN(x.lon)).slice(0, 5000);
 }
 
-// Windy live webcams API — worldwide public webcam feeds with coordinates.
+// Windy live webcams API (v3) — worldwide public webcam feeds with coordinates,
+// a current still image, and an embeddable live player. Header-auth + paginated.
 async function fetchWindyWebcams(env) {
   if (!env.WINDY_KEY) throw new Error('Windy key not configured');
-  const url = `https://api.windy.com/webcams/v2/list/nearby?key=${env.WINDY_KEY}&limit=500&offset=0`;
-  const res = await fetchWithTimeout(url, { headers: { Accept: 'application/json' } }, 15000);
-  if (!res.ok) throw new Error('Windy ' + res.status);
-  const j = await res.json();
-  const cams = (j.webcams || []).slice(0, 1000);
-  return cams.map((w) => {
-    const p = w.location || {};
-    return { lat: parseFloat(p.latitude), lon: parseFloat(p.longitude), title: w.title || '', url: w.url || '' };
-  }).filter((c) => !Number.isNaN(c.lat) && !Number.isNaN(c.lon));
+  const headers = { 'x-windy-api-key': env.WINDY_KEY, Accept: 'application/json' };
+  const out = [];
+  // Page through the most-viewed webcams for a broad spread (50/page, v3 max).
+  for (let offset = 0; offset < 500; offset += 50) {
+    const url = `https://api.windy.com/webcams/api/v3/webcams?limit=50&offset=${offset}&include=location,images,player`;
+    const res = await fetchWithTimeout(url, { headers }, 15000);
+    if (!res.ok) { if (offset === 0) throw new Error('Windy ' + res.status); break; }
+    const j = await res.json();
+    const cams = j.webcams || [];
+    if (!cams.length) break;
+    for (const w of cams) {
+      const p = w.location || {};
+      const lat = parseFloat(p.latitude), lon = parseFloat(p.longitude);
+      if (Number.isNaN(lat) || Number.isNaN(lon)) continue;
+      out.push({
+        lat, lon, title: w.title || (p.city || 'Webcam'),
+        img: (w.images && w.images.current && w.images.current.preview) || '',
+        url: (w.player && (w.player.day || w.player.lifetime)) || '',
+      });
+    }
+  }
+  return out;
 }
 
 // US National Weather Service — active alerts (no key; needs a UA).
