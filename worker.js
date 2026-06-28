@@ -422,6 +422,14 @@ function providerPool(env) {
     pool.push({ name: 'github', call: (e, s, u, sig) => openaiCompatCall({ url: 'https://models.github.ai/inference/chat/completions', key: e.GITHUB_MODELS_TOKEN, model: e.GITHUB_MODEL || 'openai/gpt-4o-mini' }, s, u, sig) });
   if (env.AI)
     pool.push({ name: 'cfai', call: cfAICall });
+  if (env.DEEPSEEK_API_KEY)
+    pool.push({ name: 'deepseek', call: deepseekCall });
+  if (env.COHERE_API_KEY)
+    pool.push({ name: 'cohere', call: cohereCall });
+  if (env.AI21_API_KEY)
+    pool.push({ name: 'ai21', call: ai21Call });
+  if (env.OCTOAI_API_KEY)
+    pool.push({ name: 'octoai', call: octoadiCall });
   return pool;
 }
 
@@ -716,6 +724,53 @@ Return ONE JSON object:
   }
 }
 Use real country centroids (approximate is fine). Return ONLY the JSON object. No markdown, no commentary.`;
+
+// ────────── More AI providers (DeepSeek, Cohere, AI21, OctoAI) ──────────
+async function deepseekCall(env, sys, usr) {
+  if (!env.DEEPSEEK_API_KEY) throw new Error('DeepSeek key not set');
+  const res = await fetchWithTimeout('https://api.deepseek.com/chat/completions', {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${env.DEEPSEEK_API_KEY}` },
+    body: JSON.stringify({ model: 'deepseek-chat', messages: [{ role: 'system', content: sys }, { role: 'user', content: usr }], temperature: 0.7, max_tokens: 2000 }),
+  }, 25000);
+  const j = await res.json();
+  if (j.error) throw new Error('DeepSeek: ' + (j.error.message || JSON.stringify(j.error)));
+  const c = j.choices && j.choices[0];
+  if (!c) throw new Error('DeepSeek: no choice');
+  return { text: c.message.content || '', usage: j.usage };
+}
+async function cohereCall(env, sys, usr) {
+  if (!env.COHERE_API_KEY) throw new Error('Cohere key not set');
+  const res = await fetchWithTimeout('https://api.cohere.ai/v2/chat', {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${env.COHERE_API_KEY}` },
+    body: JSON.stringify({ model: 'command-r-plus', messages: [{ role: 'user', content: usr }], temperature: 0.7 }),
+  }, 25000);
+  const j = await res.json();
+  if (j.error) throw new Error('Cohere: ' + (j.error.message || JSON.stringify(j.error)));
+  return { text: j.text || '', usage: { input_tokens: j.usage?.input_tokens || 0 } };
+}
+async function ai21Call(env, sys, usr) {
+  if (!env.AI21_API_KEY) throw new Error('AI21 key not set');
+  const res = await fetchWithTimeout('https://api.ai21.com/studio/v1/j2-ultra/complete', {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${env.AI21_API_KEY}` },
+    body: JSON.stringify({ prompt: sys + '\n\n' + usr, temperature: 0.7, maxTokens: 2000 }),
+  }, 25000);
+  const j = await res.json();
+  if (j.error) throw new Error('AI21: ' + (j.error.message || JSON.stringify(j.error)));
+  const d = (j.completions && j.completions[0]) || {};
+  return { text: (d.data && d.data.text) || '', usage: d.finish_reason ? { output_tokens: 1 } : {} };
+}
+async function octoadiCall(env, sys, usr) {
+  if (!env.OCTOAI_API_KEY) throw new Error('OctoAI key not set');
+  const res = await fetchWithTimeout('https://text.octoai.run/v1/chat/completions', {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${env.OCTOAI_API_KEY}` },
+    body: JSON.stringify({ model: 'meta-llama-3.1-70b-instruct', messages: [{ role: 'system', content: sys }, { role: 'user', content: usr }], temperature: 0.7, max_tokens: 2000 }),
+  }, 25000);
+  const j = await res.json();
+  if (j.error) throw new Error('OctoAI: ' + (j.error.message || JSON.stringify(j.error)));
+  const c = j.choices && j.choices[0];
+  if (!c) throw new Error('OctoAI: no choice');
+  return { text: c.message.content || '', usage: j.usage };
+}
 
 const SITUATION_SYSTEM = `You are the watch officer of a global situation room. From REAL, current world headlines pulled
 live moments ago, synthesize a cross-domain situational brief — correlate signals across domains and
@@ -1035,6 +1090,20 @@ async function fetchFires(env) {
   const iConf = h.indexOf('confidence'), iDate = h.indexOf('acq_date');
   return lines.slice(1).map((r) => { const f = r.split(','); return { lat: parseFloat(f[iLat]), lon: parseFloat(f[iLon]), bright: iBr >= 0 ? parseFloat(f[iBr]) : null, conf: iConf >= 0 ? f[iConf] : '', date: iDate >= 0 ? f[iDate] : '' }; })
     .filter((x) => !Number.isNaN(x.lat) && !Number.isNaN(x.lon)).slice(0, 5000);
+}
+
+// Windy live webcams API — worldwide public webcam feeds with coordinates.
+async function fetchWindyWebcams(env) {
+  if (!env.WINDY_KEY) throw new Error('Windy key not configured');
+  const url = `https://api.windy.com/webcams/v2/list/nearby?key=${env.WINDY_KEY}&limit=500&offset=0`;
+  const res = await fetchWithTimeout(url, { headers: { Accept: 'application/json' } }, 15000);
+  if (!res.ok) throw new Error('Windy ' + res.status);
+  const j = await res.json();
+  const cams = (j.webcams || []).slice(0, 1000);
+  return cams.map((w) => {
+    const p = w.location || {};
+    return { lat: parseFloat(p.latitude), lon: parseFloat(p.longitude), title: w.title || '', url: w.url || '' };
+  }).filter((c) => !Number.isNaN(c.lat) && !Number.isNaN(c.lon));
 }
 
 // US National Weather Service — active alerts (no key; needs a UA).
@@ -1359,6 +1428,11 @@ async function handleApi(request, env, ctx, url) {
   if (p === '/api/map/fires') {
     if (!env.FIRMS_MAP_KEY) return json({ error: true, message: 'FIRMS key not configured' }, 503);
     try { const { data, fresh } = await getData(env, ctx, 'map:fires', () => fetchFires(env), 30 * 60 * 1000); return json({ cached: !fresh, points: data }); }
+    catch (err) { return json({ error: true, message: friendlyError(err) }, 502); }
+  }
+  if (p === '/api/map/webcams-live') {
+    if (!env.WINDY_KEY) return json({ error: true, message: 'Windy key not configured' }, 503);
+    try { const { data, fresh } = await getData(env, ctx, 'map:webcams', () => fetchWindyWebcams(env), 60 * 60 * 1000); return json({ cached: !fresh, points: data }); }
     catch (err) { return json({ error: true, message: friendlyError(err) }, 502); }
   }
   if (p === '/api/map/flights') {
