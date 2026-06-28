@@ -49,6 +49,7 @@
     setStat('Connecting to live AIS feed…');
     try { ws = new WebSocket(`${proto}//${location.host}/api/ships/stream`); }
     catch { return scheduleReconnect(); }
+    ws.binaryType = 'arraybuffer'; // aisstream sends JSON as binary frames
     ws.addEventListener('open', () => { setStat('● LIVE · subscribing to this region…'); subscribe(); });
     ws.addEventListener('message', onMessage);
     ws.addEventListener('close', () => { if (opened) scheduleReconnect(); });
@@ -75,7 +76,10 @@
 
   // ---------- incoming AIS ----------
   function onMessage(ev) {
-    let m; try { m = JSON.parse(ev.data); } catch { return; }
+    let raw = ev.data;
+    if (raw instanceof ArrayBuffer) raw = new TextDecoder().decode(raw);
+    else if (typeof raw !== 'string') return; // ignore unexpected Blob frames
+    let m; try { m = JSON.parse(raw); } catch { return; }
     if (m.error) { setStat('AIS: ' + m.error); return; }
     const meta = m.MetaData || {};
     const mmsi = meta.MMSI || meta.mmsi;
