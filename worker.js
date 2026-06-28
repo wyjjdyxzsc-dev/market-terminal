@@ -665,6 +665,25 @@ Return ONE JSON object:
 }
 Use real country centroids (approximate is fine). Return ONLY the JSON object. No markdown, no commentary.`;
 
+const SITUATION_SYSTEM = `You are the watch officer of a global situation room. From REAL, current world headlines pulled
+live moments ago, synthesize a cross-domain situational brief — correlate signals across domains and
+flag where they CONVERGE (e.g. a conflict driving an energy spike driving an inflation read).
+
+Return ONE JSON object:
+{
+  "threatLevel": "Low" | "Guarded" | "Elevated" | "High" | "Severe",
+  "overview": 2-3 sentence top-line situational summary,
+  "domains": array of EXACTLY these 5, each {
+    "domain": one of "Military","Economic","Political","Disaster","Cyber/Energy",
+    "level": "calm" | "watch" | "active" | "critical",
+    "summary": one sentence grounded in the headlines
+  },
+  "convergence": 1-2 sentences on where signals reinforce each other right now,
+  "marketImplication": one sentence on the net market posture this implies,
+  "watchlist": array of 3-5 short strings (specific things to watch next)
+}
+Return ONLY the JSON object. No markdown, no commentary.`;
+
 // ───────────────────────── fetchers ─────────────────────────
 
 async function fetchIntelNews(env) {
@@ -702,6 +721,15 @@ async function fetchInvestmentReport(env) {
   data.quotes = quotes;
   data.asOf = new Date().toISOString();
   return data;
+}
+
+async function fetchSituation(env) {
+  const headlines = await fetchWorldHeadlines();
+  const userPrompt =
+    `Current time: ${new Date().toUTCString()}.\n\n` +
+    `Real, current world headlines pulled live moments ago:\n\n${headlineBlock(headlines)}\n\n` +
+    `Produce the situational brief JSON now.`;
+  return runAIJson(env, SITUATION_SYSTEM, userPrompt, (d) => d && Array.isArray(d.domains) && d.domains.length >= 3);
 }
 
 async function fetchInstability(env) {
@@ -919,6 +947,37 @@ async function fetchFlights(bbox) {
     }
   }
   return [...byIcao.values()].slice(0, 2500);
+}
+
+// GDELT GEO 2.0 — geolocated news mentions for a query (no key; rate-limited,
+// so cached long). Great for a live "where the conflict news is" heat layer.
+async function fetchGdeltGeo(query) {
+  const url = `https://api.gdeltproject.org/api/v2/geo/geo?query=${encodeURIComponent(query)}&format=geojson&timespan=2d`;
+  const res = await fetchWithTimeout(url, { headers: { 'User-Agent': 'MarketTerminal/1.0' } }, 12000);
+  if (!res.ok) throw new Error('GDELT ' + res.status);
+  const j = await res.json();
+  return (j.features || []).map((f) => {
+    const c = f.geometry && f.geometry.coordinates; const p = f.properties || {};
+    if (!c) return null;
+    return { lat: c[1], lon: c[0], name: p.name || '', count: p.count || 1, html: (p.html || '').slice(0, 400) };
+  }).filter(Boolean).slice(0, 600);
+}
+
+// NASA FIRMS — active fire/thermal detections worldwide (free MAP_KEY).
+async function fetchFires(env) {
+  if (!env.FIRMS_MAP_KEY) throw new Error('FIRMS key not configured');
+  const url = `https://firms.modaps.eosdis.nasa.gov/api/area/csv/${env.FIRMS_MAP_KEY}/VIIRS_SNPP_NRT/world/1`;
+  const res = await fetchWithTimeout(url, {}, 15000);
+  if (!res.ok) throw new Error('FIRMS ' + res.status);
+  const text = await res.text();
+  const lines = text.trim().split('\n');
+  if (lines.length < 2) return [];
+  const h = lines[0].split(',');
+  const iLat = h.indexOf('latitude'), iLon = h.indexOf('longitude');
+  const iBr = h.indexOf('bright_ti4') >= 0 ? h.indexOf('bright_ti4') : h.indexOf('brightness');
+  const iConf = h.indexOf('confidence'), iDate = h.indexOf('acq_date');
+  return lines.slice(1).map((r) => { const f = r.split(','); return { lat: parseFloat(f[iLat]), lon: parseFloat(f[iLon]), bright: iBr >= 0 ? parseFloat(f[iBr]) : null, conf: iConf >= 0 ? f[iConf] : '', date: iDate >= 0 ? f[iDate] : '' }; })
+    .filter((x) => !Number.isNaN(x.lat) && !Number.isNaN(x.lon)).slice(0, 5000);
 }
 
 // US National Weather Service — active alerts (no key; needs a UA).
@@ -1236,6 +1295,15 @@ async function handleApi(request, env, ctx, url) {
     try { const { data, fresh } = await getData(env, ctx, 'map:weather', fetchWeatherAlerts); return json({ cached: !fresh, points: data }); }
     catch (err) { return json({ error: true, message: friendlyError(err) }, 502); }
   }
+  if (p === '/api/map/conflictnews') {
+    try { const { data, fresh } = await getData(env, ctx, 'map:gdelt', () => fetchGdeltGeo('(conflict OR war OR airstrike OR military OR protest OR clashes)'), 30 * 60 * 1000); return json({ cached: !fresh, points: data }); }
+    catch (err) { return json({ error: true, message: friendlyError(err) }, 502); }
+  }
+  if (p === '/api/map/fires') {
+    if (!env.FIRMS_MAP_KEY) return json({ error: true, message: 'FIRMS key not configured' }, 503);
+    try { const { data, fresh } = await getData(env, ctx, 'map:fires', () => fetchFires(env), 30 * 60 * 1000); return json({ cached: !fresh, points: data }); }
+    catch (err) { return json({ error: true, message: friendlyError(err) }, 502); }
+  }
   if (p === '/api/map/flights') {
     // Live aircraft are viewport-scoped and change fast — short cache keyed by bbox.
     const b = (qs.get('bbox') || '-10,-10,60,40').split(',').map(Number);
@@ -1320,6 +1388,10 @@ async function handleApi(request, env, ctx, url) {
     const query = (qs.get('q') || '').trim().slice(0, 60);
     if (!query) return json({ error: true, message: 'Missing company name or ticker.' }, 400);
     try { const { data, fresh } = await getData(env, ctx, 'deepdive:' + query.toLowerCase(), () => fetchDeepDive(env, query)); return json({ cached: !fresh, ...data }); }
+    catch (err) { return json({ error: true, message: friendlyError(err) }, 500); }
+  }
+  if (p === '/api/intel/situation') {
+    try { const { data, fresh } = await getData(env, ctx, 'situation', () => fetchSituation(env)); return json({ cached: !fresh, ...data }); }
     catch (err) { return json({ error: true, message: friendlyError(err) }, 500); }
   }
   if (p === '/api/intel/instability') {

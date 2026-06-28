@@ -158,6 +158,7 @@
       <!-- Sub-navigation -->
       <div class="gi-subnav" id="giSubnav" role="tablist">
         <button class="gi-subtab active" data-sub="briefing" type="button">📡 BRIEFING</button>
+        <button class="gi-subtab" data-sub="situation" type="button">🛰 SITUATION ROOM</button>
         <button class="gi-subtab" data-sub="report" type="button">📈 INVESTMENT REPORT</button>
         <button class="gi-subtab" data-sub="map" type="button">🚢 GLOBAL MAP</button>
       </div>
@@ -171,6 +172,12 @@
         <div id="filterChips" class="chips"></div>
         <div id="newsStatus" class="status">Loading live world &amp; market intelligence…</div>
         <div id="newsList" class="card-list"></div>
+      </div>
+
+      <!-- ── SITUATION ROOM: cross-domain AI synthesis ── -->
+      <div id="gi-situation" class="gi-panel">
+        <div id="situationStatus" class="status">Synthesizing the global situation across military, economic, political, disaster and cyber/energy signals…</div>
+        <div id="situationBody" class="situation-body"></div>
       </div>
 
       <!-- ── INVESTMENT REPORT: continuous AI stock-picks from world events ── -->

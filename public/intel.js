@@ -935,12 +935,61 @@
     }
   }
 
-  // ---------- GLOBAL INTEL: sub-navigation (Briefing / Report / Map) ----------
+  // ---------- GLOBAL INTEL: Situation Room (cross-domain AI synthesis) ----------
+  let situationLoaded = false;
+  const THREAT_CLASS = (t) => {
+    const k = String(t || '').toLowerCase();
+    if (k === 'severe' || k === 'high') return 'thr-high';
+    if (k === 'elevated' || k === 'guarded') return 'thr-mid';
+    return 'thr-low';
+  };
+  const DOMAIN_DOT = (lvl) => {
+    const k = String(lvl || '').toLowerCase();
+    return k === 'critical' ? '#ff453a' : k === 'active' ? '#ff8c00' : k === 'watch' ? '#ffd23f' : '#2bd97c';
+  };
+  function renderSituation(d) {
+    const domains = (d.domains || []).map((x) => `
+      <div class="sit-domain">
+        <span class="sit-dot" style="background:${DOMAIN_DOT(x.level)}"></span>
+        <div><div class="sit-dom-name">${esc(x.domain)} <span class="sit-lvl">${esc(x.level || '')}</span></div>
+        <div class="sit-dom-sum">${esc(x.summary || '')}</div></div>
+      </div>`).join('');
+    $('#situationBody').innerHTML = `
+      <div class="sit-card">
+        <div class="sit-head ${THREAT_CLASS(d.threatLevel)}">
+          <span class="sit-threat">THREAT: ${esc(d.threatLevel || '—')}</span>
+          <span class="sit-over">${esc(d.overview || '')}</span>
+        </div>
+        <div class="sit-domains">${domains}</div>
+        <div class="sit-conv"><span class="sit-lbl">⊕ CONVERGENCE</span> ${esc(d.convergence || '')}</div>
+        <div class="sit-conv"><span class="sit-lbl">📈 MARKET IMPLICATION</span> ${esc(d.marketImplication || '')}</div>
+        <div class="report-col" style="margin-top:12px"><h4>👁 WATCHLIST</h4><ul>${(d.watchlist || []).map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>
+        <p class="dd-disclaimer">AI synthesis of live world headlines — educational only, not advice.</p>
+      </div>`;
+  }
+  async function loadSituation() {
+    situationLoaded = true;
+    $('#situationStatus').className = 'status';
+    $('#situationStatus').innerHTML = '<span class="spinner"></span>Synthesizing the global situation…';
+    $('#situationBody').innerHTML = '';
+    try {
+      const data = await fetchJSON('/api/intel/situation');
+      if (data.error) throw new Error(data.message);
+      $('#situationStatus').textContent = '';
+      renderSituation(data);
+    } catch (err) {
+      $('#situationStatus').className = 'status error';
+      $('#situationStatus').textContent = 'Could not build situation brief: ' + err.message;
+    }
+  }
+
+  // ---------- GLOBAL INTEL: sub-navigation (Briefing / Situation / Report / Map) ----------
   let giSub = 'briefing';
   function showGiSub(sub) {
     giSub = sub;
     document.querySelectorAll('.gi-subtab').forEach((b) => b.classList.toggle('active', b.dataset.sub === sub));
     document.querySelectorAll('.gi-panel').forEach((pnl) => pnl.classList.toggle('active', pnl.id === 'gi-' + sub));
+    if (sub === 'situation' && !situationLoaded) loadSituation();
     if (sub === 'report' && !reportLoaded) loadReport();
     if (sub === 'map' && window.ShipMap) window.ShipMap.open();
   }

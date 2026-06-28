@@ -143,6 +143,21 @@
       ['DR Congo', -4.0, 21.5, 'Mpox / Ebola watch'], ['Uganda', 1.4, 32.3, 'Ebola/Marburg surveillance'],
       ['DRC/Sudan', 12.0, 30.0, 'Cholera outbreaks'], ['SE Asia', 14.0, 101.0, 'Dengue surge'], ['Global', 30.0, 0.0, 'Avian influenza H5N1 spread'],
     ],
+    economicCenters: [
+      ['New York', 40.71, -74.01, 'Largest economy metro'], ['Tokyo', 35.68, 139.69, 'Japan core'], ['Shanghai', 31.23, 121.47, 'China commerce'],
+      ['London', 51.51, -0.13, 'UK/EU finance'], ['Los Angeles', 34.05, -118.24, 'Trade & media'], ['Paris', 48.86, 2.35, 'EU #2'],
+      ['Mumbai', 19.08, 72.88, 'India finance'], ['São Paulo', -23.55, -46.63, 'LatAm hub'], ['Dubai', 25.20, 55.27, 'MENA gateway'],
+    ],
+    internetExchanges: [
+      ['DE-CIX Frankfurt', 50.11, 8.68, 'World\'s largest IXP'], ['AMS-IX', 52.36, 4.95, 'Amsterdam'], ['LINX London', 51.51, -0.09, 'London'],
+      ['Equinix Ashburn', 39.04, -77.49, 'US-East core'], ['Equinix Singapore', 1.29, 103.85, 'SEA core'], ['Equinix Tokyo', 35.69, 139.69, 'Japan'],
+      ['Equinix Palo Alto', 37.44, -122.14, 'Silicon Valley'], ['MIX Milan', 45.46, 9.19, 'Italy'],
+    ],
+    gpsJamming: [
+      ['Eastern Mediterranean', 33.5, 34.0, 'Persistent GPS spoofing'], ['Black Sea', 44.0, 34.0, 'Conflict-zone jamming'],
+      ['Baltic / Kaliningrad', 55.0, 21.0, 'Jamming affecting aviation'], ['Persian Gulf', 26.5, 52.0, 'Strait of Hormuz interference'],
+      ['Korean Peninsula', 37.8, 126.5, 'DPRK jamming events'], ['Syria/Levant', 34.5, 37.0, 'Active EW operations'],
+    ],
   };
 
   // Line-based layers (great-circle-ish polylines) — [name, [[lat,lon],...], desc]
@@ -235,7 +250,16 @@
         const sc = document.querySelector('.mlp-row[data-id="flights"] .mlp-lbl');
         if (sc) sc.textContent = `Aircraft · ${planes.length}`;
       } },
-    { id: 'instability', label: 'Country Instability (AI)', icon: '🔥', group: 'Hazards', live: true, refresh: 1800000,
+    { id: 'fires', label: 'Active Fires (NASA)', icon: '🔥', group: 'Hazards', live: true, refresh: 1800000,
+      load: async (lg) => {
+        const d = await getJSON('/api/map/fires');
+        if (d.error) return;
+        (d.points || []).forEach((f) => {
+          L.circleMarker([f.lat, f.lon], { renderer: r(), radius: 2, weight: 0, fillColor: '#ff6b00', fillOpacity: 0.55 })
+            .bindPopup(`<b>🔥 Active fire</b><br><small>${f.bright ? 'Brightness ' + Math.round(f.bright) + 'K · ' : ''}conf ${esc(String(f.conf))}<br>${esc(f.date || '')}</small>`).addTo(lg);
+        });
+      } },
+    { id: 'instability', label: 'Country Instability (AI)', icon: '⚠', group: 'Hazards', live: true, refresh: 1800000,
       load: async (lg) => {
         const d = await getJSON('/api/intel/instability');
         (d.countries || []).forEach((c) => {
@@ -288,6 +312,12 @@
       load: (lg) => DATA.startupHubs.forEach(([n, la, lo, d]) => diamond(la, lo, '#bb9af7', `<b>🚀 ${esc(n)}</b><br>${esc(d)}`).addTo(lg)) },
     { id: 'gccInvestments', label: 'GCC Sovereign Funds', icon: '🛢', group: 'Markets',
       load: (lg) => DATA.gccInvestments.forEach(([n, la, lo, d]) => diamond(la, lo, '#e0af68', `<b>🛢 ${esc(n)}</b><br>${esc(d)}`).addTo(lg)) },
+    { id: 'economicCenters', label: 'Economic Centers', icon: '🌆', group: 'Markets',
+      load: (lg) => DATA.economicCenters.forEach(([n, la, lo, d]) => diamond(la, lo, '#f7c948', `<b>🌆 ${esc(n)}</b><br>${esc(d)}`).addTo(lg)) },
+    { id: 'internetExchanges', label: 'Internet Exchanges', icon: '🌐', group: 'Infrastructure',
+      load: (lg) => DATA.internetExchanges.forEach(([n, la, lo, d]) => diamond(la, lo, '#73daca', `<b>🌐 ${esc(n)}</b><br>${esc(d)}`).addTo(lg)) },
+    { id: 'gpsJamming', label: 'GPS Jamming', icon: '📡', group: 'Geopolitics',
+      load: (lg) => DATA.gpsJamming.forEach(([n, la, lo, d]) => { diamond(la, lo, '#f0883e', `<b>📡 ${esc(n)}</b><br>${esc(d)}`).addTo(lg); L.circle([la, lo], { radius: 300000, color: '#f0883e', weight: 1, fillColor: '#f0883e', fillOpacity: 0.06, interactive: false }).addTo(lg); }) },
     // Line layers
     { id: 'tradeRoutes', label: 'Trade Routes', icon: '🚢', group: 'Routes',
       load: (lg) => lines(lg, LINES.tradeRoutes, '#45c8dc', 2) },
