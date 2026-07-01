@@ -263,12 +263,12 @@
       <!-- ── GLOBAL MAP: live cargo + cruise ships + infrastructure canvas ── -->
       <div id="gi-map" class="gi-panel">
         <!-- Map layer selector -->
-        <div class="map-layer-toggle" id="mapLayerToggle">
+        <div class="map-layer-toggle" id="mapLayerToggle" hidden>
           <button class="maplayer-btn active" data-layer="infra" type="button">🛢 INFRASTRUCTURE</button>
         </div>
 
         <!-- Infrastructure canvas layer -->
-        <div id="mapLayerInfra" hidden>
+        <div id="mapLayerInfra">
           <div style="padding:6px 0 8px;font-size:11px;color:var(--muted);font-family:monospace;">
             🛢 Pipelines &nbsp;·&nbsp; 🌊 Undersea Cables &nbsp;·&nbsp; 🚢 Trade Routes &nbsp;·&nbsp;
             <span style="color:#888">Hover a line for details · Scroll to zoom · Drag to pan</span>
@@ -403,11 +403,11 @@
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
     integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-  <script src="quant.js?v=20260701l"></script>
-  <script src="app.js?v=20260701l"></script>
-  <script src="intel.js?v=20260701l"></script>
-  <script src="mapintel.js?v=20260701l"></script>
+  <script src="quant.js?v=20260701m"></script>
+  <script src="app.js?v=20260701m"></script>
+  <script src="intel.js?v=20260701m"></script>
+  <script src="mapintel.js?v=20260701m"></script>
   <script src="https://unpkg.com/globe.gl@2.34.0/dist/globe.gl.min.js"></script>
-  <script src="globe.js?v=20260701l"></script>
+  <script src="globe.js?v=20260701m"></script>
 </body>
 </html>

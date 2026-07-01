@@ -2970,6 +2970,35 @@ app.get('/api/map/layers', route(async (req, res) => {
   res.json(data);
 }));
 
+app.get('/api/map/infrastructure', route(async (req, res) => {
+  // Serve curated cable/pipeline/route data from MAP_LAYERS_BASELINE in the
+  // rich format expected by WorldMapEngine in intel.js.
+  const L = MAP_LAYERS_BASELINE.lines;
+  const slug = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+
+  const routes = (L.tradeRoutes || []).map(([name, coords, desc]) => ({
+    id: slug(name), name, type: 'trade_route', status: 'operational',
+    coords, desc,
+  }));
+  const cables = (L.cables || []).map(([name, coords, desc]) => ({
+    id: slug(name), name, type: 'undersea_cable', status: 'operational',
+    coords, desc,
+  }));
+  const pipelines = (L.pipelines || []).map(([name, coords, desc]) => {
+    const type = /gas/i.test(desc || name) ? 'gas' : 'oil';
+    return { id: slug(name), name, type, status: 'operational', coords, desc };
+  });
+
+  res.json({
+    cables, pipelines, routes,
+    cable_source: 'curated',
+    cable_count: cables.length,
+    pipeline_count: pipelines.length,
+    route_count: routes.length,
+    generated: Date.now(),
+  });
+}));
+
 // ── X/Twitter sentiment ──────────────────────────────────────────────────────
 // Fetches recent tweets from market-relevant handles, scores sentiment via AI.
 // ?handle=HANDLE fetches a single account; no param → full X_ACCOUNTS list.
