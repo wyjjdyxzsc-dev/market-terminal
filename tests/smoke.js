@@ -126,9 +126,6 @@ async function checkHtml(label, url) {
   await check('GET /api/map/gpsjam', `${BASE}/api/map/gpsjam`,
     { skipError: true, validate: d => d.tileUrl || d.type === 'FeatureCollection' || d.error });
 
-  await check('GET /api/map/ships', `${BASE}/api/map/ships`,
-    { skipError: true, validate: d => Array.isArray(d.vessels) || d.error });
-
   // Sentiment
   await check('GET /api/sentiment/twitter', `${BASE}/api/sentiment/twitter`,
     { skipError: true, validate: d => typeof d.score === 'number' || d.error });

@@ -2104,52 +2104,6 @@ async function fetchAugmentedLayers() {
   return out;
 }
 
-// REST ship snapshot — global vessel positions (secondary to WS stream).
-async function fetchRestShips(env) {
-  const vessels = [];
-  const AISSTREAM_KEY = env.AISSTREAM_API_KEY;
-
-  // Source 1: AISStream REST snapshot
-  if (AISSTREAM_KEY) {
-    try {
-      const r = await fetchWithTimeout('https://api.aisstream.io/v0/vessels', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${AISSTREAM_KEY}` },
-        body: JSON.stringify({ BoundingBoxes: [[[-89.9, -180], [89.9, 180]]], FilterShipMMSI: [], IncludeSatellite: true }),
-      }, 10000);
-      if (r.ok) {
-        const d = await r.json();
-        for (const v of (d.vessels || d || [])) {
-          if (v.Latitude == null || v.Longitude == null) continue;
-          vessels.push({ mmsi: v.MMSI || v.mmsi, lat: v.Latitude || v.latitude, lon: v.Longitude || v.longitude, name: (v.ShipName || v.Name || v.name || '').trim(), sog: v.Sog || v.sog, cog: v.Cog || v.cog, type: v.ShipType || v.type });
-        }
-      }
-    } catch { /* AISStream REST unavailable */ }
-  }
-
-  // Source 2: AISHub REST (free, ~15 min delayed, global)
-  if (vessels.length < 100) {
-    try {
-      const r = await fetchWithTimeout(
-        'https://data.aishub.net/ws.php?username=Z1456&format=1&output=json&compress=0&latmin=-90&latmax=90&lonmin=-180&lonmax=180',
-        { headers: { 'User-Agent': BROWSER_UA } }, 10000
-      );
-      if (r.ok) {
-        const raw = await r.json();
-        const rows = Array.isArray(raw) ? raw.filter(Array.isArray).flat() : [];
-        for (const v of rows) {
-          if (v.LATITUDE == null || v.LONGITUDE == null) continue;
-          vessels.push({ mmsi: v.MMSI, lat: +v.LATITUDE, lon: +v.LONGITUDE, name: (v.NAME || '').trim(), sog: v.SPEED != null ? v.SPEED / 10 : undefined, cog: v.COURSE, type: v.SHIPTYPE });
-        }
-      }
-    } catch { /* AISHub unavailable */ }
-  }
-
-  const seen = new Set();
-  const unique = vessels.filter((v) => { if (!v.mmsi || seen.has(v.mmsi)) return false; seen.add(v.mmsi); return true; });
-  return { vessels: unique, count: unique.length, source: 'rest', ts: Date.now() };
-}
-
 // Live map data: Disease Outbreaks (ProMED RSS + WHO DON)
 async function fetchDiseaseOutbreaks() {
   const parseRSS = async (url, srcName) => {
@@ -2489,49 +2443,6 @@ async function handleApi(request, env, ctx, url) {
   const qs = url.searchParams;
   const sym = () => (qs.get('symbol') || '').toUpperCase();
 
-  // --- Live ship AIS stream: proxy the browser <-> aisstream.io, injecting the
-  // API key server-side so it never reaches the client. The browser sends its
-  // subscription (bounding boxes / filters); we add the key and forward. ---
-  if (p === '/api/ships/stream') {
-    if (request.headers.get('Upgrade') !== 'websocket') return new Response('Expected websocket', { status: 426 });
-    if (!env.AISSTREAM_API_KEY) return new Response('AIS not configured', { status: 503 });
-
-    const pair = new WebSocketPair();
-    const client = pair[0], server = pair[1];
-    server.accept();
-
-    let upstream = null;
-    let lastSub = null;
-    let closed = false;
-    const closeAll = () => { closed = true; try { upstream && upstream.close(); } catch {} try { server.close(); } catch {} };
-
-    // Connect to aisstream.io (Cloudflare outbound WS via fetch upgrade).
-    (async () => {
-      try {
-        const resp = await fetch('https://stream.aisstream.io/v0/stream', { headers: { Upgrade: 'websocket' } });
-        upstream = resp.webSocket;
-        if (!upstream) { server.send(JSON.stringify({ error: 'AIS upstream unavailable' })); return closeAll(); }
-        upstream.accept();
-        upstream.addEventListener('message', (e) => { if (!closed) try { server.send(e.data); } catch {} });
-        upstream.addEventListener('close', () => closeAll());
-        upstream.addEventListener('error', () => closeAll());
-        if (lastSub) upstream.send(JSON.stringify(lastSub)); // replay sub that arrived early
-      } catch { try { server.send(JSON.stringify({ error: 'AIS connect failed' })); } catch {} closeAll(); }
-    })();
-
-    // Client -> upstream: inject the API key into every subscription message.
-    server.addEventListener('message', (e) => {
-      let msg; try { msg = JSON.parse(e.data); } catch { return; }
-      msg.APIKey = env.AISSTREAM_API_KEY;
-      lastSub = msg;
-      if (upstream) try { upstream.send(JSON.stringify(msg)); } catch {}
-    });
-    server.addEventListener('close', () => closeAll());
-    server.addEventListener('error', () => closeAll());
-
-    return new Response(null, { status: 101, webSocket: client });
-  }
-
   // --- Live stock trade stream: proxy the browser <-> Finnhub's trade
   // websocket, injecting the API key into the upstream URL so it never reaches
   // the client. The browser sends {type:'subscribe'|'unsubscribe',symbol}; we
@@ -2611,10 +2522,6 @@ async function handleApi(request, env, ctx, url) {
 
   if (p === '/api/map/layers') {
     try { const { data, fresh } = await getData(env, ctx, 'map:layers', fetchAugmentedLayers, 86400 * 1000); return json({ cached: !fresh, ...data }); }
-    catch (err) { return json({ error: true, message: friendlyError(err) }, 502); }
-  }
-  if (p === '/api/map/ships') {
-    try { const { data, fresh } = await getData(env, ctx, 'map:ships', () => fetchRestShips(env), 60 * 1000); return json({ cached: !fresh, ...data }); }
     catch (err) { return json({ error: true, message: friendlyError(err) }, 502); }
   }
   if (p === '/api/map/conflict') {
@@ -3721,7 +3628,7 @@ async function fetchPriceAction(env, symbol) {
 
   const priceChange = quote && quote.change != null ? quote.change : 0;
   const pctChange  = quote && quote.changePercent != null ? quote.changePercent : 0;
-  const direction  = pctChange >= 0 ? 'rising' : 'falling';
+  const direction  = Math.abs(pctChange) < 0.01 ? 'flat' : (pctChange >= 0 ? 'rising' : 'falling');
 
   const prompt = [
     `You are a sell-side equity analyst. Explain concisely in 2-3 sentences why ${symbol} is ${direction} today.`,
@@ -3739,7 +3646,7 @@ async function fetchPriceAction(env, symbol) {
     });
     return { symbol, quote, direction, change: pctChange, explanation: explanation.explanation, catalysts: explanation.catalysts || [], sentiment: explanation.sentiment || 'neutral', headlines: relevant };
   } catch (_) {
-    return { symbol, quote, direction, change: pctChange, explanation: `${symbol} is ${direction} ${Math.abs(pctChange).toFixed(2)}% today. No AI analysis available.`, catalysts: [], sentiment: pctChange >= 0 ? 'bullish' : 'bearish', headlines: relevant };
+    return { symbol, quote, direction, change: pctChange, explanation: `${symbol} is ${direction === 'flat' ? 'roughly flat' : direction} ${Math.abs(pctChange).toFixed(2)}% today. No AI analysis available.`, catalysts: [], sentiment: Math.abs(pctChange) < 0.01 ? 'neutral' : (pctChange >= 0 ? 'bullish' : 'bearish'), headlines: relevant };
   }
 }
 

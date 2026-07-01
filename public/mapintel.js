@@ -2,7 +2,7 @@
 
 /* ════════════════════════════════════════════════════════════════
    Market Terminal — GLOBAL MAP intelligence layers
-   A toggleable layer system over the Leaflet map owned by ships.js.
+   A toggleable layer system over the Leaflet map (infrastructure view).
    Modeled on worldmonitor's layered situational map but written from
    scratch (no AGPL code) on our own stack, fed by free public sources
    proxied through /api/map/* (USGS, NASA EONET, OpenSky, NWS) plus
@@ -606,14 +606,14 @@
   // Expose curated + line data so the 3D globe can plot the same layers.
   window.MapData = { DATA, LINES };
 
-  // ── init when the ship map is ready ──
-  document.addEventListener('shipmap:ready', (e) => {
+  // ── init when the infra map is ready ──
+  document.addEventListener('inframap:ready', (e) => {
     map = e.detail.map;
     if (!map || panel) return;
     buildPanel();
     // Sensible defaults on first open.
     setTimeout(() => {
-      document.querySelectorAll('.map-layer-panel input[data-layer="earthquakes"], .map-layer-panel input[data-layer="daynight"], .map-layer-panel input[data-layer="flights"], .map-layer-panel input[data-layer="ships"]').forEach((cb) => { cb.checked = true; setLayer(cb.dataset.layer, true); });
+      document.querySelectorAll('.map-layer-panel input[data-layer="earthquakes"], .map-layer-panel input[data-layer="daynight"], .map-layer-panel input[data-layer="flights"]').forEach((cb) => { cb.checked = true; setLayer(cb.dataset.layer, true); });
     }, 300);
   });
 })();

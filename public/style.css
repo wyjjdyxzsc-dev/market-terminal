@@ -1308,26 +1308,8 @@ a { color: inherit; }
   font-family: var(--mono); font-size: 11px; letter-spacing: .5px; padding: 6px 14px; border-radius: 7px; cursor: pointer; transition: all .15s; }
 .maplayer-btn.active { background: rgba(6,182,212,.12); color: #06b6d4; border-color: #06b6d4; }
 
-/* Ship map */
-.ship-controls { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 10px; flex-wrap: wrap; }
-.ship-filters { display: flex; gap: 6px; flex-wrap: wrap; }
-.ship-filter { display: inline-flex; align-items: center; gap: 6px; background: var(--panel-2); border: 1px solid var(--border);
-  color: var(--muted); font-size: 12px; padding: 6px 12px; border-radius: 7px; cursor: pointer; }
-.ship-filter.active { color: var(--text); border-color: var(--border-bright); }
-.ship-filter:not(.active) { opacity: .5; }
-.ship-filter .dot { width: 9px; height: 9px; border-radius: 50%; }
-.ship-filter .dot.cargo { background: #2bd97c; } .ship-filter .dot.cruise { background: #d96bff; } .ship-filter .dot.tanker { background: #ffa028; } .ship-filter .dot.other { background: #5a6472; }
-.ship-stat { font-family: var(--mono); font-size: 12px; color: var(--amber); }
-.ship-map { height: 540px; border: 1px solid var(--border-bright); border-radius: 10px; overflow: hidden; background: #0a0a0a; }
-.ship-hint { font-size: 11px; color: var(--muted); margin-top: 8px; }
-.leaflet-container { background: #0a0a0a; font-family: var(--mono); }
-.ship-popup .leaflet-popup-content-wrapper { background: var(--panel); color: var(--text); border: 1px solid var(--border-bright); border-radius: 8px; }
-.ship-popup .leaflet-popup-tip { background: var(--panel); }
-.ship-pop { font-size: 12px; line-height: 1.5; }
-
 @media (max-width: 720px) {
   .themes-wrap, .report-foot { grid-template-columns: 1fr; }
-  .ship-map { height: 420px; }
 }
 
 /* ═══════════ GLOBAL MAP — layer panel ═══════════ */

@@ -2411,89 +2411,6 @@ async function fetchOverpassLines() {
  * Tries: IAEA PRIS, UNHCR, Wikidata, Overpass (real OSM geodata).
  * Failures are silently swallowed — baseline is always returned.
  */
-// ── REST ship snapshot — global vessel positions (secondary to WS stream) ──
-// Sources tried in order:
-//   1. AISStream REST API (same provider as the WS feed, authoritative)
-//   2. AISHub REST (free, registration-only, no key env var required)
-// Returns { vessels: [{mmsi, lat, lon, name, sog, cog, type}] }
-async function fetchRestShips() {
-  const vessels = [];
-  const AISSTREAM_KEY = process.env.AISSTREAM_API_KEY;
-
-  // ── Source 1: AISStream REST snapshot ──────────────────────────────────
-  // POST /v0/vessels with a global bounding box filter
-  if (AISSTREAM_KEY) {
-    try {
-      const r = await fetch('https://api.aisstream.io/v0/vessels', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${AISSTREAM_KEY}` },
-        body: JSON.stringify({
-          BoundingBoxes: [[[-89.9, -180], [89.9, 180]]],
-          FilterShipMMSI: [],
-          IncludeSatellite: true,
-        }),
-        signal: AbortSignal.timeout(10000),
-      });
-      if (r.ok) {
-        const d = await r.json();
-        for (const v of (d.vessels || d || [])) {
-          if (v.Latitude == null || v.Longitude == null) continue;
-          vessels.push({
-            mmsi: v.MMSI || v.mmsi,
-            lat: v.Latitude || v.latitude,
-            lon: v.Longitude || v.longitude,
-            name: (v.ShipName || v.Name || v.name || '').trim(),
-            sog: v.Sog || v.sog,
-            cog: v.Cog || v.cog,
-            type: v.ShipType || v.type,
-          });
-        }
-      }
-    } catch { /* AISStream REST unavailable */ }
-  }
-
-  // ── Source 2: AISHub REST (free, ~15 min delayed, global incl. satellite) ─
-  // Falls back only if AISStream REST returned nothing.
-  if (vessels.length < 100) {
-    try {
-      // AISHub provides a compressed JSON feed to registered users.
-      // The endpoint below is their free-tier JSON snapshot (no key needed
-      // for the public endpoint, though registered accounts get more data).
-      const r = await fetch(
-        'https://data.aishub.net/ws.php?username=Z1456&format=1&output=json&compress=0&latmin=-90&latmax=90&lonmin=-180&lonmax=180',
-        { headers: { 'User-Agent': BROWSER_UA }, signal: AbortSignal.timeout(10000) }
-      );
-      if (r.ok) {
-        const raw = await r.json();
-        // AISHub returns [ {header}, [vessels...] ] — skip header object
-        const rows = Array.isArray(raw) ? raw.filter(Array.isArray).flat() : [];
-        for (const v of rows) {
-          if (v.LATITUDE == null || v.LONGITUDE == null) continue;
-          vessels.push({
-            mmsi: v.MMSI,
-            lat: +v.LATITUDE,
-            lon: +v.LONGITUDE,
-            name: (v.NAME || '').trim(),
-            sog: v.SPEED != null ? v.SPEED / 10 : undefined,
-            cog: v.COURSE,
-            type: v.SHIPTYPE,
-          });
-        }
-      }
-    } catch { /* AISHub unavailable */ }
-  }
-
-  // Deduplicate by MMSI
-  const seen = new Set();
-  const unique = vessels.filter((v) => {
-    if (!v.mmsi || seen.has(v.mmsi)) return false;
-    seen.add(v.mmsi);
-    return true;
-  });
-
-  return { vessels: unique, count: unique.length, source: 'rest', ts: Date.now() };
-}
-
 async function fetchAugmentedLayers() {
   const out = JSON.parse(JSON.stringify(MAP_LAYERS_BASELINE)); // deep clone
 
@@ -3053,14 +2970,6 @@ app.get('/api/map/layers', route(async (req, res) => {
   res.json(data);
 }));
 
-app.get('/api/map/ships', route(async (req, res) => {
-  // 60-second TTL — REST snapshot of global vessel positions as a secondary
-  // source. Primary data comes from the AISStream WebSocket (ships.js).
-  // This catches open-ocean vessels where terrestrial AIS coverage is thin.
-  const { data } = await fetch_cached_data('map:ships', fetchRestShips, 60);
-  res.json(data);
-}));
-
 // ── X/Twitter sentiment ──────────────────────────────────────────────────────
 // Fetches recent tweets from market-relevant handles, scores sentiment via AI.
 // ?handle=HANDLE fetches a single account; no param → full X_ACCOUNTS list.
@@ -3231,52 +3140,6 @@ app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.ht
 
 const http = require('http');
 const httpServer = http.createServer(app);
-
-// ── WebSocket proxy for AIS ship stream (local dev) ────────────────────────
-// In prod this lives in worker.js; here we replicate it for local testing.
-if (WS) {
-  httpServer.on('upgrade', (request, socket, head) => {
-    const url = request.url || '';
-    if (!url.startsWith('/api/ships/stream')) { socket.destroy(); return; }
-    const AISSTREAM_KEY = process.env.AISSTREAM_API_KEY;
-    if (!AISSTREAM_KEY) { socket.write('HTTP/1.1 503 AIS not configured\r\n\r\n'); socket.destroy(); return; }
-
-    const wss = new WS.Server({ noServer: true });
-    wss.handleUpgrade(request, socket, head, (clientWs) => {
-      let upstream = null;
-      let lastSub = null;
-      let closed = false;
-      const closeAll = () => {
-        closed = true;
-        try { upstream && upstream.close(); } catch {}
-        try { clientWs.close(); } catch {}
-      };
-
-      // Connect upstream to aisstream.io
-      try {
-        upstream = new WS('wss://stream.aisstream.io/v0/stream');
-        upstream.on('open', () => {
-          if (lastSub) upstream.send(JSON.stringify(lastSub));
-        });
-        upstream.on('message', (data) => {
-          if (!closed && clientWs.readyState === WS.OPEN) clientWs.send(data);
-        });
-        upstream.on('close', () => closeAll());
-        upstream.on('error', () => closeAll());
-      } catch { closeAll(); return; }
-
-      // Client -> upstream: inject API key
-      clientWs.on('message', (data) => {
-        let msg; try { msg = JSON.parse(data); } catch { return; }
-        msg.APIKey = AISSTREAM_KEY;
-        lastSub = msg;
-        if (upstream && upstream.readyState === WS.OPEN) upstream.send(JSON.stringify(msg));
-      });
-      clientWs.on('close', () => closeAll());
-      clientWs.on('error', () => closeAll());
-    });
-  });
-}
 
 httpServer.listen(PORT, () => {
   const speedAvail = SPEED_PROVIDERS.filter(p => process.env[p.envKey]).map(p => p.name);

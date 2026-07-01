@@ -2,18 +2,16 @@
 
 /* ════════════════════════════════════════════════════════════════
    Market Terminal — 3D globe view (GLOBAL MAP · 3D)
-   A globe.gl Earth that plots the same intelligence layers as the 2D
-   map: live ships, earthquakes, the AI instability index (as spikes),
-   conflict zones, curated reference points, and trade/cable/pipeline
-   paths. Toggled against the Leaflet 2D map. Written from scratch.
+   A globe.gl Earth that plots intelligence layers: earthquakes,
+   the AI instability index (as spikes), conflict zones, curated
+   reference points, and trade/cable/pipeline paths.
    ════════════════════════════════════════════════════════════════ */
 (() => {
   let globe = null, initialized = false, rotTimer = null;
-  const active = { ships: true, earthquakes: true, instability: true, conflicts: true, routes: true, webcams: false, nuclear: false, military: false, exchanges: false };
+  const active = { earthquakes: true, instability: true, conflicts: true, routes: true, webcams: false, nuclear: false, military: false, exchanges: false };
   const cache = {};
 
   const $ = (s) => document.querySelector(s);
-  const SHIP_COL = { cargo: '#2bd97c', cruise: '#d96bff', tanker: '#ffa028', other: '#5a6472' };
   const quakeColor = (m) => (m >= 6 ? '#ff453a' : m >= 4.5 ? '#ff8c00' : m >= 3 ? '#ffd23f' : '#9acd32');
   const cii = (s) => (s >= 75 ? '#ff453a' : s >= 50 ? '#ff8c00' : s >= 30 ? '#ffd23f' : '#2bd97c');
 
@@ -22,10 +20,6 @@
   // Each globe layer yields point or path features.
   async function pointsFor(id) {
     const D = (window.MapData && window.MapData.DATA) || {};
-    if (id === 'ships') {
-      const s = (window.ShipMap && window.ShipMap.getShips) ? window.ShipMap.getShips() : [];
-      return s.map((v) => ({ lat: v.lat, lon: v.lon, color: SHIP_COL[v.cls] || SHIP_COL.other, alt: 0.002, r: 0.12, label: `${v.name || 'Vessel'} (${v.cls})` }));
-    }
     if (id === 'earthquakes') {
       if (!cache.q) cache.q = (await getJSON('/api/map/earthquakes')).points || [];
       return cache.q.map((q) => ({ lat: q.lat, lon: q.lon, color: quakeColor(q.mag || 0), alt: Math.max(0.01, (q.mag || 1) * 0.012), r: 0.25, label: `M${q.mag} ${q.place || ''}` }));
@@ -68,7 +62,7 @@
   function buildToggle(host) {
     const wrap = document.createElement('div');
     wrap.className = 'globe-panel';
-    const rows = [['ships', '🚢 Ships'], ['earthquakes', '🌐 Quakes'], ['instability', '⚠ Instability'], ['conflicts', '⚔ Conflicts'], ['routes', '🚢 Routes'], ['webcams', '📹 Webcams'], ['nuclear', '☢ Nuclear'], ['military', '🪖 Military'], ['exchanges', '🏛 Exchanges']];
+    const rows = [['earthquakes', '🌐 Quakes'], ['instability', '⚠ Instability'], ['conflicts', '⚔ Conflicts'], ['routes', '🛣 Routes'], ['webcams', '📹 Webcams'], ['nuclear', '☢ Nuclear'], ['military', '🪖 Military'], ['exchanges', '🏛 Exchanges']];
     wrap.innerHTML = `<div class="globe-stat" id="globeStat">Loading…</div>` +
       rows.map(([id, lbl]) => `<label class="globe-row"><input type="checkbox" data-g="${id}" ${active[id] ? 'checked' : ''}><span>${lbl}</span></label>`).join('');
     wrap.querySelectorAll('input[data-g]').forEach((cb) => cb.addEventListener('change', () => { active[cb.dataset.g] = cb.checked; render(); }));
@@ -111,20 +105,4 @@
     hide() { /* keep state; the container is hidden by the toggle */ },
   };
 
-  // 2D / 3D toggle wiring
-  document.addEventListener('click', (e) => {
-    const btn = e.target.closest('.mapmode-btn');
-    if (!btn) return;
-    const mode = btn.dataset.mode;
-    document.querySelectorAll('.mapmode-btn').forEach((b) => b.classList.toggle('active', b === btn));
-    const ship = $('#shipMap'), globeEl = $('#globeMap');
-    if (mode === '3d') {
-      ship.hidden = true; globeEl.hidden = false;
-      window.GlobeView.show();
-    } else {
-      globeEl.hidden = true; ship.hidden = false;
-      const m = window.ShipMap && window.ShipMap.getMap && window.ShipMap.getMap();
-      if (m) setTimeout(() => m.invalidateSize(), 60);
-    }
-  });
 })();

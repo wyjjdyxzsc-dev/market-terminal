@@ -29,7 +29,7 @@ Deploys to `https://market-terminal.wyjjdyxzsc.workers.dev`
   - `quant.js`: Pure math IIFE (30+ functions, no DOM)
   - `intel.js`: Deep Dive + QUANT LAB UI
   - `index.html`: Layout, tabs
-- **APIs**: Finnhub (quotes), Yahoo/Nasdaq (charts), Google News RSS, GDELT (conflict), NASA (fires/events), USGS (quakes), Groq (AI), Windy (webcams), AIS Stream (ships)
+- **APIs**: Finnhub (quotes), Yahoo/Nasdaq (charts), Google News RSS, GDELT (conflict), NASA (fires/events), USGS (quakes), Groq (AI), Windy (webcams)
 - **Key npm deps** (local only):
   - `express`, `dotenv`, `groq-sdk`, `rss-parser`, `web-push`
 
@@ -62,7 +62,7 @@ Deploys to `https://market-terminal.wyjjdyxzsc.workers.dev`
 - **Advanced stochastic (Module 2.2)**: Rough Jump-Diffusion MC (Hurst H<0.5 + Poisson jumps), Heston MC + calibrator (Lewis 2001 CF), Malliavin Greeks (Delta/Gamma/Vega via integration-by-parts), Roll Model spread decomposition
 - **QUANT LAB UI** (`intel.js`): Full indicator grid (40 indicators across 5 groups), volume profile canvas, model switcher (GBM/RJD/Heston), RJD sub-params (Hurst, lambda, jump μ/σ), Heston sub-params (v0/κ/θ/ξ/ρ), Malliavin Greeks panel, all wired to chart data
 - Candlestick pattern detector (18 patterns) + AI analysis endpoint
-- Map: 30+ layers — earthquakes, events, weather, conflict, fires, webcams, aircraft, ships, chokepoints, nuclear, military bases, critical minerals, tech HQs, cloud regions, startup hubs, financial centers, commodity ports, trade routes, cables, pipelines, and more
+- Map: 30+ layers — earthquakes, events, weather, conflict, fires, webcams, aircraft, chokepoints, nuclear, military bases, critical minerals, tech HQs, cloud regions, startup hubs, financial centers, commodity ports, trade routes, cables, pipelines, and more
 - **Map data architecture**: All curated reference layers now served from `/api/map/layers` with 24h TTL. Live augmentation: IAEA PRIS (nuclear operational status), UNHCR refugee data, Wikidata SPARQL (military installations). Conflict, disease, GPS jamming layers have live API overlays on top (GDELT, ProMED/WHO, gpsjam.org). Frontend `ensureLayerData()` fetches once per page load, falls back to embedded `DATA` if server unavailable.
 - Alerts: Web Push + breaking-news detection
 
@@ -98,7 +98,7 @@ Deploys to `https://market-terminal.wyjjdyxzsc.workers.dev`
 | `public/quant.js` | Math lib (no DOM), IIFE export |
 | `public/intel.js` | Deep Dive UI + QUANT LAB |
 | `public/index.html` | Layout, cache-buster versioning |
-| `.env` (git-ignored) | FINNHUB_API_KEY, GROQ_API_KEY, POLYGON_KEY, FIRMS_MAP_KEY, WINDY_KEY, AISSTREAM_API_KEY, VAPID_* |
+| `.env` (git-ignored) | FINNHUB_API_KEY, GROQ_API_KEY, POLYGON_KEY, FIRMS_MAP_KEY, WINDY_KEY, VAPID_* |
 
 ## Env vars (all optional except noted)
 
@@ -115,7 +115,6 @@ Deploys to `https://market-terminal.wyjjdyxzsc.workers.dev`
 **Map**:
 - `FIRMS_MAP_KEY` (NASA fires)
 - `WINDY_KEY` (webcams)
-- `AISSTREAM_API_KEY` (ships)
 
 **Push**:
 - `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` (breaking alerts)

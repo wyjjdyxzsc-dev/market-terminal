@@ -1492,21 +1492,18 @@
     document.querySelectorAll('.gi-panel').forEach((pnl) => pnl.classList.toggle('active', pnl.id === 'gi-' + sub));
     if (sub === 'situation' && !situationLoaded) loadSituation();
     if (sub === 'report' && !reportLoaded) loadReport();
-    if (sub === 'map' && window.ShipMap) window.ShipMap.open();
+    if (sub === 'map' && window.WorldMap) window.WorldMap.init();
   }
   document.querySelectorAll('.gi-subtab').forEach((b) => b.addEventListener('click', () => showGiSub(b.dataset.sub)));
 
-  // ── Infrastructure / Ships layer toggle ──────────────────────────────
-  let activeMapLayer = 'ships';
+  // ── Infrastructure layer toggle ───────────────────────────────────────
+  let activeMapLayer = 'infra';
   function showMapLayer(layer) {
     activeMapLayer = layer;
     document.querySelectorAll('.maplayer-btn').forEach(b => b.classList.toggle('active', b.dataset.layer === layer));
-    const shipsEl = document.getElementById('mapLayerShips');
     const infraEl = document.getElementById('mapLayerInfra');
-    if (shipsEl) shipsEl.hidden = layer !== 'ships';
     if (infraEl) infraEl.hidden = layer !== 'infra';
     if (layer === 'infra' && window.WorldMap) window.WorldMap.init();
-    if (layer === 'ships' && window.ShipMap) window.ShipMap.open();
   }
   document.querySelectorAll('.maplayer-btn').forEach(b => b.addEventListener('click', () => showMapLayer(b.dataset.layer)));
 
