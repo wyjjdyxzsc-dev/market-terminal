@@ -333,6 +333,45 @@ a { color: inherit; }
   font-variant-numeric: tabular-nums;
 }
 
+/* Why is it moving? panel */
+.why-btn {
+  margin-top: 10px;
+  background: transparent;
+  border: 1px solid var(--cyan);
+  color: var(--cyan);
+  padding: 4px 10px;
+  font-size: 11px;
+  font-family: inherit;
+  border-radius: 3px;
+  cursor: pointer;
+  letter-spacing: 0.5px;
+  transition: background 0.15s;
+}
+.why-btn:hover { background: rgba(0,230,255,0.08); }
+.why-panel {
+  margin-top: 10px;
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+  font-size: 12px;
+}
+.why-loading { color: var(--muted); font-style: italic; }
+.why-sentiment {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+.why-sentiment.bullish { color: var(--up); }
+.why-sentiment.bearish { color: var(--down); }
+.why-sentiment.neutral { color: var(--muted); }
+.why-text { color: var(--fg); line-height: 1.6; margin-bottom: 8px; }
+.why-catalysts { margin: 0 0 8px 14px; padding: 0; color: var(--muted); }
+.why-catalysts li { margin-bottom: 3px; }
+.why-headlines { font-size: 10px; color: var(--muted); border-top: 1px solid var(--border); padding-top: 6px; }
+.why-headlines a { color: var(--cyan); text-decoration: none; }
+.why-headlines a:hover { text-decoration: underline; }
+
 /* Snapshot grid */
 .stat-grid {
   display: grid;
@@ -1262,6 +1301,12 @@ a { color: inherit; }
 .report-col { background: var(--panel-2); border: 1px solid var(--border); border-radius: 9px; padding: 12px 14px; }
 .report-col h4 { margin: 0 0 8px; font-family: var(--mono); font-size: 11px; letter-spacing: 1px; color: var(--amber); }
 .report-col ul { margin: 0; padding-left: 16px; } .report-col li { font-size: 13px; color: var(--text); line-height: 1.5; margin-bottom: 5px; }
+
+/* Map layer toggle */
+.map-layer-toggle { display: inline-flex; gap: 4px; margin-bottom: 10px; }
+.maplayer-btn { background: var(--panel-2); border: 1px solid var(--border); color: var(--muted);
+  font-family: var(--mono); font-size: 11px; letter-spacing: .5px; padding: 6px 14px; border-radius: 7px; cursor: pointer; transition: all .15s; }
+.maplayer-btn.active { background: rgba(6,182,212,.12); color: #06b6d4; border-color: #06b6d4; }
 
 /* Ship map */
 .ship-controls { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 10px; flex-wrap: wrap; }

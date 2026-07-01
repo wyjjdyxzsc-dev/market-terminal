@@ -2926,7 +2926,312 @@ async function handleApi(request, env, ctx, url) {
     return json({ ok: true, devices: diag.sent, results: diag.results });
   }
 
+  // --- Infrastructure map data ---
+  if (p === '/api/map/infrastructure') {
+    const cacheKey = 'cache:map:infrastructure';
+    const cached = await env.MT_KV.get(cacheKey).catch(() => null);
+    if (cached) return json(JSON.parse(cached));
+    const data = await buildInfrastructureData(env);
+    await env.MT_KV.put(cacheKey, JSON.stringify(data), { expirationTtl: 86400 }).catch(() => {});
+    return json(data);
+  }
+
+  // --- Price action AI explainer ---
+  if (p === '/api/intel/priceaction') {
+    const sym = url.searchParams.get('symbol') || '';
+    if (!sym) return json({ error: 'symbol required' }, 400);
+    const cacheKey = `cache:priceaction:${sym.toUpperCase()}`;
+    const cached = await env.MT_KV.get(cacheKey).catch(() => null);
+    if (cached) return json(JSON.parse(cached));
+    const result = await fetchPriceAction(env, sym.toUpperCase());
+    await env.MT_KV.put(cacheKey, JSON.stringify(result), { expirationTtl: 600 }).catch(() => {});
+    return json(result);
+  }
+
   return json({ error: 'Not found' }, 404);
+}
+
+// ─── Infrastructure Data ───────────────────────────────────────────────────
+
+const INFRA_PIPELINES = [
+  { id: 'keystone-xl', name: 'Keystone XL Corridor', type: 'oil', status: 'operational',
+    capacity_kbd: 590, substance: 'crude', operator: 'TC Energy',
+    beneficiaries: ['Canada', 'USA (Midwest refiners)'], risks: ['Spill risk near Ogallala Aquifer'],
+    coords: [[-111.4,49.0],[-104.5,45.5],[-100.8,42.8],[-97.4,39.1],[-94.1,35.9]] },
+  { id: 'nord-stream-2', name: 'Nord Stream 2', type: 'gas', status: 'sabotaged',
+    capacity_bcmd: 55, substance: 'natural gas', operator: 'Gazprom',
+    beneficiaries: ['Germany','EU'], risks: ['Geopolitical weapon; offline since 2022 sabotage'],
+    coords: [[28.0,57.5],[18.5,55.8],[14.0,54.5],[12.5,54.8],[13.4,54.1]] },
+  { id: 'druzhba', name: 'Druzhba Pipeline', type: 'oil', status: 'operational',
+    capacity_kbd: 1200, substance: 'crude', operator: 'Transneft',
+    beneficiaries: ['Russia','Poland','Germany','Hungary','Czech Republic'],
+    risks: ['Sanctions risk; transit through Ukraine'],
+    coords: [[56.0,52.0],[39.0,50.5],[28.5,49.5],[23.0,51.5],[18.0,52.0],[14.0,51.0],[12.5,52.5]] },
+  { id: 'tapline', name: 'Trans-Arabian Pipeline', type: 'oil', status: 'mothballed',
+    capacity_kbd: 500, substance: 'crude', operator: 'Aramco',
+    beneficiaries: ['Saudi Arabia (historical)'], risks: ['Offline; geopolitical legacy asset'],
+    coords: [[50.1,26.3],[44.0,29.5],[39.1,32.0],[35.9,33.5],[35.5,34.8]] },
+  { id: 'baku-tbilisi-ceyhan', name: 'Baku-Tbilisi-Ceyhan', type: 'oil', status: 'operational',
+    capacity_kbd: 1200, substance: 'crude', operator: 'BP',
+    beneficiaries: ['Azerbaijan','Georgia','Turkey','EU'],
+    risks: ['Conflict zone exposure (Nagorno-Karabakh corridor)'],
+    coords: [[50.0,40.4],[46.0,41.7],[44.5,41.7],[41.0,41.0],[36.8,37.0],[35.9,36.8]] },
+  { id: 'transcanada-mainline', name: 'TransCanada Mainline', type: 'gas', status: 'operational',
+    capacity_bcmd: 157, substance: 'natural gas', operator: 'TC Energy',
+    beneficiaries: ['Canada','USA'], risks: ['Aging infrastructure; regulatory pressure'],
+    coords: [[-114.1,51.1],[-106.7,52.1],[-96.8,49.9],[-87.6,43.6],[-79.4,43.7],[-73.6,45.5]] },
+  { id: 'west-east-gas', name: 'China West-East Gas Pipeline', type: 'gas', status: 'operational',
+    capacity_bcmd: 30, substance: 'natural gas', operator: 'PetroChina',
+    beneficiaries: ['China (Xinjiang to Shanghai)'], risks: ['Seismic risk; political stability in Xinjiang'],
+    coords: [[75.9,39.5],[87.6,41.8],[99.5,38.5],[106.7,34.3],[113.0,32.0],[118.8,32.1],[121.5,31.2]] },
+  { id: 'sumed', name: 'SUMED Pipeline', type: 'oil', status: 'operational',
+    capacity_kbd: 2500, substance: 'crude', operator: 'SUMED Co.',
+    beneficiaries: ['Egypt','Arabian Gulf producers','Europe'],
+    risks: ['Suez bypass; critical if canal disrupted'],
+    coords: [[32.3,29.9],[31.5,30.5],[29.9,31.2],[29.1,30.8]] },
+  { id: 'eastern-siberia-pacific', name: 'ESPO Pipeline', type: 'oil', status: 'operational',
+    capacity_kbd: 1600, substance: 'crude', operator: 'Transneft',
+    beneficiaries: ['Russia','China','Japan (Kozmino terminal)'],
+    risks: ['Sanctions exposure; permafrost ground shift'],
+    coords: [[107.5,52.3],[116.5,51.0],[122.0,50.0],[128.5,48.5],[131.9,48.5],[132.9,42.8]] },
+  { id: 'colonial-pipeline', name: 'Colonial Pipeline', type: 'oil', status: 'operational',
+    capacity_kbd: 2500, substance: 'refined products', operator: 'Colonial Pipeline Co.',
+    beneficiaries: ['USA Southeast & East Coast'], risks: ['Cyberattack vector (2021 ransomware)'],
+    coords: [[-84.4,33.7],[-83.0,32.1],[-80.9,33.9],[-78.6,35.8],[-77.0,38.9],[-75.1,39.9],[-74.2,40.7]] },
+  { id: 'iran-pakistan', name: 'Iran-Pakistan Pipeline', type: 'gas', status: 'partial',
+    capacity_bcmd: 21.5, substance: 'natural gas', operator: 'NIGC/SSGC',
+    beneficiaries: ['Iran','Pakistan'], risks: ['US sanctions; incomplete on Pakistan side'],
+    coords: [[56.3,27.2],[62.3,27.3],[67.0,25.3],[67.5,24.9]] },
+  { id: 'transmed', name: 'TransMed (ENI) Pipeline', type: 'gas', status: 'operational',
+    capacity_bcmd: 33.5, substance: 'natural gas', operator: 'ENI/SONATRACH',
+    beneficiaries: ['Algeria','Tunisia','Italy'],
+    risks: ['North Africa instability'],
+    coords: [[6.1,36.8],[10.2,37.1],[10.6,37.5],[11.6,37.4],[12.3,37.7],[12.5,38.1],[13.3,38.1],[14.2,40.8]] },
+  { id: 'tzpf', name: 'Trans-Saharan Gas Pipeline', type: 'gas', status: 'planned',
+    capacity_bcmd: 30, substance: 'natural gas', operator: 'NNPC/SONATRACH',
+    beneficiaries: ['Nigeria','Niger','Algeria','Europe'],
+    risks: ['Sahel instability; financing gaps'],
+    coords: [[7.5,4.0],[7.5,10.0],[8.5,16.0],[5.5,20.0],[2.5,24.0],[6.5,29.0],[6.1,36.8]] },
+  { id: 'tapgas', name: 'Trans-Adriatic Pipeline', type: 'gas', status: 'operational',
+    capacity_bcmd: 10, substance: 'natural gas', operator: 'TAP AG',
+    beneficiaries: ['Azerbaijan','Greece','Albania','Italy'],
+    risks: ['Limited capacity; expansion in progress'],
+    coords: [[48.9,40.5],[40.0,41.0],[26.5,41.0],[21.0,41.1],[19.8,41.3],[18.8,41.1],[15.8,41.0]] },
+  { id: 'turkstream', name: 'TurkStream', type: 'gas', status: 'operational',
+    capacity_bcmd: 31.5, substance: 'natural gas', operator: 'Gazprom/BOTAŞ',
+    beneficiaries: ['Russia','Turkey','SE Europe'],
+    risks: ['Geopolitical leverage tool; sanctions risk'],
+    coords: [[37.7,45.4],[37.0,43.0],[36.5,41.5],[32.5,40.9],[28.8,41.0],[26.2,41.7],[22.9,41.1]] },
+  { id: 'mopac', name: 'Mozambique LNG Corridor', type: 'gas', status: 'construction',
+    capacity_bcmd: 12.9, substance: 'LNG', operator: 'TotalEnergies',
+    beneficiaries: ['Mozambique','France','Asia-Pacific buyers'],
+    risks: ['Insurgency in Cabo Delgado; force majeure 2021'],
+    coords: [[40.5,-10.7],[40.3,-12.2],[40.4,-13.2],[40.7,-14.5]] },
+  { id: 'gcc-interconnection', name: 'GCC Gas Interconnection', type: 'gas', status: 'operational',
+    capacity_bcmd: 2, substance: 'natural gas', operator: 'GICO',
+    beneficiaries: ['Kuwait','Saudi Arabia','Bahrain','UAE','Oman'],
+    risks: ['Limited capacity; regional backup only'],
+    coords: [[47.9,29.4],[50.6,26.2],[50.5,25.9],[51.5,25.3],[54.4,24.1],[57.6,23.6]] },
+  { id: 'southern-gas-corridor', name: 'Southern Gas Corridor', type: 'gas', status: 'operational',
+    capacity_bcmd: 16, substance: 'natural gas', operator: 'BP/SOCAR',
+    beneficiaries: ['Azerbaijan','Turkey','EU'],
+    risks: ['Geopolitical exposure crossing multiple jurisdictions'],
+    coords: [[50.0,40.4],[46.0,41.7],[43.3,41.7],[40.0,40.2],[35.0,38.5],[28.8,41.0],[26.5,41.0]] },
+  { id: 'alaska-highway', name: 'Alaska Highway Pipeline', type: 'gas', status: 'planned',
+    capacity_bcmd: 4.5, substance: 'natural gas', operator: 'AK LNG Project',
+    beneficiaries: ['Alaska','Canada','US Pacific Coast'],
+    risks: ['Financing uncertainty; permafrost engineering challenges'],
+    coords: [[-162.0,60.5],[-149.9,61.2],[-141.0,60.5],[-135.0,59.6],[-129.0,56.8],[-122.8,49.3]] },
+  { id: 'midal', name: 'MIDAL Gas Pipeline', type: 'gas', status: 'operational',
+    capacity_bcmd: 3.5, substance: 'natural gas', operator: 'Wintershall',
+    beneficiaries: ['Germany (North-South distribution)'],
+    risks: ['Aging; grid transition pressure'],
+    coords: [[10.0,53.5],[9.8,51.0],[9.5,48.8],[10.2,47.5]] },
+];
+
+const INFRA_CABLES = [
+  { id: 'marea', name: 'MAREA', type: 'undersea_cable', status: 'active',
+    capacity_tbps: 200, owner: 'Microsoft/Facebook',
+    beneficiaries: ['USA','Spain','EU'], risks: ['Single landing point vulnerability'],
+    coords: [[-74.0,40.7],[-40.0,35.0],[-10.0,37.0],[-3.7,40.4]] },
+  { id: 'aae-1', name: 'AAE-1', type: 'undersea_cable', status: 'active',
+    capacity_tbps: 40, owner: 'Consortium (China Unicom, Telia, etc.)',
+    beneficiaries: ['Asia','Africa','Europe'], risks: ['Red Sea chokepoint risk'],
+    coords: [[121.5,31.2],[110.4,20.0],[103.8,1.4],[80.3,13.1],[72.8,18.9],[45.3,12.5],[43.1,11.6],[36.8,11.8],[32.5,31.2],[32.3,30.1],[14.0,40.8],[12.5,41.9]] },
+  { id: 'sea-me-we-5', name: 'SEA-ME-WE 5', type: 'undersea_cable', status: 'active',
+    capacity_tbps: 24, owner: 'Orange/SingTel Consortium',
+    beneficiaries: ['Singapore','South Asia','Middle East','Europe'],
+    risks: ['Monsoon anchor drags; Gulf of Aden piracy zone'],
+    coords: [[103.8,1.4],[82.3,6.9],[73.0,18.9],[55.4,23.6],[43.3,11.5],[32.5,31.0],[14.0,40.8],[2.3,48.9],[-8.7,41.5]] },
+  { id: 'dunant', name: 'Dunant (Google)', type: 'undersea_cable', status: 'active',
+    capacity_tbps: 250, owner: 'Google',
+    beneficiaries: ['USA','France'], risks: ['Sole owner concentration risk'],
+    coords: [[-74.0,40.7],[-45.0,36.0],[-10.0,44.0],[-1.6,48.7]] },
+  { id: 'jupiter', name: 'Jupiter', type: 'undersea_cable', status: 'active',
+    capacity_tbps: 60, owner: 'Facebook/PLDT/SoftBank',
+    beneficiaries: ['USA Pacific','Japan','Philippines'],
+    risks: ['Pacific seismic zones'],
+    coords: [[-122.4,37.8],[-145.0,35.0],[145.0,35.0],[139.7,35.7],[123.9,10.3],[124.0,11.6]] },
+  { id: 'apcn-2', name: 'APCN-2', type: 'undersea_cable', status: 'active',
+    capacity_tbps: 2.56, owner: 'AT&T/KDD Consortium',
+    beneficiaries: ['Asia-Pacific ring'], risks: ['Aging infrastructure; South China Sea dispute zones'],
+    coords: [[139.7,35.7],[129.0,35.1],[122.5,31.2],[117.2,39.9],[126.9,37.5],[139.7,35.7]] },
+  { id: 'havfrue', name: 'HAVFRUE / AEC-1', type: 'undersea_cable', status: 'active',
+    capacity_tbps: 69, owner: 'Google/Facebook/Aqua Comms',
+    beneficiaries: ['USA','Denmark','Ireland','Norway'],
+    risks: ['Arctic routing; trawl damage risk'],
+    coords: [[-74.0,40.7],[-45.0,52.0],[-13.8,53.0],[-8.0,51.9],[10.0,57.9],[10.7,59.9]] },
+  { id: 'africa-coast-europe', name: 'Africa Coast to Europe', type: 'undersea_cable', status: 'active',
+    capacity_tbps: 5.12, owner: 'Orange/MTN Consortium',
+    beneficiaries: ['38 African countries','Europe'],
+    risks: ['Multiple landing points near conflict zones (West Africa)'],
+    coords: [[2.3,48.9],[0.0,45.0],[-8.0,38.7],[-17.0,28.5],[-17.4,14.7],[-10.8,6.3],[2.4,5.6],[9.4,3.9],[13.7,-4.3],[18.4,-33.9]] },
+  { id: 'echo', name: 'Echo (Google/Meta)', type: 'undersea_cable', status: 'active',
+    capacity_tbps: 480, owner: 'Google/Meta',
+    beneficiaries: ['USA','Singapore','Guam'],
+    risks: ['Pacific Ring of Fire; earthquake vulnerability'],
+    coords: [[-122.4,37.8],[-165.0,20.0],[144.7,13.5],[103.8,1.4]] },
+  { id: 'south-atlantic-express', name: 'SAEx', type: 'undersea_cable', status: 'planned',
+    capacity_tbps: 60, owner: 'SAEx International',
+    beneficiaries: ['Brazil','South Africa'],
+    risks: ['Financing uncertainty; single route redundancy'],
+    coords: [[-43.2,-22.9],[-25.0,-30.0],[-5.0,-35.0],[18.4,-33.9]] },
+  { id: 'imewe', name: 'IMEWE', type: 'undersea_cable', status: 'active',
+    capacity_tbps: 3.84, owner: 'Consortium',
+    beneficiaries: ['India','Middle East','West Europe'],
+    risks: ['Red Sea/Suez disruption risk (Houthi attacks 2024)'],
+    coords: [[72.8,18.9],[60.0,22.0],[45.0,12.0],[32.5,29.5],[32.3,31.2],[14.0,40.8],[2.3,48.9]] },
+  { id: 'pacific-light-cable', name: 'Pacific Light Cable Network', type: 'undersea_cable', status: 'partial',
+    capacity_tbps: 120, owner: 'Google/Meta (partial; China segment blocked)',
+    beneficiaries: ['USA','Taiwan','Philippines'],
+    risks: ['Geopolitical: US blocked Hong Kong segment (FCC 2021)'],
+    coords: [[-118.2,33.8],[-155.0,25.0],[121.9,25.0],[124.0,11.6],[122.5,31.2]] },
+];
+
+const INFRA_ROUTES = [
+  { id: 'malacca', name: 'Strait of Malacca', type: 'trade_route',
+    throughput_ships_day: 85, cargo_types: ['Oil','LNG','Electronics','Consumer goods'],
+    beneficiaries: ['China','Japan','South Korea','EU'],
+    risks: ['Piracy; chokepoint—40% of world trade'],
+    coords: [[103.8,1.4],[103.4,2.9],[102.9,4.9],[101.5,5.4],[100.3,5.9],[99.0,6.5]] },
+  { id: 'suez', name: 'Suez Canal / Red Sea', type: 'trade_route',
+    throughput_ships_day: 51, cargo_types: ['Oil','Containers','LNG'],
+    beneficiaries: ['Europe','Asia'], risks: ['Houthi attacks (2024); blocking incidents'],
+    coords: [[32.3,29.9],[33.0,27.5],[36.0,22.0],[43.0,13.0],[45.3,12.5],[50.5,11.5]] },
+  { id: 'hormuz', name: 'Strait of Hormuz', type: 'trade_route',
+    throughput_ships_day: 21, cargo_types: ['Crude Oil (21 mbd)','LNG'],
+    beneficiaries: ['Gulf producers','Asia-Pacific importers'],
+    risks: ['Iran threat; closure = $6T/yr disruption'],
+    coords: [[56.5,24.0],[57.0,23.5],[57.5,23.2],[58.5,22.8],[59.5,22.2],[60.5,22.0]] },
+  { id: 'bab-el-mandeb', name: 'Bab-el-Mandeb Strait', type: 'trade_route',
+    throughput_ships_day: 48, cargo_types: ['Oil','Containers'],
+    beneficiaries: ['Europe','Asia'],
+    risks: ['Houthi missile attacks (2024); Yemen instability'],
+    coords: [[43.1,11.6],[43.3,12.5],[43.5,13.4],[44.0,14.5]] },
+  { id: 'panama-canal', name: 'Panama Canal', type: 'trade_route',
+    throughput_ships_day: 40, cargo_types: ['LNG','Containers','Grain'],
+    beneficiaries: ['USA','Asia'], risks: ['Drought-induced low water (2023); capacity cuts'],
+    coords: [[-79.9,9.4],[-79.7,9.1],[-79.5,8.9],[-79.5,8.6],[-79.6,8.4]] },
+  { id: 'cape-good-hope', name: 'Cape of Good Hope Route', type: 'trade_route',
+    throughput_ships_day: 35, cargo_types: ['VLCC Tankers','Bulk'],
+    beneficiaries: ['Diversionary route (Suez alternative)'],
+    risks: ['Storms; +2 weeks vs Suez; high operating cost'],
+    coords: [[18.4,-33.9],[10.0,-38.0],[0.0,-40.0],[-10.0,-38.0],[-20.0,-32.0]] },
+  { id: 'northern-sea-route', name: 'Northern Sea Route', type: 'trade_route',
+    throughput_ships_day: 4, cargo_types: ['LNG (Russia)','Bulk'],
+    beneficiaries: ['Russia','China (Arctic gateway)'],
+    risks: ['Ice conditions; sanctions; icebreaker dependency'],
+    coords: [[60.0,68.0],[80.0,72.0],[100.0,73.5],[120.0,73.0],[140.0,72.0],[160.0,70.0],[180.0,68.0]] },
+  { id: 'taiwan-strait', name: 'Taiwan Strait', type: 'trade_route',
+    throughput_ships_day: 200, cargo_types: ['Semiconductors','Electronics','Oil'],
+    beneficiaries: ['East Asia tech supply chain'],
+    risks: ['China-Taiwan military tension; semiconductor supply chain'],
+    coords: [[120.0,26.0],[120.2,24.5],[120.4,22.5],[120.5,21.0]] },
+  { id: 'dover-strait', name: 'English Channel / Dover Strait', type: 'trade_route',
+    throughput_ships_day: 500, cargo_types: ['Containers','Oil','Consumer goods'],
+    beneficiaries: ['UK','EU'], risks: ['Busiest shipping lane; accident risk; Brexit logistics'],
+    coords: [[-4.0,48.5],[0.0,50.5],[1.4,51.0],[2.0,51.3],[3.0,51.5]] },
+  { id: 'danish-straits', name: 'Danish Straits (Kattegat/Øresund)', type: 'trade_route',
+    throughput_ships_day: 90, cargo_types: ['Oil (Russia→Baltic)','Baltic trade'],
+    beneficiaries: ['Baltic states','Nordic countries'],
+    risks: ['Russia oil sanctions enforcement; Baltic security'],
+    coords: [[12.6,55.7],[12.0,56.3],[11.0,57.5],[10.5,58.5],[10.0,59.0]] },
+];
+
+async function buildInfrastructureData(env) {
+  // Try live Overpass API for pipeline data, merge with curated sets
+  let livePipelines = [];
+  try {
+    const overpassQuery = `[out:json][timeout:25];(way["man_made"="pipeline"]["substance"~"oil|gas",i](bbox:-60,-170,75,180););out geom 100;`;
+    const res = await fetchWithTimeout(`https://overpass-api.de/api/interpreter?data=${encodeURIComponent(overpassQuery)}`, {}, 20000);
+    if (res.ok) {
+      const d = await res.json();
+      if (d.elements && d.elements.length > 0) {
+        livePipelines = d.elements.slice(0, 30).map(el => ({
+          id: `osm_${el.id}`,
+          name: el.tags?.name || `${el.tags?.substance || 'Unknown'} Pipeline`,
+          type: (el.tags?.substance || '').toLowerCase().includes('gas') ? 'gas' : 'oil',
+          status: 'operational',
+          capacity_kbd: null,
+          substance: el.tags?.substance || 'unknown',
+          operator: el.tags?.operator || 'Unknown',
+          beneficiaries: [], risks: ['Live OSM data'],
+          coords: (el.geometry || []).filter((_, i) => i % 5 === 0).map(n => [n.lon, n.lat]),
+          source: 'osm'
+        })).filter(p => p.coords.length >= 2);
+      }
+    }
+  } catch (_) { /* use curated only */ }
+
+  return {
+    pipelines: [...INFRA_PIPELINES, ...livePipelines],
+    cables: INFRA_CABLES,
+    routes: INFRA_ROUTES,
+    generated: Date.now(),
+    ttl: 86400,
+  };
+}
+
+// ─── Price Action AI Explainer ─────────────────────────────────────────────
+
+async function fetchPriceAction(env, symbol) {
+  // Fetch quote + recent news in parallel
+  const [quoteResult, newsResult] = await Promise.allSettled([
+    getQuoteCached(env, symbol),
+    fetchIntelNews(env).catch(() => []),
+  ]);
+
+  const quote = quoteResult.status === 'fulfilled' ? quoteResult.value : null;
+  const allNews = newsResult.status === 'fulfilled' ? newsResult.value : [];
+
+  // Filter news relevant to this symbol or its company
+  const relevant = allNews.filter(n => {
+    const text = ((n.title || '') + ' ' + (n.summary || '')).toLowerCase();
+    return text.includes(symbol.toLowerCase()) || (quote && quote.name && text.includes((quote.name || '').toLowerCase().split(' ')[0]));
+  }).slice(0, 6);
+
+  const priceChange = quote && quote.change != null ? quote.change : 0;
+  const pctChange  = quote && quote.changePercent != null ? quote.changePercent : 0;
+  const direction  = pctChange >= 0 ? 'rising' : 'falling';
+
+  const prompt = [
+    `You are a sell-side equity analyst. Explain concisely in 2-3 sentences why ${symbol} is ${direction} today.`,
+    `Price: $${quote?.price?.toFixed(2) ?? 'N/A'} (${pctChange >= 0 ? '+' : ''}${pctChange.toFixed(2)}%, ${priceChange >= 0 ? '+' : ''}${priceChange.toFixed(2)}).`,
+    relevant.length > 0
+      ? `Recent headlines:\n` + relevant.map(n => `- ${n.title}`).join('\n')
+      : 'No directly relevant headlines found.',
+    `Be specific. Reference the headlines if they explain the move. If news is absent, cite macro conditions or technicals.`,
+  ].join('\n');
+
+  try {
+    const explanation = await runAIJson(env, prompt, {
+      task_type: 'nlp',
+      schema: { type: 'object', properties: { explanation: { type: 'string' }, catalysts: { type: 'array', items: { type: 'string' } }, sentiment: { type: 'string', enum: ['bullish','bearish','neutral'] } }, required: ['explanation','catalysts','sentiment'] },
+    });
+    return { symbol, quote, direction, change: pctChange, explanation: explanation.explanation, catalysts: explanation.catalysts || [], sentiment: explanation.sentiment || 'neutral', headlines: relevant };
+  } catch (_) {
+    return { symbol, quote, direction, change: pctChange, explanation: `${symbol} is ${direction} ${Math.abs(pctChange).toFixed(2)}% today. No AI analysis available.`, catalysts: [], sentiment: pctChange >= 0 ? 'bullish' : 'bearish', headlines: relevant };
+  }
 }
 
 export default {

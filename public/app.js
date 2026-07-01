@@ -293,6 +293,69 @@ async function loadQuote(symbol) {
   }
 }
 
+// ─── "Why is it moving?" ──────────────────────────────────────────────────
+let whyPanelOpen = false;
+
+async function loadPriceAction(symbol) {
+  const panel = $('whyPanel');
+  const loadingEl = $('whyLoading');
+  const textEl = $('whyText');
+  const sentEl = $('whySentiment');
+  const catsEl = $('whyCatalysts');
+  const headsEl = $('whyHeadlines');
+  if (!panel) return;
+
+  panel.hidden = false;
+  loadingEl.hidden = false;
+  textEl.textContent = '';
+  sentEl.textContent = '';
+  sentEl.className = 'why-sentiment';
+  catsEl.innerHTML = '';
+  headsEl.innerHTML = '';
+
+  try {
+    const d = await getJSON('/api/intel/priceaction?symbol=' + encodeURIComponent(symbol));
+    if (state.symbol !== symbol) return;
+    loadingEl.hidden = true;
+
+    const pct = d.change != null ? (d.change >= 0 ? '+' : '') + d.change.toFixed(2) + '%' : '';
+    sentEl.textContent = (d.sentiment || 'neutral').toUpperCase() + (pct ? '  ' + pct : '');
+    sentEl.className = 'why-sentiment ' + (d.sentiment || 'neutral');
+
+    textEl.textContent = d.explanation || '';
+
+    if (d.catalysts && d.catalysts.length) {
+      catsEl.innerHTML = d.catalysts.map(c => `<li>${c}</li>`).join('');
+    }
+
+    if (d.headlines && d.headlines.length) {
+      headsEl.innerHTML = '<strong style="color:var(--muted);font-size:10px">RELATED HEADLINES</strong><br>' +
+        d.headlines.map(h => `<div style="margin-top:4px">• ${h.title || h.headline || ''}</div>`).join('');
+    }
+  } catch (err) {
+    loadingEl.hidden = true;
+    textEl.textContent = 'AI analysis unavailable: ' + err.message;
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const btn = $('whyMoveBtn');
+  if (btn) {
+    btn.addEventListener('click', () => {
+      const panel = $('whyPanel');
+      if (!whyPanelOpen) {
+        whyPanelOpen = true;
+        btn.textContent = '✕ Close';
+        if (state.symbol) loadPriceAction(state.symbol);
+      } else {
+        whyPanelOpen = false;
+        btn.textContent = '🤖 Why is it moving?';
+        if (panel) panel.hidden = true;
+      }
+    });
+  }
+});
+
 async function loadProfile(symbol) {
   try {
     const p = await getJSON('/api/profile?symbol=' + encodeURIComponent(symbol));

@@ -1038,11 +1038,13 @@
       updateMalliavin(mc, sigma, T, K, bsT);
     }
 
+    // ── Black-Scholes + Malliavin Greeks ──
+    // NOTE: bsType must be declared BEFORE runMonteCarlo() is called below,
+    // because runMonteCarlo() closes over it and `typeof` of a TDZ let throws.
+    let bsType = 'call';
+
     $('#qlMcRun').addEventListener('click', runMonteCarlo);
     runMonteCarlo();
-
-    // ── Black-Scholes + Malliavin Greeks ──
-    let bsType = 'call';
     $('#qlBsCall').addEventListener('click', () => { bsType = 'call'; $('#qlBsCall').classList.add('active'); $('#qlBsPut').classList.remove('active'); });
     $('#qlBsPut').addEventListener('click',  () => { bsType = 'put';  $('#qlBsPut').classList.add('active');  $('#qlBsCall').classList.remove('active'); });
 
@@ -1494,6 +1496,20 @@
   }
   document.querySelectorAll('.gi-subtab').forEach((b) => b.addEventListener('click', () => showGiSub(b.dataset.sub)));
 
+  // ── Infrastructure / Ships layer toggle ──────────────────────────────
+  let activeMapLayer = 'ships';
+  function showMapLayer(layer) {
+    activeMapLayer = layer;
+    document.querySelectorAll('.maplayer-btn').forEach(b => b.classList.toggle('active', b.dataset.layer === layer));
+    const shipsEl = document.getElementById('mapLayerShips');
+    const infraEl = document.getElementById('mapLayerInfra');
+    if (shipsEl) shipsEl.hidden = layer !== 'ships';
+    if (infraEl) infraEl.hidden = layer !== 'infra';
+    if (layer === 'infra' && window.WorldMap) window.WorldMap.init();
+    if (layer === 'ships' && window.ShipMap) window.ShipMap.open();
+  }
+  document.querySelectorAll('.maplayer-btn').forEach(b => b.addEventListener('click', () => showMapLayer(b.dataset.layer)));
+
   // ---------- View lifecycle (driven by app.js `tabshown`) ----------
   const loaded = { news: false, sectors: false };
   let currentView = 'terminal';
@@ -1579,4 +1595,506 @@
     if (reg && pushSupported && Notification.permission === 'granted') ensureSubscribed(reg).catch(() => {});
   });
   reflectAlertState();
+})();
+
+// ═══════════════════════════════════════════════════════════════════════════
+// WORLD INFRASTRUCTURE MAP — Canvas engine (appended after main IIFE)
+// ═══════════════════════════════════════════════════════════════════════════
+(function WorldMapEngine() {
+  'use strict';
+
+  // ── Constants ─────────────────────────────────────────────────────────
+  const TILE_URL = 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}';
+  const COLORS = {
+    oil: '#e87722', gas: '#ffd23f', water: '#4ecdc4',
+    undersea_cable: '#a78bfa', trade_route: '#06b6d4',
+    active: 1.0, operational: 1.0, partial: 0.65,
+    planned: 0.35, construction: 0.5, sabotaged: 0.25, mothballed: 0.2,
+  };
+  const ROUTE_WIDTH = { trade_route: 3.5, undersea_cable: 1.5, oil: 2.5, gas: 2.0, water: 2.0 };
+  const DASH = { planned: [6,4], construction: [3,3], sabotaged: [2,6], mothballed: [4,8] };
+
+  // ── Viewport state ────────────────────────────────────────────────────
+  const vp = { zoom: 1.5, cx: 0, cy: 0, dragging: false, dragStart: null, vpStart: null, animRaf: null, flowOffset: 0 };
+
+  // ── Data cache ────────────────────────────────────────────────────────
+  let infraData = null, landPolys = null;
+  let hudFeature = null, hudX = 0, hudY = 0;
+  let canvases = {}, ctxs = {}, mapRoot = null;
+
+  // ── Web Mercator projection ────────────────────────────────────────────
+  function project(lon, lat, scale) {
+    const x = ((lon + 180) / 360) * scale;
+    const sinLat = Math.sin(lat * Math.PI / 180);
+    const y = (0.5 - Math.log((1 + sinLat) / (1 - sinLat)) / (4 * Math.PI)) * scale;
+    return [x, y];
+  }
+  function toScreen(lon, lat, W, H) {
+    const scale = 256 * Math.pow(2, vp.zoom);
+    const [mx, my] = project(lon, lat, scale);
+    return [mx - vp.cx + W / 2, my - vp.cy + H / 2];
+  }
+  function screenToGeo(sx, sy, W, H) {
+    const scale = 256 * Math.pow(2, vp.zoom);
+    const mx = sx - W / 2 + vp.cx;
+    const my = sy - H / 2 + vp.cy;
+    const lon = (mx / scale) * 360 - 180;
+    const latRad = Math.atan(Math.sinh(Math.PI * (1 - 2 * my / scale)));
+    return [lon, latRad * 180 / Math.PI];
+  }
+
+  // ── Douglas-Peucker simplification ────────────────────────────────────
+  function perpDist([x1,y1],[x2,y2],[px,py]) {
+    const dx = x2-x1, dy = y2-y1;
+    if (dx===0 && dy===0) return Math.hypot(px-x1,py-y1);
+    const t = ((px-x1)*dx + (py-y1)*dy) / (dx*dx+dy*dy);
+    return Math.hypot(px-(x1+t*dx), py-(y1+t*dy));
+  }
+  function rdp(pts, eps) {
+    if (pts.length <= 2) return pts;
+    let maxD = 0, maxI = 0;
+    for (let i=1;i<pts.length-1;i++) {
+      const d = perpDist(pts[0],pts[pts.length-1],pts[i]);
+      if (d>maxD) { maxD=d; maxI=i; }
+    }
+    if (maxD>eps) {
+      const l = rdp(pts.slice(0,maxI+1),eps);
+      const r = rdp(pts.slice(maxI),eps);
+      return [...l.slice(0,-1),...r];
+    }
+    return [pts[0],pts[pts.length-1]];
+  }
+
+  // ── Frustum cull ──────────────────────────────────────────────────────
+  function inView(x, y, W, H, margin=80) {
+    return x > -margin && x < W+margin && y > -margin && y < H+margin;
+  }
+
+  // ── Draw route/cable/pipeline ─────────────────────────────────────────
+  function drawFeature(ctx, feat, W, H) {
+    const coords = feat.coords;
+    if (!coords || coords.length < 2) return;
+    const eps = Math.max(0.3, 2.5 / Math.pow(2, vp.zoom));
+    const pts2d = coords.map(([lon,lat]) => toScreen(lon,lat,W,H));
+    const simplified = rdp(pts2d, eps);
+    if (simplified.length < 2) return;
+
+    // Frustum cull: skip if ALL points off-screen
+    if (!simplified.some(([x,y]) => inView(x,y,W,H))) return;
+
+    const type = feat.type;
+    const status = (feat.status || 'operational').toLowerCase();
+    const baseColor = COLORS[type] || COLORS[feat.substance] || '#888';
+    const alpha = COLORS[status] != null ? COLORS[status] : 1.0;
+    const width = (ROUTE_WIDTH[type] || 2) * Math.max(0.5, Math.min(2, vp.zoom / 2));
+
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = baseColor;
+    ctx.lineWidth = width;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    if (DASH[status]) {
+      ctx.setLineDash(DASH[status]);
+      ctx.lineDashOffset = -vp.flowOffset;
+    } else {
+      ctx.setLineDash([]);
+      if (type === 'oil' || type === 'gas') ctx.lineDashOffset = -vp.flowOffset;
+    }
+
+    // Glow for trade routes
+    if (type === 'trade_route') {
+      ctx.shadowColor = baseColor;
+      ctx.shadowBlur = 6;
+    }
+
+    ctx.beginPath();
+    let penDown = false;
+    for (const [x,y] of simplified) {
+      if (!penDown) { ctx.moveTo(x,y); penDown=true; } else ctx.lineTo(x,y);
+    }
+    ctx.stroke();
+
+    ctx.restore();
+  }
+
+  // ── Draw all infrastructure ───────────────────────────────────────────
+  function drawInfra(W, H) {
+    const ctx = ctxs.infra;
+    if (!ctx || !infraData) return;
+    ctx.clearRect(0, 0, W, H);
+    const all = [
+      ...(infraData.routes || []),
+      ...(infraData.cables || []),
+      ...(infraData.pipelines || []),
+    ];
+    for (const f of all) drawFeature(ctx, f, W, H);
+  }
+
+  // ── Tile-based base map ───────────────────────────────────────────────
+  const tileCache = new Map();
+  function loadTile(z, x, y) {
+    const key = `${z}/${x}/${y}`;
+    if (tileCache.has(key)) return tileCache.get(key);
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.src = TILE_URL.replace('{z}',z).replace('{x}',x).replace('{y}',y);
+    img.onload = () => requestRender();
+    tileCache.set(key, img);
+    if (tileCache.size > 512) { const first = tileCache.keys().next().value; tileCache.delete(first); }
+    return img;
+  }
+  function drawTiles(W, H) {
+    const ctx = ctxs.base;
+    if (!ctx) return;
+    ctx.clearRect(0,0,W,H);
+    ctx.fillStyle = '#0a0e14';
+    ctx.fillRect(0,0,W,H);
+    const z = Math.max(0, Math.min(10, Math.round(vp.zoom)));
+    const tileSize = 256;
+    const scale = 256 * Math.pow(2, vp.zoom);
+    const numTiles = Math.pow(2, z);
+    const tileWorld = scale / numTiles;
+    const ox = W/2 - vp.cx;
+    const oy = H/2 - vp.cy;
+    const startX = Math.floor(-ox / tileWorld);
+    const startY = Math.floor(-oy / tileWorld);
+    const endX = Math.ceil((W-ox) / tileWorld);
+    const endY = Math.ceil((H-oy) / tileWorld);
+    for (let tx=startX; tx<=endX; tx++) {
+      for (let ty=startY; ty<=endY; ty++) {
+        const wtx = ((tx % numTiles) + numTiles) % numTiles;
+        const wty = ((ty % numTiles) + numTiles) % numTiles;
+        if (wty >= numTiles) continue;
+        const img = loadTile(z, wtx, wty);
+        const px = Math.round(tx * tileWorld + ox);
+        const py = Math.round(ty * tileWorld + oy);
+        const sz = Math.ceil(tileWorld) + 1;
+        if (img.complete && img.naturalWidth) ctx.drawImage(img, px, py, sz, sz);
+      }
+    }
+  }
+
+  // ── HUD panel ─────────────────────────────────────────────────────────
+  function showHUD(feat, sx, sy, W, H) {
+    hudFeature = feat; hudX = sx; hudY = sy;
+    const ctx = ctxs.dynamic;
+    if (!ctx) return;
+    ctx.clearRect(0,0,W,H);
+
+    const pct = feat.capacity_kbd || feat.capacity_tbps || feat.capacity_bcmd || feat.throughput_ships_day;
+    const pctLabel = feat.capacity_kbd ? `${feat.capacity_kbd.toLocaleString()} kbd`
+      : feat.capacity_tbps ? `${feat.capacity_tbps} Tbps`
+      : feat.capacity_bcmd ? `${feat.capacity_bcmd} bcm/d`
+      : feat.throughput_ships_day ? `${feat.throughput_ships_day} ships/day` : null;
+
+    // What-If shock: assume 100% disruption
+    const disruption = 1.0;
+    const priceShockPct = -(1 / 0.1) * disruption * 100;
+    // Direct loss (rough estimate for display — server has live prices)
+    const dailyLossEst = feat.capacity_kbd ? feat.capacity_kbd * 1000 * 75 : null;
+
+    const lines = [
+      feat.name,
+      `Type: ${(feat.type||'').replace('_',' ').toUpperCase()}  ·  Status: ${(feat.status||'operational').toUpperCase()}`,
+      pctLabel ? `Capacity: ${pctLabel}` : null,
+      feat.operator ? `Operator: ${feat.operator}` : null,
+      '',
+      feat.beneficiaries?.length ? `Beneficiaries: ${feat.beneficiaries.join(', ')}` : null,
+      feat.risks?.length ? `Key Risk: ${feat.risks[0]}` : null,
+      '',
+      '── WHAT-IF: FULL DISRUPTION ──',
+      `Price shock: ${priceShockPct.toFixed(0)}% (inelastic model)`,
+      dailyLossEst ? `Est. daily loss: $${(dailyLossEst/1e6).toFixed(0)}M (at $75/bbl)` : null,
+    ].filter(l => l !== null);
+
+    const padding = 14, lineH = 17, titleH = 22;
+    const w = 320, h = padding*2 + titleH + (lines.length-1)*lineH;
+    let hx = sx + 16, hy = sy - 10;
+    if (hx + w > W - 10) hx = sx - w - 16;
+    if (hy + h > H - 10) hy = H - h - 10;
+    if (hy < 10) hy = 10;
+
+    // Box
+    ctx.fillStyle = 'rgba(10,14,20,0.92)';
+    ctx.strokeStyle = COLORS[feat.type] || '#06b6d4';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.roundRect(hx, hy, w, h, 5); ctx.fill(); ctx.stroke();
+
+    // Title
+    ctx.fillStyle = COLORS[feat.type] || '#06b6d4';
+    ctx.font = 'bold 13px monospace';
+    ctx.fillText(lines[0], hx+padding, hy+padding+13);
+
+    // Body
+    ctx.font = '11px monospace';
+    lines.slice(1).forEach((l,i) => {
+      if (!l) return;
+      if (l.startsWith('──')) {
+        ctx.fillStyle = '#ffd23f';
+        ctx.font = 'bold 10px monospace';
+      } else if (l.startsWith('Price shock') || l.startsWith('Est.')) {
+        ctx.fillStyle = '#ff453a';
+        ctx.font = '11px monospace';
+      } else if (l.startsWith('Beneficiaries')) {
+        ctx.fillStyle = '#2bd97c';
+        ctx.font = '11px monospace';
+      } else if (l.startsWith('Key Risk')) {
+        ctx.fillStyle = '#ffa040';
+        ctx.font = '11px monospace';
+      } else {
+        ctx.fillStyle = '#b0b8c8';
+        ctx.font = '11px monospace';
+      }
+      ctx.fillText(l, hx+padding, hy+titleH+padding + i*lineH);
+    });
+  }
+
+  // ── Raycasting click detection ────────────────────────────────────────
+  function ptSegDist([ax,ay],[bx,by],[px,py]) {
+    const dx=bx-ax,dy=by-ay,len2=dx*dx+dy*dy;
+    if (len2===0) return Math.hypot(px-ax,py-ay);
+    const t=Math.max(0,Math.min(1,((px-ax)*dx+(py-ay)*dy)/len2));
+    return Math.hypot(px-(ax+t*dx), py-(ay+t*dy));
+  }
+  function hitTest(sx, sy, W, H) {
+    if (!infraData) return null;
+    const threshold = 9;
+    const all = [
+      ...(infraData.routes||[]),
+      ...(infraData.cables||[]),
+      ...(infraData.pipelines||[]),
+    ];
+    let best = null, bestD = threshold;
+    for (const f of all) {
+      if (!f.coords || f.coords.length < 2) continue;
+      const pts = f.coords.map(([lon,lat]) => toScreen(lon,lat,W,H));
+      for (let i=0;i<pts.length-1;i++) {
+        const d = ptSegDist(pts[i],pts[i+1],[sx,sy]);
+        if (d < bestD) { bestD=d; best=f; }
+      }
+    }
+    return best;
+  }
+
+  // ── Render loop ───────────────────────────────────────────────────────
+  let renderPending = false;
+  function requestRender() {
+    if (renderPending) return;
+    renderPending = true;
+    requestAnimationFrame(render);
+  }
+  function render() {
+    renderPending = false;
+    const el = canvases.base;
+    if (!el || !el.isConnected) return;
+    const W = el.width, H = el.height;
+    drawTiles(W, H);
+    drawInfra(W, H);
+    if (!hudFeature) { ctxs.dynamic?.clearRect(0,0,W,H); }
+  }
+
+  // ── Flow animation ────────────────────────────────────────────────────
+  let flowRaf = null;
+  function startFlow() {
+    if (flowRaf) return;
+    function tick() {
+      vp.flowOffset = (vp.flowOffset + 0.4) % 40;
+      if (infraData && canvases.infra?.isConnected) {
+        const W = canvases.infra.width, H = canvases.infra.height;
+        drawInfra(W, H);
+      }
+      flowRaf = requestAnimationFrame(tick);
+    }
+    flowRaf = requestAnimationFrame(tick);
+  }
+  function stopFlow() {
+    if (flowRaf) { cancelAnimationFrame(flowRaf); flowRaf = null; }
+  }
+
+  // ── Canvas setup ──────────────────────────────────────────────────────
+  function createLayeredCanvas(container) {
+    const layers = ['base','infra','dynamic'];
+    layers.forEach(name => {
+      const c = document.createElement('canvas');
+      c.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:' + (name==='dynamic'?'auto':'none');
+      c.style.zIndex = name==='base'?0:name==='infra'?1:2;
+      container.appendChild(c);
+      canvases[name] = c;
+      ctxs[name] = c.getContext('2d');
+    });
+    // Only dynamic layer gets pointer events
+    return canvases.dynamic;
+  }
+
+  function resizeCanvases(W, H) {
+    Object.values(canvases).forEach(c => { c.width=W; c.height=H; });
+    requestRender();
+  }
+
+  // ── Map initialization ────────────────────────────────────────────────
+  function initWorldMap(container) {
+    mapRoot = container;
+    container.style.cssText = 'position:relative;width:100%;height:100%;overflow:hidden;background:#0a0e14;min-height:400px;cursor:grab;border-radius:4px;';
+
+    createLayeredCanvas(container);
+
+    // Initial viewport: center on 0,30 (prime meridian, N. Africa)
+    const W = container.offsetWidth || 800;
+    const H = container.offsetHeight || 500;
+    const scale = 256 * Math.pow(2, vp.zoom);
+    const [cx,cy] = project(10, 25, scale);
+    vp.cx = cx; vp.cy = cy;
+    resizeCanvases(W, H);
+
+    // Load infrastructure data
+    fetch('/api/map/infrastructure')
+      .then(r => r.json())
+      .then(d => { infraData = d; requestRender(); startFlow(); })
+      .catch(() => {});
+
+    // Pointer events
+    const dynC = canvases.dynamic;
+    dynC.addEventListener('mousedown', e => {
+      vp.dragging = true;
+      vp.dragStart = [e.clientX, e.clientY];
+      vp.vpStart = [vp.cx, vp.cy];
+      dynC.style.cursor = 'grabbing';
+    });
+    dynC.addEventListener('mousemove', e => {
+      if (vp.dragging) {
+        vp.cx = vp.vpStart[0] - (e.clientX - vp.dragStart[0]);
+        vp.cy = vp.vpStart[1] - (e.clientY - vp.dragStart[1]);
+        requestRender();
+        return;
+      }
+      const rect = dynC.getBoundingClientRect();
+      const sx = e.clientX - rect.left, sy = e.clientY - rect.top;
+      const W = dynC.width, H = dynC.height;
+      const hit = hitTest(sx, sy, W, H);
+      if (hit) {
+        dynC.style.cursor = 'pointer';
+        showHUD(hit, sx, sy, W, H);
+      } else {
+        dynC.style.cursor = vp.dragging ? 'grabbing' : 'grab';
+        hudFeature = null;
+        ctxs.dynamic?.clearRect(0,0,W,H);
+      }
+    });
+    dynC.addEventListener('mouseup', () => { vp.dragging = false; dynC.style.cursor = 'grab'; });
+    dynC.addEventListener('mouseleave', () => {
+      vp.dragging = false;
+      hudFeature = null;
+      ctxs.dynamic?.clearRect(0,0,dynC.width,dynC.height);
+    });
+    dynC.addEventListener('wheel', e => {
+      e.preventDefault();
+      const rect = dynC.getBoundingClientRect();
+      const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+      const W = dynC.width, H = dynC.height;
+      const [glon, glat] = screenToGeo(mx, my, W, H);
+      const delta = e.deltaY > 0 ? -0.25 : 0.25;
+      vp.zoom = Math.max(0.5, Math.min(8, vp.zoom + delta));
+      // Zoom toward cursor
+      const scale = 256 * Math.pow(2, vp.zoom);
+      const [nx, ny] = project(glon, glat, scale);
+      vp.cx = nx - (mx - W/2);
+      vp.cy = ny - (my - H/2);
+      requestRender();
+    }, { passive: false });
+
+    // Touch support
+    let lastTouchDist = null;
+    dynC.addEventListener('touchstart', e => {
+      if (e.touches.length === 1) {
+        vp.dragging = true;
+        vp.dragStart = [e.touches[0].clientX, e.touches[0].clientY];
+        vp.vpStart = [vp.cx, vp.cy];
+      } else if (e.touches.length === 2) {
+        vp.dragging = false;
+        lastTouchDist = Math.hypot(e.touches[0].clientX-e.touches[1].clientX, e.touches[0].clientY-e.touches[1].clientY);
+      }
+    }, { passive: true });
+    dynC.addEventListener('touchmove', e => {
+      e.preventDefault();
+      if (e.touches.length === 1 && vp.dragging) {
+        vp.cx = vp.vpStart[0] - (e.touches[0].clientX - vp.dragStart[0]);
+        vp.cy = vp.vpStart[1] - (e.touches[1-1]?.clientY - vp.dragStart[1]) || vp.cy; // eslint
+        vp.cx = vp.vpStart[0] - (e.touches[0].clientX - vp.dragStart[0]);
+        vp.cy = vp.vpStart[0] !== undefined ? vp.vpStart[1] - (e.touches[0].clientY - vp.dragStart[1]) : vp.cy;
+        requestRender();
+      } else if (e.touches.length === 2 && lastTouchDist != null) {
+        const d = Math.hypot(e.touches[0].clientX-e.touches[1].clientX, e.touches[0].clientY-e.touches[1].clientY);
+        const scale = d / lastTouchDist;
+        vp.zoom = Math.max(0.5, Math.min(8, vp.zoom + (scale > 1 ? 0.15 : -0.15)));
+        lastTouchDist = d;
+        requestRender();
+      }
+    }, { passive: false });
+    dynC.addEventListener('touchend', () => { vp.dragging = false; lastTouchDist = null; });
+
+    // Resize observer
+    const ro = new ResizeObserver(() => {
+      const w = container.offsetWidth, h = container.offsetHeight;
+      if (w > 0 && h > 0) resizeCanvases(w, h);
+    });
+    ro.observe(container);
+
+    // Zoom controls
+    const zoomWrap = document.createElement('div');
+    zoomWrap.style.cssText = 'position:absolute;top:10px;right:10px;z-index:10;display:flex;flex-direction:column;gap:4px;';
+    [['＋', 0.5], ['－', -0.5]].forEach(([label, delta]) => {
+      const btn = document.createElement('button');
+      btn.textContent = label;
+      btn.style.cssText = 'width:28px;height:28px;background:rgba(10,14,20,0.85);border:1px solid #2a3340;color:#b0b8c8;font-size:16px;cursor:pointer;border-radius:3px;font-family:monospace;';
+      btn.addEventListener('click', () => {
+        vp.zoom = Math.max(0.5, Math.min(8, vp.zoom + delta));
+        requestRender();
+      });
+      zoomWrap.appendChild(btn);
+    });
+    container.appendChild(zoomWrap);
+
+    // Legend
+    const legend = document.createElement('div');
+    legend.style.cssText = 'position:absolute;bottom:10px;left:10px;z-index:10;background:rgba(10,14,20,0.85);border:1px solid #2a3340;padding:8px 12px;font-size:10px;font-family:monospace;color:#b0b8c8;border-radius:3px;line-height:1.8;';
+    legend.innerHTML = [
+      `<span style="color:#e87722">━━</span> Oil Pipeline`,
+      `<span style="color:#ffd23f">━━</span> Gas Pipeline`,
+      `<span style="color:#a78bfa">━━</span> Undersea Cable`,
+      `<span style="color:#06b6d4">━━</span> Trade Route`,
+      `<span style="color:#888">╌╌</span> Planned / Damaged`,
+    ].join('<br>');
+    container.appendChild(legend);
+  }
+
+  // ── Tab integration ───────────────────────────────────────────────────
+  // Wait for the Global Intel map subtab to be activated, then inject the canvas
+  let mapInitialized = false;
+  function tryInitMap() {
+    if (mapInitialized) return;
+    const container = document.getElementById('worldMapContainer');
+    if (!container) return;
+    mapInitialized = true;
+    initWorldMap(container);
+  }
+
+  // Hook into the subtab click system (intel.js fires click on the nav buttons)
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-sub]');
+    if (btn && btn.dataset.sub === 'map') {
+      setTimeout(tryInitMap, 100);
+    }
+  });
+
+  // Also try on DOMContentLoaded in case map tab is already open
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', tryInitMap);
+  } else {
+    setTimeout(tryInitMap, 200);
+  }
+
+  // Expose for external callers
+  window.WorldMap = { init: tryInitMap, refresh: () => { infraData = null; if (mapInitialized) fetch('/api/map/infrastructure').then(r=>r.json()).then(d=>{infraData=d;requestRender();}).catch(()=>{}); } };
 })();
