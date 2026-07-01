@@ -1671,29 +1671,26 @@
   }
 
   // ── Draw route/cable/pipeline ─────────────────────────────────────────
+  // Handles both single coords[] and MultiLineString segments[].
   function drawFeature(ctx, feat, W, H) {
-    const coords = feat.coords;
-    if (!coords || coords.length < 2) return;
-    const eps = Math.max(0.3, 2.5 / Math.pow(2, vp.zoom));
-    const pts2d = coords.map(([lon,lat]) => toScreen(lon,lat,W,H));
-    const simplified = rdp(pts2d, eps);
-    if (simplified.length < 2) return;
+    // Build list of coord-segments to draw
+    const segs = feat.segments && feat.segments.length ? feat.segments : [feat.coords];
+    if (!segs || !segs.length) return;
 
-    // Frustum cull: skip if ALL points off-screen
-    if (!simplified.some(([x,y]) => inView(x,y,W,H))) return;
-
-    const type = feat.type;
+    const type   = feat.type;
     const status = (feat.status || 'operational').toLowerCase();
-    const baseColor = COLORS[type] || COLORS[feat.substance] || '#888';
-    const alpha = COLORS[status] != null ? COLORS[status] : 1.0;
-    const width = (ROUTE_WIDTH[type] || 2) * Math.max(0.5, Math.min(2, vp.zoom / 2));
+    // TeleGeography supplies per-cable hex colors; fall back to type color
+    const baseColor = feat.color || COLORS[type] || COLORS[feat.substance] || '#888';
+    const alpha  = COLORS[status] != null ? COLORS[status] : 1.0;
+    const width  = (ROUTE_WIDTH[type] || 2) * Math.max(0.4, Math.min(2, vp.zoom / 2));
+    const eps    = Math.max(0.3, 2.5 / Math.pow(2, vp.zoom));
 
     ctx.save();
     ctx.globalAlpha = alpha;
     ctx.strokeStyle = baseColor;
-    ctx.lineWidth = width;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
+    ctx.lineWidth   = width;
+    ctx.lineCap     = 'round';
+    ctx.lineJoin    = 'round';
 
     if (DASH[status]) {
       ctx.setLineDash(DASH[status]);
@@ -1703,20 +1700,26 @@
       if (type === 'oil' || type === 'gas') ctx.lineDashOffset = -vp.flowOffset;
     }
 
-    // Glow for trade routes
-    if (type === 'trade_route') {
-      ctx.shadowColor = baseColor;
-      ctx.shadowBlur = 6;
-    }
+    if (type === 'trade_route') { ctx.shadowColor = baseColor; ctx.shadowBlur = 6; }
 
-    ctx.beginPath();
-    let penDown = false;
-    for (const [x,y] of simplified) {
-      if (!penDown) { ctx.moveTo(x,y); penDown=true; } else ctx.lineTo(x,y);
-    }
-    ctx.stroke();
+    let drewAny = false;
+    for (const coords of segs) {
+      if (!coords || coords.length < 2) continue;
+      const pts2d     = coords.map(([lon, lat]) => toScreen(lon, lat, W, H));
+      const simplified = rdp(pts2d, eps);
+      if (simplified.length < 2) continue;
+      if (!simplified.some(([x, y]) => inView(x, y, W, H))) continue;
 
+      ctx.beginPath();
+      let penDown = false;
+      for (const [x, y] of simplified) {
+        if (!penDown) { ctx.moveTo(x, y); penDown = true; } else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+      drewAny = true;
+    }
     ctx.restore();
+    return drewAny;
   }
 
   // ── Draw all infrastructure ───────────────────────────────────────────
@@ -1860,19 +1863,23 @@
   }
   function hitTest(sx, sy, W, H) {
     if (!infraData) return null;
-    const threshold = 9;
+    const threshold = 10;
     const all = [
-      ...(infraData.routes||[]),
-      ...(infraData.cables||[]),
-      ...(infraData.pipelines||[]),
+      ...(infraData.routes    || []),
+      ...(infraData.cables    || []),
+      ...(infraData.pipelines || []),
     ];
     let best = null, bestD = threshold;
     for (const f of all) {
-      if (!f.coords || f.coords.length < 2) continue;
-      const pts = f.coords.map(([lon,lat]) => toScreen(lon,lat,W,H));
-      for (let i=0;i<pts.length-1;i++) {
-        const d = ptSegDist(pts[i],pts[i+1],[sx,sy]);
-        if (d < bestD) { bestD=d; best=f; }
+      // Support both MultiLineString segments[] and legacy coords[]
+      const segs = (f.segments && f.segments.length) ? f.segments : [f.coords];
+      for (const seg of segs) {
+        if (!seg || seg.length < 2) continue;
+        const pts = seg.map(([lon, lat]) => toScreen(lon, lat, W, H));
+        for (let i = 0; i < pts.length - 1; i++) {
+          const d = ptSegDist(pts[i], pts[i + 1], [sx, sy]);
+          if (d < bestD) { bestD = d; best = f; }
+        }
       }
     }
     return best;
@@ -1948,11 +1955,25 @@
     vp.cx = cx; vp.cy = cy;
     resizeCanvases(W, H);
 
-    // Load infrastructure data
+    // Load infrastructure data — show live count badge once loaded
+    const statusBadge = document.createElement('div');
+    statusBadge.style.cssText = 'position:absolute;top:10px;left:10px;z-index:10;background:rgba(10,14,20,0.85);border:1px solid #2a3340;color:#b0b8c8;font-family:monospace;font-size:10px;padding:4px 8px;border-radius:3px;pointer-events:none;';
+    statusBadge.textContent = 'Loading cable data…';
+    container.appendChild(statusBadge);
+
     fetch('/api/map/infrastructure')
       .then(r => r.json())
-      .then(d => { infraData = d; requestRender(); startFlow(); })
-      .catch(() => {});
+      .then(d => {
+        infraData = d;
+        const src = d.cable_source === 'telegeography' ? '📡 TeleGeography' : '📋 Curated';
+        const pCount = (d.pipelines || []).length;
+        const cCount = d.cable_count || (d.cables || []).length;
+        const rCount = (d.routes || []).length;
+        statusBadge.textContent = `${src} · ${cCount} cables · ${pCount} pipelines · ${rCount} routes`;
+        requestRender();
+        startFlow();
+      })
+      .catch(() => { statusBadge.textContent = 'Offline — cached data'; });
 
     // Pointer events
     const dynC = canvases.dynamic;

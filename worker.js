@@ -3525,37 +3525,113 @@ const INFRA_ROUTES = [
     coords: [[50.0,29.0],[51.5,25.9],[52.5,24.5],[54.4,24.1],[56.3,24.0],[58.0,22.0]] },
 ];
 
+// Downsample a coord array to at most maxPts points using uniform stride.
+function downsample(coords, maxPts = 30) {
+  if (!coords || coords.length <= maxPts) return coords;
+  const step = Math.ceil(coords.length / maxPts);
+  const out = [];
+  for (let i = 0; i < coords.length; i += step) out.push(coords[i]);
+  if (out[out.length - 1] !== coords[coords.length - 1]) out.push(coords[coords.length - 1]);
+  return out;
+}
+
 async function buildInfrastructureData(env) {
-  // Try live Overpass API for pipeline data, merge with curated sets
+  // ── 1. TeleGeography submarine cable database (600+ cables) ──────────
+  let liveCables = [];
+  let cableSource = 'curated';
+  try {
+    const TELE_GEO  = 'https://www.submarinecablemap.com/api/v3/cable/cable-geo.json';
+    const TELE_META = 'https://www.submarinecablemap.com/api/v3/cable/all.json';
+    const hdrs = { 'User-Agent': 'MarketTerminal/1.0 (educational)', 'Accept': 'application/json' };
+
+    const [geoRes, metaRes] = await Promise.all([
+      fetchWithTimeout(TELE_GEO,  { headers: hdrs }, 20000),
+      fetchWithTimeout(TELE_META, { headers: hdrs }, 15000),
+    ]);
+
+    // Build metadata lookup: cable id → {owners, landing_points, is_planned, ...}
+    let metaMap = {};
+    if (metaRes.ok) {
+      const md = await metaRes.json();
+      (md.cables || []).forEach(c => { metaMap[c.id] = c; });
+    }
+
+    if (geoRes.ok) {
+      const geo = await geoRes.json();
+      liveCables = (geo.features || []).map(f => {
+        const props = f.properties || {};
+        const meta  = metaMap[props.id] || {};
+        const geom  = f.geometry || {};
+
+        // Convert geometry to array of segments (MultiLineString → [[lon,lat],...])
+        let rawSegs = [];
+        if (geom.type === 'LineString') {
+          rawSegs = [geom.coordinates || []];
+        } else if (geom.type === 'MultiLineString') {
+          rawSegs = geom.coordinates || [];
+        }
+
+        // Downsample each segment and drop empties
+        const segments = rawSegs
+          .map(s => downsample(s, 30))
+          .filter(s => s && s.length >= 2);
+
+        if (!segments.length) return null;
+
+        const owners = (meta.owners || []).map(o => o.name).filter(Boolean);
+        const landingNames = (meta.landing_points || []).map(lp => lp.name).filter(Boolean).slice(0, 6);
+        const isPlanned = !!(meta.is_planned || (meta.rfs && parseInt(meta.rfs) > 2026));
+
+        return {
+          id: props.id || `tg_${Math.random().toString(36).slice(2)}`,
+          name: props.name || meta.name || 'Unknown Cable',
+          type: 'undersea_cable',
+          status: isPlanned ? 'planned' : 'active',
+          capacity_tbps: null,
+          owner: owners.slice(0, 3).join(', ') || 'Consortium',
+          color: props.color || '#a78bfa',
+          segments,
+          coords: segments[0],           // first segment for hit-test compat
+          beneficiaries: landingNames,
+          risks: [],
+          rfs: meta.rfs || null,
+          source: 'telegeography',
+        };
+      }).filter(Boolean);
+
+      if (liveCables.length > 20) cableSource = 'telegeography';
+    }
+  } catch (_) { /* fall through to curated */ }
+
+  // ── 2. OSM live pipelines (best-effort) ──────────────────────────────
   let livePipelines = [];
   try {
-    const overpassQuery = `[out:json][timeout:25];(way["man_made"="pipeline"]["substance"~"oil|gas",i](bbox:-60,-170,75,180););out geom 100;`;
-    const res = await fetchWithTimeout(`https://overpass-api.de/api/interpreter?data=${encodeURIComponent(overpassQuery)}`, {}, 20000);
+    const q = `[out:json][timeout:20];(way["man_made"="pipeline"]["substance"~"oil|gas",i](bbox:-60,-170,75,180););out geom 80;`;
+    const res = await fetchWithTimeout(`https://overpass-api.de/api/interpreter?data=${encodeURIComponent(q)}`, {}, 18000);
     if (res.ok) {
       const d = await res.json();
-      if (d.elements && d.elements.length > 0) {
-        livePipelines = d.elements.slice(0, 30).map(el => ({
-          id: `osm_${el.id}`,
-          name: el.tags?.name || `${el.tags?.substance || 'Unknown'} Pipeline`,
-          type: (el.tags?.substance || '').toLowerCase().includes('gas') ? 'gas' : 'oil',
-          status: 'operational',
-          capacity_kbd: null,
-          substance: el.tags?.substance || 'unknown',
-          operator: el.tags?.operator || 'Unknown',
-          beneficiaries: [], risks: ['Live OSM data'],
-          coords: (el.geometry || []).filter((_, i) => i % 5 === 0).map(n => [n.lon, n.lat]),
-          source: 'osm'
-        })).filter(p => p.coords.length >= 2);
-      }
+      livePipelines = (d.elements || []).slice(0, 40).map(el => ({
+        id: `osm_${el.id}`,
+        name: el.tags?.name || `${el.tags?.substance || 'Unknown'} Pipeline (OSM)`,
+        type: (el.tags?.substance || '').toLowerCase().includes('gas') ? 'gas' : 'oil',
+        status: 'operational', capacity_kbd: null,
+        substance: el.tags?.substance || 'unknown',
+        operator: el.tags?.operator || 'Unknown',
+        beneficiaries: [], risks: [],
+        coords: downsample((el.geometry || []).map(n => [n.lon, n.lat]), 25),
+        source: 'osm',
+      })).filter(p => p.coords.length >= 2);
     }
-  } catch (_) { /* use curated only */ }
+  } catch (_) {}
 
   return {
     pipelines: [...INFRA_PIPELINES, ...livePipelines],
-    cables: INFRA_CABLES,
+    cables: liveCables.length > 20 ? liveCables : INFRA_CABLES,
     routes: INFRA_ROUTES,
     generated: Date.now(),
     ttl: 86400,
+    cable_source: cableSource,
+    cable_count: liveCables.length || INFRA_CABLES.length,
   };
 }
 
