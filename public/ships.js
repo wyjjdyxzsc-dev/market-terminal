@@ -9,8 +9,8 @@
    ════════════════════════════════════════════════════════════════ */
 (() => {
   const COLORS = { cargo: '#2bd97c', cruise: '#d96bff', tanker: '#ffa028', other: '#5a6472' };
-  const MAX_SHIPS = 2200;       // hard cap on rendered markers
-  const STALE_MS = 8 * 60_000;  // drop ships not heard from in 8 min
+  const MAX_SHIPS = 8000;        // hard cap on rendered markers
+  const STALE_MS = 12 * 60_000; // drop ships not heard from in 12 min
 
   let map = null, renderer = null, ws = null;
   let initialized = false, opened = false;
@@ -41,8 +41,11 @@
       attribution: '© OpenStreetMap · © CARTO · AIS via aisstream.io', subdomains: 'abcd', maxZoom: 16,
     }).addTo(map);
     renderer = L.canvas({ padding: 0.5 });
-    map.on('moveend', scheduleSubscribe);
+    // No moveend re-subscribe — we're always subscribed globally.
     pruneTimer = setInterval(prune, 30_000);
+    // Poll the REST fallback every 3 minutes for open-ocean vessels.
+    restPollTimer = setInterval(pollRestShips, 180_000);
+    setTimeout(pollRestShips, 4000); // initial REST poll after connect
   }
 
   // ---------- websocket ----------
@@ -64,18 +67,41 @@
     reconnectTimer = setTimeout(() => { if (opened) connect(); }, 3500);
   }
 
-  function bbox() {
-    const b = map.getBounds();
-    const s = Math.max(-89.9, b.getSouth()), n = Math.min(89.9, b.getNorth());
-    const w = Math.max(-180, b.getWest()), e = Math.min(180, b.getEast());
-    return [[[s, w], [n, e]]];
-  }
+  // Always subscribe to the full globe — terrestrial AIS covers coastal waters
+  // worldwide; aisstream.io streams everything they receive.
+  const GLOBAL_BBOX = [[[-89.9, -180], [89.9, 180]]];
+
   function subscribe() {
     if (!ws || ws.readyState !== 1) return;
     // APIKey is injected by the worker proxy.
-    ws.send(JSON.stringify({ BoundingBoxes: bbox(), FilterMessageTypes: ['PositionReport', 'ShipStaticData'] }));
+    ws.send(JSON.stringify({ BoundingBoxes: GLOBAL_BBOX, FilterMessageTypes: ['PositionReport', 'ShipStaticData'] }));
   }
   function scheduleSubscribe() { clearTimeout(subTimer); subTimer = setTimeout(subscribe, 600); }
+
+  // ---------- REST fallback poll (open-ocean ships not near a coastal AIS receiver) ----------
+  let restPollTimer = null;
+  async function pollRestShips() {
+    try {
+      const r = await fetch('/api/map/ships', { headers: { Accept: 'application/json' } });
+      if (!r.ok) return;
+      const d = await r.json();
+      for (const v of (d.vessels || [])) {
+        if (v.lat == null || v.lon == null) continue;
+        const mmsi = v.mmsi || v.id;
+        if (!mmsi) continue;
+        let s = ships.get(mmsi);
+        if (!s) { s = { marker: null, type: undefined, name: (v.name || '').trim(), last: 0 }; ships.set(mmsi, s); }
+        // Only update if REST data is newer (WS takes priority)
+        if (Date.now() - s.last > 30_000) {
+          s.lat = v.lat; s.lon = v.lon; s.last = Date.now() - 60_000; // mark as slightly stale vs live WS
+          s.sog = v.sog; s.cog = v.cog;
+          if (!s.name && v.name) s.name = v.name.trim();
+          if (s.type == null && v.type != null) s.type = v.type;
+          upsert(mmsi, s);
+        }
+      }
+    } catch { /* REST poll failed — WS stream is enough */ }
+  }
 
   // ---------- incoming AIS ----------
   function onMessage(ev) {
