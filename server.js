@@ -1940,8 +1940,6 @@ const MAP_LAYERS_BASELINE = {
  * Wikidata SPARQL (additional military installations).
  * Failures are silently swallowed — baseline is always returned.
  */
-async function fetchAugmentedLayers() {
-
 // ── REST ship snapshot — global vessel positions (secondary to WS stream) ──
 // Sources tried in order:
 //   1. AISStream REST API (same provider as the WS feed, authoritative)
