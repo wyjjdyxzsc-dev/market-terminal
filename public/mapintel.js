@@ -22,6 +22,17 @@
   }
   const drill = (t) => { try { window.dispatchEvent(new CustomEvent('mt:drill', { detail: { ticker: t } })); } catch {} };
 
+  // ── Server-side layer data (24h TTL, augmented with live APIs) ──
+  // Fetched once per page load; falls back to embedded DATA if server unavailable.
+  let _layerDataPromise = null;
+  async function ensureLayerData() {
+    if (_layerDataPromise) return _layerDataPromise;
+    _layerDataPromise = getJSON('/api/map/layers')
+      .then((d) => (d && d._updated ? d : DATA))
+      .catch(() => DATA);
+    return _layerDataPromise;
+  }
+
   // ── EONET category colors ──
   const EONET_COLORS = {
     wildfires: '#ff6b35', severeStorms: '#45c8dc', volcanoes: '#ff453a', seaLakeIce: '#cfe8ff',
@@ -313,32 +324,33 @@
       load: (lg) => { drawTerminator(lg); } },
     // Curated reference layers
     { id: 'chokepoints', label: 'Chokepoints', icon: '⚓', group: 'Geopolitics',
-      load: (lg) => DATA.chokepoints.forEach(([n, la, lo, d]) => diamond(la, lo, '#45c8dc', `<b>${esc(n)}</b><br>${esc(d)}`).addTo(lg)) },
+      load: async (lg) => { const d = await ensureLayerData(); (d.chokepoints || DATA.chokepoints).forEach(([n, la, lo, desc]) => diamond(la, lo, '#45c8dc', `<b>${esc(n)}</b><br>${esc(desc)}`).addTo(lg)); } },
     { id: 'nuclear', label: 'Nuclear Sites', icon: '☢', group: 'Geopolitics',
-      load: (lg) => DATA.nuclear.forEach(([n, la, lo, d]) => diamond(la, lo, '#ffd23f', `<b>☢ ${esc(n)}</b><br>${esc(d)}`).addTo(lg)) },
+      load: async (lg) => { const d = await ensureLayerData(); (d.nuclear || DATA.nuclear).forEach(([n, la, lo, desc]) => diamond(la, lo, '#ffd23f', `<b>☢ ${esc(n)}</b><br>${esc(desc)}`).addTo(lg)); } },
     { id: 'spaceports', label: 'Spaceports', icon: '🚀', group: 'Infrastructure',
-      load: (lg) => DATA.spaceports.forEach(([n, la, lo, d]) => diamond(la, lo, '#d96bff', `<b>🚀 ${esc(n)}</b><br>${esc(d)}`).addTo(lg)) },
+      load: async (lg) => { const d = await ensureLayerData(); (d.spaceports || DATA.spaceports).forEach(([n, la, lo, desc]) => diamond(la, lo, '#d96bff', `<b>🚀 ${esc(n)}</b><br>${esc(desc)}`).addTo(lg)); } },
     { id: 'datacenters', label: 'AI Data Centers', icon: '🖥', group: 'Infrastructure',
-      load: (lg) => DATA.datacenters.forEach(([n, la, lo, d]) => diamond(la, lo, '#2bd97c', `<b>🖥 ${esc(n)}</b><br>${esc(d)}`).addTo(lg)) },
+      load: async (lg) => { const d = await ensureLayerData(); (d.datacenters || DATA.datacenters).forEach(([n, la, lo, desc]) => diamond(la, lo, '#2bd97c', `<b>🖥 ${esc(n)}</b><br>${esc(desc)}`).addTo(lg)); } },
     { id: 'exchanges', label: 'Stock Exchanges', icon: '🏛', group: 'Markets',
-      load: (lg) => DATA.exchanges.forEach(([n, la, lo, d]) => diamond(la, lo, '#ffa028', `<b>🏛 ${esc(n)}</b><br>${esc(d)}`).addTo(lg)) },
+      load: async (lg) => { const d = await ensureLayerData(); (d.exchanges || DATA.exchanges).forEach(([n, la, lo, desc]) => diamond(la, lo, '#ffa028', `<b>🏛 ${esc(n)}</b><br>${esc(desc)}`).addTo(lg)); } },
     { id: 'centralbanks', label: 'Central Banks', icon: '💰', group: 'Markets',
-      load: (lg) => DATA.centralbanks.forEach(([n, la, lo, d]) => diamond(la, lo, '#e8c170', `<b>💰 ${esc(n)}</b><br>${esc(d)}`).addTo(lg)) },
+      load: async (lg) => { const d = await ensureLayerData(); (d.centralbanks || DATA.centralbanks).forEach(([n, la, lo, desc]) => diamond(la, lo, '#e8c170', `<b>💰 ${esc(n)}</b><br>${esc(desc)}`).addTo(lg)); } },
     { id: 'financialCenters', label: 'Financial Centers', icon: '💵', group: 'Markets',
-      load: (lg) => DATA.financialCenters.forEach(([n, la, lo, d]) => diamond(la, lo, '#ffd23f', `<b>💵 ${esc(n)}</b><br>${esc(d)}`).addTo(lg)) },
+      load: async (lg) => { const d = await ensureLayerData(); (d.financialCenters || DATA.financialCenters).forEach(([n, la, lo, desc]) => diamond(la, lo, '#ffd23f', `<b>💵 ${esc(n)}</b><br>${esc(desc)}`).addTo(lg)); } },
     { id: 'commodityPorts', label: 'Commodity Ports', icon: '⚓', group: 'Markets',
-      load: (lg) => DATA.commodityPorts.forEach(([n, la, lo, d]) => diamond(la, lo, '#e8a87c', `<b>⚓ ${esc(n)}</b><br>${esc(d)}`).addTo(lg)) },
+      load: async (lg) => { const d = await ensureLayerData(); (d.commodityPorts || DATA.commodityPorts).forEach(([n, la, lo, desc]) => diamond(la, lo, '#e8a87c', `<b>⚓ ${esc(n)}</b><br>${esc(desc)}`).addTo(lg)); } },
     // Geopolitics & defense
     { id: 'militaryBases', label: 'Military Bases', icon: '🪖', group: 'Geopolitics',
-      load: (lg) => DATA.militaryBases.forEach(([n, la, lo, d]) => diamond(la, lo, '#ff8c5a', `<b>🪖 ${esc(n)}</b><br>${esc(d)}`).addTo(lg)) },
+      load: async (lg) => { const d = await ensureLayerData(); (d.militaryBases || DATA.militaryBases).forEach(([n, la, lo, desc]) => diamond(la, lo, '#ff8c5a', `<b>🪖 ${esc(n)}</b><br>${esc(desc)}`).addTo(lg)); } },
     { id: 'criticalMinerals', label: 'Critical Minerals', icon: '💎', group: 'Geopolitics',
-      load: (lg) => DATA.criticalMinerals.forEach(([n, la, lo, d]) => diamond(la, lo, '#6fd3c9', `<b>💎 ${esc(n)}</b><br>${esc(d)}`).addTo(lg)) },
+      load: async (lg) => { const d = await ensureLayerData(); (d.criticalMinerals || DATA.criticalMinerals).forEach(([n, la, lo, desc]) => diamond(la, lo, '#6fd3c9', `<b>💎 ${esc(n)}</b><br>${esc(desc)}`).addTo(lg)); } },
     { id: 'refugeeHotspots', label: 'Displacement', icon: '👥', group: 'Geopolitics',
-      load: (lg) => DATA.refugeeHotspots.forEach(([n, la, lo, d]) => diamond(la, lo, '#ff6b9d', `<b>👥 ${esc(n)}</b><br>${esc(d)}`).addTo(lg)) },
+      load: async (lg) => { const d = await ensureLayerData(); (d.refugeeHotspots || DATA.refugeeHotspots).forEach(([n, la, lo, desc]) => diamond(la, lo, '#ff6b9d', `<b>👥 ${esc(n)}</b><br>${esc(desc)}`).addTo(lg)); } },
     { id: 'conflictZones', label: 'Conflict Zones', icon: '⚔', group: 'Geopolitics', live: true, refresh: 900000,
       load: async (lg) => {
-        // Static curated zones always shown as background context
-        DATA.conflictZones.forEach(([n, la, lo, d]) => {
+        // Server-side curated zones (24h TTL) always shown as background context
+        const ld = await ensureLayerData();
+        (ld.conflictZones || DATA.conflictZones).forEach(([n, la, lo, d]) => {
           diamond(la, lo, '#ff453a', `<b>⚔ ${esc(n)}</b><br>${esc(d)}`).addTo(lg);
           L.circle([la, lo], { radius: 220000, color: '#ff453a', weight: 1, fillColor: '#ff453a', fillOpacity: 0.06, interactive: false }).addTo(lg);
         });
@@ -362,11 +374,12 @@
         } catch { /* leave static layer intact */ }
       } },
     { id: 'sanctions', label: 'Sanctioned States', icon: '🚫', group: 'Geopolitics',
-      load: (lg) => DATA.sanctions.forEach(([n, la, lo, d]) => diamond(la, lo, '#f0883e', `<b>🚫 ${esc(n)}</b><br>${esc(d)}`).addTo(lg)) },
+      load: async (lg) => { const d = await ensureLayerData(); (d.sanctions || DATA.sanctions).forEach(([n, la, lo, desc]) => diamond(la, lo, '#f0883e', `<b>🚫 ${esc(n)}</b><br>${esc(desc)}`).addTo(lg)); } },
     { id: 'diseaseOutbreaks', label: 'Disease Outbreaks', icon: '🦠', group: 'Hazards', live: true, refresh: 900000,
       load: async (lg) => {
-        // Always render the curated baseline
-        DATA.diseaseOutbreaks.forEach(([n, la, lo, d]) => diamond(la, lo, '#a3e635', `<b>🦠 ${esc(n)}</b><br>${esc(d)}`).addTo(lg));
+        // Server-side curated baseline (24h TTL)
+        const ld = await ensureLayerData();
+        (ld.diseaseOutbreaks || DATA.diseaseOutbreaks).forEach(([n, la, lo, d]) => diamond(la, lo, '#a3e635', `<b>🦠 ${esc(n)}</b><br>${esc(d)}`).addTo(lg));
         // Layer live ProMED + WHO alerts on top
         try {
           const geo = await getJSON('/api/map/disease');
@@ -388,21 +401,22 @@
       } },
     // Tech & infrastructure
     { id: 'techHQs', label: 'Tech HQs', icon: '🏢', group: 'Infrastructure',
-      load: (lg) => DATA.techHQs.forEach(([n, la, lo, d]) => diamond(la, lo, '#7aa2f7', `<b>🏢 ${esc(n)}</b><br>${esc(d)}`).addTo(lg)) },
+      load: async (lg) => { const d = await ensureLayerData(); (d.techHQs || DATA.techHQs).forEach(([n, la, lo, desc]) => diamond(la, lo, '#7aa2f7', `<b>🏢 ${esc(n)}</b><br>${esc(desc)}`).addTo(lg)); } },
     { id: 'cloudRegions', label: 'Cloud Regions', icon: '☁', group: 'Infrastructure',
-      load: (lg) => DATA.cloudRegions.forEach(([n, la, lo, d]) => diamond(la, lo, '#9ece6a', `<b>☁ ${esc(n)}</b><br>${esc(d)}`).addTo(lg)) },
+      load: async (lg) => { const d = await ensureLayerData(); (d.cloudRegions || DATA.cloudRegions).forEach(([n, la, lo, desc]) => diamond(la, lo, '#9ece6a', `<b>☁ ${esc(n)}</b><br>${esc(desc)}`).addTo(lg)); } },
     { id: 'startupHubs', label: 'Startup Hubs', icon: '🚀', group: 'Markets',
-      load: (lg) => DATA.startupHubs.forEach(([n, la, lo, d]) => diamond(la, lo, '#bb9af7', `<b>🚀 ${esc(n)}</b><br>${esc(d)}`).addTo(lg)) },
+      load: async (lg) => { const d = await ensureLayerData(); (d.startupHubs || DATA.startupHubs).forEach(([n, la, lo, desc]) => diamond(la, lo, '#bb9af7', `<b>🚀 ${esc(n)}</b><br>${esc(desc)}`).addTo(lg)); } },
     { id: 'gccInvestments', label: 'GCC Sovereign Funds', icon: '🛢', group: 'Markets',
-      load: (lg) => DATA.gccInvestments.forEach(([n, la, lo, d]) => diamond(la, lo, '#e0af68', `<b>🛢 ${esc(n)}</b><br>${esc(d)}`).addTo(lg)) },
+      load: async (lg) => { const d = await ensureLayerData(); (d.gccInvestments || DATA.gccInvestments).forEach(([n, la, lo, desc]) => diamond(la, lo, '#e0af68', `<b>🛢 ${esc(n)}</b><br>${esc(desc)}`).addTo(lg)); } },
     { id: 'economicCenters', label: 'Economic Centers', icon: '🌆', group: 'Markets',
-      load: (lg) => DATA.economicCenters.forEach(([n, la, lo, d]) => diamond(la, lo, '#f7c948', `<b>🌆 ${esc(n)}</b><br>${esc(d)}`).addTo(lg)) },
+      load: async (lg) => { const d = await ensureLayerData(); (d.economicCenters || DATA.economicCenters).forEach(([n, la, lo, desc]) => diamond(la, lo, '#f7c948', `<b>🌆 ${esc(n)}</b><br>${esc(desc)}`).addTo(lg)); } },
     { id: 'internetExchanges', label: 'Internet Exchanges', icon: '🌐', group: 'Infrastructure',
-      load: (lg) => DATA.internetExchanges.forEach(([n, la, lo, d]) => diamond(la, lo, '#73daca', `<b>🌐 ${esc(n)}</b><br>${esc(d)}`).addTo(lg)) },
+      load: async (lg) => { const d = await ensureLayerData(); (d.internetExchanges || DATA.internetExchanges).forEach(([n, la, lo, desc]) => diamond(la, lo, '#73daca', `<b>🌐 ${esc(n)}</b><br>${esc(desc)}`).addTo(lg)); } },
     { id: 'gpsJamming', label: 'GPS Jamming', icon: '📡', group: 'Geopolitics', live: true, refresh: 21600000,
       load: async (lg) => {
-        // Curated known hotspots as baseline
-        DATA.gpsJamming.forEach(([n, la, lo, d]) => {
+        // Server-side curated hotspots as baseline (24h TTL)
+        const ld = await ensureLayerData();
+        (ld.gpsJamming || DATA.gpsJamming).forEach(([n, la, lo, d]) => {
           diamond(la, lo, '#f0883e', `<b>📡 ${esc(n)}</b><br>${esc(d)}`).addTo(lg);
           L.circle([la, lo], { radius: 300000, color: '#f0883e', weight: 1, fillColor: '#f0883e', fillOpacity: 0.06, interactive: false }).addTo(lg);
         });
@@ -433,8 +447,7 @@
         } catch { /* keep static baseline */ }
       } },
     { id: 'webcams', label: 'Curated Webcams', icon: '📷', group: 'Overlays',
-      load: (lg) => DATA.webcams.forEach(([n, la, lo, d, url]) => L.circleMarker([la, lo], { renderer: r(), radius: 5, weight: 1.5, color: '#45c8dc', fillColor: '#0a0a0a', fillOpacity: 0.9 })
-        .bindPopup(`<b>📷 ${esc(n)}</b><br>${esc(d)}<br><a href="${esc(url)}" target="_blank" rel="noopener" style="color:#45c8dc">▶ Watch live</a>`).addTo(lg)) },
+      load: async (lg) => { const d = await ensureLayerData(); (d.webcams || DATA.webcams).forEach(([n, la, lo, desc, url]) => L.circleMarker([la, lo], { renderer: r(), radius: 5, weight: 1.5, color: '#45c8dc', fillColor: '#0a0a0a', fillOpacity: 0.9 }).bindPopup(`<b>📷 ${esc(n)}</b><br>${esc(desc)}<br><a href="${esc(url)}" target="_blank" rel="noopener" style="color:#45c8dc">▶ Watch live</a>`).addTo(lg)); } },
     { id: 'webcams-live', label: 'Live Webcams (Windy)', icon: '📹', group: 'Overlays', live: true, refresh: 600000,
       load: async (lg) => {
         const d = await getJSON('/api/map/webcams-live');
@@ -451,11 +464,11 @@
       } },
     // Line layers
     { id: 'tradeRoutes', label: 'Trade Routes', icon: '🚢', group: 'Routes',
-      load: (lg) => lines(lg, LINES.tradeRoutes, '#45c8dc', 2) },
+      load: async (lg) => { const d = await ensureLayerData(); lines(lg, (d.lines || LINES).tradeRoutes || LINES.tradeRoutes, '#45c8dc', 2); } },
     { id: 'cables', label: 'Undersea Cables', icon: '🔌', group: 'Routes',
-      load: (lg) => lines(lg, LINES.cables, '#7aa2f7', 1.5, '4 3') },
+      load: async (lg) => { const d = await ensureLayerData(); lines(lg, (d.lines || LINES).cables || LINES.cables, '#7aa2f7', 1.5, '4 3'); } },
     { id: 'pipelines', label: 'Pipelines', icon: '🛢', group: 'Routes',
-      load: (lg) => lines(lg, LINES.pipelines, '#ffa028', 2, '1 4') },
+      load: async (lg) => { const d = await ensureLayerData(); lines(lg, (d.lines || LINES).pipelines || LINES.pipelines, '#ffa028', 2, '1 4'); } },
   ];
 
   function lines(lg, set, color, weight, dash) {

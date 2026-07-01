@@ -1726,6 +1726,304 @@ async function fetchNasaEonet() {
   return res.json();
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+//  MAP LAYERS BASELINE — curated reference data (served with 24h TTL)
+//  Augmented at request-time by live public APIs where available.
+// ═══════════════════════════════════════════════════════════════════════════
+
+const MAP_LAYERS_BASELINE = {
+  exchanges: [
+    ['NYSE', 40.707, -74.011, 'New York Stock Exchange'], ['NASDAQ', 40.757, -73.986, 'Nasdaq'],
+    ['LSE', 51.515, -0.099, 'London Stock Exchange'], ['TSE', 35.683, 139.774, 'Tokyo Stock Exchange'],
+    ['SSE', 31.234, 121.491, 'Shanghai Stock Exchange'], ['HKEX', 22.283, 114.158, 'Hong Kong Exchange'],
+    ['Euronext', 48.870, 2.332, 'Euronext Paris'], ['DB', 50.115, 8.671, 'Deutsche Börse'],
+    ['BSE', 18.929, 72.833, 'Bombay Stock Exchange'], ['TSX', 43.648, -79.382, 'Toronto Exchange'],
+    ['ASX', -33.866, 151.207, 'Australian Securities Exchange'], ['SIX', 47.371, 8.539, 'SIX Swiss Exchange'],
+    ['B3', -23.553, -46.634, 'B3 São Paulo'], ['KRX', 37.525, 126.926, 'Korea Exchange'], ['SGX', 1.283, 103.851, 'Singapore Exchange'],
+  ],
+  chokepoints: [
+    ['Strait of Hormuz', 26.567, 56.25, '~20% of global oil passes here'], ['Suez Canal', 30.5, 32.35, 'Europe–Asia shortcut'],
+    ['Strait of Malacca', 1.43, 102.89, 'Busiest cargo chokepoint'], ['Panama Canal', 9.08, -79.68, 'Atlantic–Pacific link'],
+    ['Bab-el-Mandeb', 12.58, 43.33, 'Red Sea gateway'], ['Bosphorus', 41.12, 29.07, 'Black Sea outlet'],
+    ['Strait of Gibraltar', 35.95, -5.6, 'Mediterranean entrance'], ['Danish Straits', 55.7, 12.7, 'Baltic outlet'],
+    ['Cape of Good Hope', -34.36, 18.47, 'Tanker reroute around Africa'], ['Taiwan Strait', 24.5, 119.5, 'Critical Asia shipping lane'],
+  ],
+  nuclear: [
+    ['Natanz', 33.72, 51.73, 'Iran enrichment site'], ['Fordow', 34.88, 50.99, 'Iran enrichment (underground)'],
+    ['Yongbyon', 39.8, 125.75, 'North Korea reactor'], ['Dimona', 31.0, 35.14, 'Israel (Negev)'],
+    ['Zaporizhzhia', 47.51, 34.59, 'Largest NPP in Europe (Ukraine)'], ['Bushehr', 28.83, 50.89, 'Iran power reactor'],
+    ['Chernobyl', 51.39, 30.10, 'Exclusion zone'], ['Fukushima Daiichi', 37.42, 141.03, 'Japan (decommissioning)'],
+    ['Belo Monte', -3.10, -51.73, 'Brazil — major hydro'], ['Olkiluoto', 61.23, 21.44, 'Finland NPP'],
+    ['Hinkley Point C', 51.21, -3.13, 'UK — under construction'], ['Barakah', 23.96, 52.20, 'UAE first NPP'],
+  ],
+  spaceports: [
+    ['Cape Canaveral', 28.49, -80.58, 'USA — SpaceX/ULA/NASA'], ['Starbase', 25.99, -97.16, 'SpaceX Boca Chica'],
+    ['Baikonur', 45.92, 63.34, 'Kazakhstan (Roscosmos)'], ['Kourou', 5.24, -52.77, 'ESA Guiana Space Centre'],
+    ['Vandenberg', 34.74, -120.57, 'USA — polar launches'], ['Jiuquan', 40.96, 100.29, 'China'],
+    ['Wenchang', 19.61, 110.95, 'China — heavy lift'], ['Sriharikota', 13.72, 80.23, 'India (ISRO)'],
+    ['Tanegashima', 30.4, 130.97, 'Japan (JAXA)'], ['Mahia', -39.26, 177.86, 'Rocket Lab — New Zealand'],
+    ['Naro', 34.43, 127.54, 'South Korea (KARI)'],
+  ],
+  datacenters: [
+    ['Ashburn (US-East)', 39.04, -77.49, 'Largest data-center hub on Earth'], ['Santa Clara', 37.35, -121.96, 'Silicon Valley core'],
+    ['Dublin', 53.34, -6.27, 'EU cloud gateway'], ['Singapore', 1.35, 103.82, 'APAC hub'],
+    ['Frankfurt', 50.11, 8.68, 'DE-CIX exchange'], ['Phoenix', 33.45, -112.07, 'Booming AI capacity'],
+    ['The Dalles', 45.6, -121.18, 'Google flagship'], ['Council Bluffs', 41.26, -95.86, 'Meta/Google mega-campus'],
+    ['Chicago', 41.88, -87.63, 'Midwest financial DC hub'], ['Amsterdam', 52.37, 4.90, 'AMS-IX colocation'],
+    ['Sydney', -33.87, 151.21, 'ANZ cloud hub'], ['Tokyo', 35.68, 139.76, 'JP cloud hub'],
+  ],
+  centralbanks: [
+    ['Federal Reserve', 38.893, -77.045, 'United States'], ['ECB', 50.109, 8.674, 'Eurozone (Frankfurt)'],
+    ['Bank of England', 51.514, -0.089, 'United Kingdom'], ['Bank of Japan', 35.686, 139.771, 'Japan'],
+    ['PBoC', 39.915, 116.366, "People's Bank of China"], ['SNB', 46.947, 7.444, 'Switzerland'],
+    ['RBI', 18.932, 72.836, 'India'], ['BoC', 45.421, -75.704, 'Canada'],
+    ['RBA', -35.28, 149.13, 'Australia'], ['BCB', -15.78, -47.93, 'Brazil'],
+    ['SARB', -25.74, 28.18, 'South Africa'], ['CBR', 55.75, 37.62, 'Russia'],
+  ],
+  militaryBases: [
+    ['Ramstein AB', 49.44, 7.60, 'US Air Force — Germany'], ['Diego Garcia', -7.31, 72.41, 'US/UK Indian Ocean base'],
+    ['Guam (Andersen)', 13.58, 144.93, 'US Pacific hub'], ['Al Udeid AB', 25.12, 51.32, 'US CENTCOM — Qatar'],
+    ['Camp Humphreys', 36.96, 127.03, 'Largest US overseas base — Korea'], ['Yokosuka', 35.29, 139.67, 'US 7th Fleet — Japan'],
+    ['Djibouti (Lemonnier)', 11.55, 43.16, 'US/Allied Horn of Africa'], ['Tartus', 34.90, 35.87, 'Russian naval base — Syria'],
+    ['Pearl Harbor', 21.36, -157.95, 'US Pacific Fleet'], ['Incirlik AB', 37.00, 35.43, 'US/NATO — Türkiye'],
+    ['Bagram (former)', 34.95, 69.27, 'Afghanistan'], ['Kaliningrad', 54.71, 20.51, 'Russian Baltic exclave'],
+    ['RAAF Darwin', -12.41, 130.87, 'Australia — US Marines rotation'], ['Sembawang', 1.43, 103.82, 'Singapore — US/UK'],
+    ['Souda Bay', 35.52, 24.07, 'US/NATO — Crete'], ['Misawa AB', 40.70, 141.37, 'US — Northern Japan'],
+  ],
+  criticalMinerals: [
+    ['Bayan Obo', 41.77, 109.97, "China — rare earths (world's largest)"], ['Mountain Pass', 35.48, -115.53, 'USA — rare earths'],
+    ['Escondida', -24.27, -69.07, 'Chile — copper (largest)'], ['Grasberg', -4.06, 137.11, 'Indonesia — copper/gold'],
+    ['Cobalt (Katanga)', -10.7, 25.5, 'DR Congo — cobalt belt'], ['Greenbushes', -33.86, 116.06, 'Australia — lithium'],
+    ['Salar de Atacama', -23.5, -68.2, 'Chile — lithium brine'], ['Norilsk', 69.35, 88.20, 'Russia — nickel/palladium'],
+    ['Olympic Dam', -30.44, 136.88, 'Australia — uranium/copper'], ['Jiangxi', 28.0, 116.0, 'China — rare-earth refining'],
+    ['Cerro Rico', -19.59, -65.76, 'Bolivia — silver/tin (historic)'], ['Carajas', -6.10, -50.01, 'Brazil — iron ore'],
+    ['Witwatersrand', -26.27, 27.23, 'South Africa — gold belt'], ['Pilbara', -23.0, 118.5, 'Australia — iron ore'],
+  ],
+  techHQs: [
+    ['Apple', 37.335, -122.009, 'Cupertino'], ['Google', 37.422, -122.084, 'Mountain View'], ['Microsoft', 47.640, -122.129, 'Redmond'],
+    ['Nvidia', 37.371, -121.965, 'Santa Clara'], ['Meta', 37.485, -122.148, 'Menlo Park'], ['TSMC', 24.774, 121.001, 'Hsinchu, Taiwan'],
+    ['ASML', 51.41, 5.46, 'Veldhoven, NL'], ['Samsung', 37.258, 127.054, 'Suwon'], ['Tesla', 30.222, -97.617, 'Austin'],
+    ['Amazon', 47.622, -122.337, 'Seattle'], ['ARM', 52.198, 0.127, 'Cambridge UK'],
+    ['OpenAI', 37.777, -122.419, 'San Francisco'], ['Anthropic', 37.785, -122.408, 'San Francisco'],
+    ['Huawei', 22.62, 114.06, 'Shenzhen'], ['SMIC', 31.23, 121.47, 'Shanghai'],
+  ],
+  cloudRegions: [
+    ['AWS us-east-1', 39.04, -77.49, 'N. Virginia — core'], ['AWS us-west-2', 45.87, -119.69, 'Oregon'],
+    ['AWS us-east-2', 39.96, -82.99, 'Ohio'], ['AWS ap-south-1', 19.08, 72.88, 'Mumbai'],
+    ['Azure East US', 37.37, -79.16, 'Virginia'], ['Azure West US 2', 47.60, -122.33, 'Washington'],
+    ['GCP us-central1', 41.26, -95.86, 'Iowa'], ['GCP europe-west1', 50.45, 3.82, 'Belgium'],
+    ['AWS eu-west-1', 53.41, -8.24, 'Ireland'], ['AWS ap-southeast-1', 1.32, 103.69, 'Singapore'],
+    ['Azure West Europe', 52.37, 4.90, 'Netherlands'], ['GCP asia-east1', 24.05, 120.52, 'Taiwan'],
+    ['AWS ap-northeast-1', 35.68, 139.77, 'Tokyo'], ['Azure Southeast Asia', 1.35, 103.82, 'Singapore'],
+    ['GCP southamerica-east1', -23.55, -46.63, 'São Paulo'], ['AWS af-south-1', -33.92, 18.42, 'Cape Town'],
+  ],
+  financialCenters: [
+    ['Wall Street', 40.706, -74.009, 'New York'], ['City of London', 51.515, -0.092, 'London'],
+    ['Hong Kong', 22.281, 114.158, 'HK'], ['Singapore', 1.284, 103.851, 'SG'], ['Tokyo', 35.681, 139.767, 'Marunouchi'],
+    ['Frankfurt', 50.111, 8.679, 'DE'], ['Zurich', 47.369, 8.539, 'CH'], ['Dubai (DIFC)', 25.215, 55.282, 'UAE'],
+    ['Shanghai', 31.240, 121.499, 'Lujiazui'], ['Sydney', -33.87, 151.21, 'AU'], ['Toronto', 43.65, -79.38, 'CA'],
+    ['Mumbai', 19.08, 72.88, 'IN'], ['São Paulo', -23.55, -46.63, 'BR'],
+  ],
+  refugeeHotspots: [
+    ['Syria', 35.0, 38.0, 'Largest displacement crisis'], ['Ukraine', 49.0, 32.0, 'War displacement'],
+    ['Sudan', 15.5, 30.0, 'Conflict displacement'], ['Gaza', 31.5, 34.45, 'Humanitarian crisis'],
+    ['DR Congo', -2.0, 27.0, 'Eastern conflict'], ['Myanmar', 21.0, 96.0, 'Rohingya & internal'],
+    ['Afghanistan', 34.0, 66.0, 'Protracted displacement'], ['Venezuela', 7.0, -66.0, 'Regional migration'],
+    ['Somalia', 5.0, 45.0, 'Prolonged crisis'], ['South Sudan', 7.0, 30.0, 'Internal displacement'],
+    ['Ethiopia', 9.0, 40.0, 'Tigray & Amhara crisis'], ['Sahel', 14.0, -2.0, 'Burkina/Mali/Niger displacement'],
+  ],
+  commodityPorts: [
+    ['Ras Tanura', 26.64, 50.16, 'Saudi — oil export'], ['Rotterdam', 51.95, 4.14, "Europe's largest port"],
+    ['Shanghai', 30.62, 122.06, "World's busiest container port"], ['Houston', 29.73, -95.27, 'US energy export'],
+    ['Singapore', 1.26, 103.75, 'Bunkering & transshipment'], ['Fujairah', 25.16, 56.36, 'UAE oil storage hub'],
+    ['Newcastle', -32.92, 151.80, 'Australia — coal export'], ['Santos', -23.96, -46.30, 'Brazil — soy/sugar'],
+    ['Dalian', 38.91, 121.62, 'China — crude import'], ['Corpus Christi', 27.79, -97.39, 'US LNG export'],
+    ['Dampier', -20.66, 116.72, 'Australia — iron ore'], ['Caofeidian', 39.52, 119.06, 'China — coal/ore hub'],
+  ],
+  conflictZones: [
+    ['Ukraine', 48.3, 37.8, 'Russia–Ukraine war (active front)'], ['Gaza', 31.45, 34.40, 'Israel–Hamas conflict'],
+    ['Sudan', 15.5, 32.5, 'Civil war (RSF vs SAF)'], ['Sahel', 14.0, 0.0, 'Jihadist insurgency belt'],
+    ['Myanmar', 21.5, 96.5, 'Civil war'], ['DR Congo (East)', -1.5, 29.0, 'M23 & militia conflict'],
+    ['Red Sea', 14.5, 42.0, 'Houthi shipping attacks'], ['Taiwan Strait', 24.5, 119.5, 'Cross-strait tensions'],
+    ['Kashmir', 34.0, 76.0, 'India–Pakistan flashpoint'], ['Korean DMZ', 38.0, 127.5, 'North–South standoff'],
+    ['Tigray/Amhara', 12.5, 38.5, 'Ethiopia internal conflict'], ['Haiti', 18.9, -72.3, 'Gang control crisis'],
+  ],
+  sanctions: [
+    ['Russia', 61.5, 100.0, 'Heavily sanctioned (West)'], ['Iran', 32.0, 53.0, 'Oil & banking sanctions'],
+    ['North Korea', 40.0, 127.0, 'UN/US sanctions'], ['Venezuela', 7.0, -66.0, 'US oil sanctions'],
+    ['Syria', 35.0, 38.0, 'Multilateral sanctions'], ['Cuba', 22.0, -79.5, 'US embargo'],
+    ['Belarus', 53.7, 27.9, 'EU/US sanctions'], ['Myanmar', 16.0, 96.0, 'EU/US targeted sanctions'],
+    ['Mali', 17.0, -4.0, 'ECOWAS/EU sanctions'], ['Nicaragua', 12.8, -85.2, 'US democracy sanctions'],
+  ],
+  startupHubs: [
+    ['Silicon Valley', 37.39, -122.08, 'Global #1'], ['New York', 40.74, -73.99, 'Fintech & SaaS'],
+    ['London', 51.52, -0.10, 'Europe #1'], ['Bengaluru', 12.97, 77.59, 'India tech capital'],
+    ['Tel Aviv', 32.07, 34.79, 'Startup Nation'], ['Beijing', 39.98, 116.31, 'Zhongguancun'],
+    ['Berlin', 52.52, 13.40, 'EU growth hub'], ['Singapore', 1.29, 103.85, 'SEA gateway'],
+    ['Shenzhen', 22.54, 114.06, 'Hardware capital'], ['Seoul', 37.56, 126.99, 'K-startup hub'],
+    ['Toronto', 43.65, -79.38, 'AI research hub (Vector Institute)'], ['Paris', 48.86, 2.35, 'Station F ecosystem'],
+    ['Dubai', 25.20, 55.27, 'MENA startup hub'], ['São Paulo', -23.55, -46.63, 'LatAm fintech'],
+  ],
+  gccInvestments: [
+    ['PIF (Saudi)', 24.71, 46.68, '$900B+ sovereign fund'], ['ADIA (Abu Dhabi)', 24.45, 54.38, '~$1T sovereign fund'],
+    ['QIA (Qatar)', 25.29, 51.53, '~$500B fund'], ['Mubadala', 24.50, 54.37, 'Abu Dhabi strategic fund'],
+    ['Kuwait (KIA)', 29.38, 47.99, 'Oldest sovereign fund'], ['NEOM', 28.0, 35.3, '$500B megacity project'],
+    ['ADQ', 24.47, 54.37, 'Abu Dhabi Developmental Holding'], ['DIFC', 25.21, 55.28, 'Dubai financial free zone'],
+  ],
+  diseaseOutbreaks: [
+    ['DR Congo', -4.0, 21.5, 'Mpox / Ebola watch'], ['Uganda', 1.4, 32.3, 'Ebola/Marburg surveillance'],
+    ['DRC/Sudan', 12.0, 30.0, 'Cholera outbreaks'], ['SE Asia', 14.0, 101.0, 'Dengue surge'],
+    ['Global', 30.0, 0.0, 'Avian influenza H5N1 spread'], ['Brazil', -14.24, -51.93, 'Yellow fever alert zones'],
+    ['West Africa', 8.0, -4.0, 'Marburg surveillance'], ['Haiti', 18.9, -72.3, 'Cholera resurgence'],
+  ],
+  economicCenters: [
+    ['New York', 40.71, -74.01, 'Largest economy metro'], ['Tokyo', 35.68, 139.69, 'Japan core'],
+    ['Shanghai', 31.23, 121.47, 'China commerce'], ['London', 51.51, -0.13, 'UK/EU finance'],
+    ['Los Angeles', 34.05, -118.24, 'Trade & media'], ['Paris', 48.86, 2.35, 'EU #2'],
+    ['Mumbai', 19.08, 72.88, 'India finance'], ['São Paulo', -23.55, -46.63, 'LatAm hub'],
+    ['Dubai', 25.20, 55.27, 'MENA gateway'], ['Singapore', 1.35, 103.82, 'SEA financial hub'],
+    ['Frankfurt', 50.11, 8.68, 'EU ECB seat'], ['Chicago', 41.88, -87.63, 'US derivatives hub'],
+  ],
+  internetExchanges: [
+    ['DE-CIX Frankfurt', 50.11, 8.68, "World's largest IXP"], ['AMS-IX', 52.36, 4.95, 'Amsterdam'],
+    ['LINX London', 51.51, -0.09, 'London'], ['Equinix Ashburn', 39.04, -77.49, 'US-East core'],
+    ['Equinix Singapore', 1.29, 103.85, 'SEA core'], ['Equinix Tokyo', 35.69, 139.69, 'Japan'],
+    ['Equinix Palo Alto', 37.44, -122.14, 'Silicon Valley'], ['MIX Milan', 45.46, 9.19, 'Italy'],
+    ['MSK-IX Moscow', 55.75, 37.62, 'Russia largest IXP'], ['TorIX Toronto', 43.65, -79.38, 'Canada'],
+    ['BDIX Dhaka', 23.81, 90.41, 'Bangladesh hub'], ['Nap Africa Johannesburg', -26.20, 28.04, 'Africa core IXP'],
+  ],
+  gpsJamming: [
+    ['Eastern Mediterranean', 33.5, 34.0, 'Persistent GPS spoofing'], ['Black Sea', 44.0, 34.0, 'Conflict-zone jamming'],
+    ['Baltic / Kaliningrad', 55.0, 21.0, 'Jamming affecting aviation'], ['Persian Gulf', 26.5, 52.0, 'Strait of Hormuz interference'],
+    ['Korean Peninsula', 37.8, 126.5, 'DPRK jamming events'], ['Syria/Levant', 34.5, 37.0, 'Active EW operations'],
+    ['Red Sea / Bab-el-Mandeb', 13.0, 43.5, 'Houthi EW interference'], ['Barents Sea', 69.0, 33.0, 'Russian EW exercises'],
+  ],
+  webcams: [
+    ['Times Square', 40.758, -73.985, 'New York City', 'https://www.youtube.com/results?search_query=times+square+live+cam'],
+    ['Shibuya Crossing', 35.659, 139.700, 'Tokyo', 'https://www.youtube.com/results?search_query=shibuya+crossing+live+cam'],
+    ['Las Vegas Strip', 36.115, -115.173, 'Nevada', 'https://www.youtube.com/results?search_query=las+vegas+strip+live+cam'],
+    ["Venice — St Mark's", 45.434, 12.339, 'Italy', 'https://www.youtube.com/results?search_query=venice+st+marks+live+cam'],
+    ['Abbey Road', 51.532, -0.177, 'London', 'https://www.youtube.com/results?search_query=abbey+road+live+cam'],
+    ['Mount Fuji', 35.361, 138.728, 'Japan', 'https://www.youtube.com/results?search_query=mount+fuji+live+cam'],
+    ['Niagara Falls', 43.080, -79.075, 'US/Canada', 'https://www.youtube.com/results?search_query=niagara+falls+live+cam'],
+    ['Reykjavík / Aurora', 64.146, -21.942, 'Iceland', 'https://www.youtube.com/results?search_query=iceland+aurora+live+cam'],
+    ['Bondi Beach', -33.891, 151.277, 'Sydney', 'https://www.youtube.com/results?search_query=bondi+beach+live+cam'],
+    ['Dubai Marina', 25.080, 55.140, 'UAE', 'https://www.youtube.com/results?search_query=dubai+live+cam'],
+    ['Singapore Marina', 1.283, 103.860, 'Singapore', 'https://www.youtube.com/results?search_query=singapore+marina+live+cam'],
+    ['Kyiv', 50.450, 30.523, 'Ukraine', 'https://www.youtube.com/results?search_query=kyiv+live+cam'],
+  ],
+  lines: {
+    tradeRoutes: [
+      ['Asia–Europe (via Suez)', [[31.2, 121.5], [1.3, 104.0], [6.9, 79.8], [12.6, 43.3], [30.0, 32.5], [37.0, 15.0], [36.1, -5.3], [51.0, 1.4]], 'Main container artery'],
+      ['Transpacific', [[31.2, 121.5], [35.5, 140.0], [40.0, 175.0], [40.0, -150.0], [37.8, -122.4]], 'Asia–US West Coast'],
+      ['Transatlantic', [[51.0, 1.4], [50.0, -20.0], [42.0, -50.0], [40.7, -74.0]], 'Europe–US East Coast'],
+      ['Gulf–Asia (oil)', [[26.6, 50.2], [26.5, 56.3], [12.6, 60.0], [6.9, 79.8], [1.3, 104.0], [31.2, 121.5]], 'Crude to Asia'],
+      ['Cape Route', [[26.6, 50.2], [12.0, 50.0], [-12.0, 45.0], [-34.4, 18.5], [0.0, -15.0], [51.0, 1.4]], 'Around Africa (Red Sea bypass)'],
+    ],
+    cables: [
+      ['Transatlantic (MAREA-ish)', [[36.7, -3.5], [38.0, -30.0], [36.8, -76.0]], 'US–Europe fiber'],
+      ['Transpacific (JUPITER-ish)', [[35.3, 139.7], [30.0, 170.0], [21.3, -157.9], [34.0, -118.5]], 'Asia–US fiber'],
+      ['SEA-ME-WE (Asia–Europe)', [[1.3, 103.8], [6.9, 79.8], [25.0, 56.0], [30.0, 32.5], [43.3, 5.4], [51.5, -0.1]], 'Asia–Mideast–Europe'],
+    ],
+    pipelines: [
+      ['Nord Stream', [[60.2, 28.0], [59.5, 22.0], [55.4, 15.0], [54.1, 13.6]], 'Russia–Germany (gas)'],
+      ['Druzhba', [[52.5, 50.0], [52.0, 35.0], [52.2, 23.0], [51.0, 15.0]], 'Russia–Europe (oil)'],
+      ['TurkStream', [[45.0, 37.0], [42.0, 33.0], [41.2, 28.0]], 'Russia–Türkiye (gas)'],
+      ['Keystone', [[56.0, -111.0], [49.0, -101.0], [40.0, -97.0], [29.7, -95.3]], 'Canada–US (oil)'],
+    ],
+  },
+};
+
+/**
+ * Fetch live augmentations and merge into MAP_LAYERS_BASELINE.
+ * Tries: IAEA PRIS (nuclear status), UNHCR displacement API,
+ * Wikidata SPARQL (additional military installations).
+ * Failures are silently swallowed — baseline is always returned.
+ */
+async function fetchAugmentedLayers() {
+  const out = JSON.parse(JSON.stringify(MAP_LAYERS_BASELINE)); // deep clone
+
+  // ── 1. IAEA PRIS — nuclear reactor operational status ─────────────────────
+  // Public REST endpoint (no key required)
+  try {
+    const iaRes = await fetch(
+      'https://pris.iaea.org/api/reactors?status=operational&format=json',
+      { headers: { 'User-Agent': BROWSER_UA }, signal: AbortSignal.timeout(8000) }
+    );
+    if (iaRes.ok) {
+      const iaData = await iaRes.json();
+      const reactors = Array.isArray(iaData) ? iaData : (iaData.data || iaData.reactors || []);
+      for (const rx of reactors.slice(0, 80)) {
+        if (rx.latitude == null || rx.longitude == null) continue;
+        const name = rx.name || rx.reactor_name || rx.unitName || 'Unknown reactor';
+        const country = rx.country || '';
+        const capacity = rx.capacity || rx.netCapacity || '';
+        const label = `${name}${country ? ' (' + country + ')' : ''}`;
+        const desc = `Operational NPP${capacity ? ' · ' + capacity + ' MWe' : ''}`;
+        // Only add if not already in baseline (avoid dupes)
+        const isDupe = out.nuclear.some(([n]) => n.toLowerCase().includes(name.toLowerCase().slice(0, 6)));
+        if (!isDupe) out.nuclear.push([label, +rx.latitude, +rx.longitude, desc]);
+      }
+    }
+  } catch { /* IAEA unreachable — baseline nuclear data still used */ }
+
+  // ── 2. UNHCR Refugee Situations API ──────────────────────────────────────
+  // Public API, no key required
+  try {
+    const uhRes = await fetch(
+      'https://api.unhcr.org/population/v1/unsd/?limit=50&sortBy=refugeesUnderUNHCRsMandate&sortOrder=desc',
+      { headers: { 'User-Agent': BROWSER_UA }, signal: AbortSignal.timeout(8000) }
+    );
+    if (uhRes.ok) {
+      const uhData = await uhRes.json();
+      const items = uhData.items || uhData.data || [];
+      for (const item of items.slice(0, 20)) {
+        if (!item.geoId && !item.countryOfOriginName) continue;
+        const name = item.countryOfOriginName || item.name || '';
+        const count = item.refugeesUnderUNHCRsMandate || item.total || 0;
+        const fmtCount = count > 1e6 ? (count / 1e6).toFixed(1) + 'M' : count > 1000 ? (count / 1000).toFixed(0) + 'K' : String(count);
+        // Try to find matching entry in baseline to augment its description
+        const idx = out.refugeeHotspots.findIndex(([n]) => name && n.toLowerCase().includes(name.toLowerCase().slice(0, 5)));
+        if (idx >= 0) {
+          out.refugeeHotspots[idx][3] = `${out.refugeeHotspots[idx][3]} — ${fmtCount} refugees`;
+        }
+      }
+    }
+  } catch { /* UNHCR unreachable — baseline refugee data used */ }
+
+  // ── 3. Wikidata SPARQL — additional military bases ────────────────────────
+  // Public SPARQL endpoint, no key required; limit to 40 results
+  try {
+    const sparql = `SELECT ?item ?label ?lat ?lon ?country WHERE {
+      ?item wdt:P31 wd:Q179049;
+            wdt:P17 ?countryItem;
+            p:P625 [ psv:P625 [ wikibase:geoLatitude ?lat; wikibase:geoLongitude ?lon ] ].
+      ?countryItem rdfs:label ?country FILTER(LANG(?country)="en").
+      ?item rdfs:label ?label FILTER(LANG(?label)="en").
+      FILTER(?lat > -90 && ?lat < 90 && ?lon > -180 && ?lon < 180)
+    } LIMIT 40`;
+    const wdRes = await fetch(
+      'https://query.wikidata.org/sparql?query=' + encodeURIComponent(sparql) + '&format=json',
+      { headers: { 'User-Agent': BROWSER_UA, 'Accept': 'application/sparql-results+json' }, signal: AbortSignal.timeout(10000) }
+    );
+    if (wdRes.ok) {
+      const wdData = await wdRes.json();
+      for (const b of (wdData.results?.bindings || [])) {
+        const name = b.label?.value || '';
+        const lat = parseFloat(b.lat?.value);
+        const lon = parseFloat(b.lon?.value);
+        const country = b.country?.value || '';
+        if (!name || isNaN(lat) || isNaN(lon)) continue;
+        const isDupe = out.militaryBases.some(([n]) => n.toLowerCase().includes(name.toLowerCase().slice(0, 8)));
+        if (!isDupe) out.militaryBases.push([name, lat, lon, `Military installation — ${country}`]);
+      }
+    }
+  } catch { /* Wikidata unreachable — baseline military data used */ }
+
+  out._updated = new Date().toISOString();
+  return out;
+}
+
 // ── Live map data: Disease Outbreaks (ProMED RSS + WHO DON) ──────────────
 
 async function fetchDiseaseOutbreaks() {
@@ -2179,6 +2477,12 @@ app.get('/api/map/gpsjam', route(async (req, res) => {
 app.get('/api/map/conflict', route(async (req, res) => {
   // 15-min TTL — GDELT updates every 15 min; ACLED updates daily
   const { data } = await fetch_cached_data('map:conflict', fetchConflictZones, TTL.NEWS);
+  res.json(data);
+}));
+
+app.get('/api/map/layers', route(async (req, res) => {
+  // 24-hour TTL — curated reference data + live augmentation
+  const { data } = await fetch_cached_data('map:layers', fetchAugmentedLayers, TTL.MAP);
   res.json(data);
 }));
 

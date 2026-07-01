@@ -48,23 +48,30 @@ Deploys to `https://market-terminal.wyjjdyxzsc.workers.dev`
 
 ## Current State
 
-**Implemented** (v4 — Module 1 complete):
+**Implemented** (v5):
 - Live quotes (10-provider pool w/ round-robin Finnhub piggyback)
 - Charts (Yahoo/Nasdaq, 1D–5Y, candlestick support)
 - News desk, sector analysis, company deep-dive, supply-chain map
 - Geopolitical instability, situation room (AI synthesized)
-- Quant: 30+ metrics (Sharpe, Sortino, Calmar, Kelly, Omega, VaR, Monte Carlo, Black-Scholes)
-- 15 indicators (ATR, Stochastic, Keltner, Parabolic SAR, Fibonacci, ROC)
-- Candlestick pattern detector (18 patterns) + AI analysis endpoint `/api/intel/candle`
-- Map: Earthquakes, events, weather, conflict, fires, webcams, aircraft, ships (7 layers)
+- **Quant (Module 2 complete)**: Full 40-indicator suite in `quant.js` (Float64Array):
+  - Trend: SMA/EMA, MACD, ADX, Ichimoku, Parabolic SAR, Hull MA, ZigZag
+  - Momentum: RSI, Stochastic, Williams %R, CCI, CMO, MFI, Awesome Oscillator, ROC
+  - Volatility: Bollinger Bands, ATR, Keltner, Donchian, Chaikin Volatility, StdDev, Ulcer Index, Historical Vol
+  - Volume: OBV, CMF, VWAP, A/D Line, Volume Profile (50 bins), Force Index
+  - Risk: Monte Carlo (GBM), Sharpe, Sortino, Calmar, Kelly, Max Drawdown, Tracking Error, Info Ratio, Beta, Treynor
+- **Advanced stochastic (Module 2.2)**: Rough Jump-Diffusion MC (Hurst H<0.5 + Poisson jumps), Heston MC + calibrator (Lewis 2001 CF), Malliavin Greeks (Delta/Gamma/Vega via integration-by-parts), Roll Model spread decomposition
+- **QUANT LAB UI** (`intel.js`): Full indicator grid (40 indicators across 5 groups), volume profile canvas, model switcher (GBM/RJD/Heston), RJD sub-params (Hurst, lambda, jump μ/σ), Heston sub-params (v0/κ/θ/ξ/ρ), Malliavin Greeks panel, all wired to chart data
+- Candlestick pattern detector (18 patterns) + AI analysis endpoint
+- Map: 30+ layers — earthquakes, events, weather, conflict, fires, webcams, aircraft, ships, chokepoints, nuclear, military bases, critical minerals, tech HQs, cloud regions, startup hubs, financial centers, commodity ports, trade routes, cables, pipelines, and more
+- **Map data architecture**: All curated reference layers now served from `/api/map/layers` with 24h TTL. Live augmentation: IAEA PRIS (nuclear operational status), UNHCR refugee data, Wikidata SPARQL (military installations). Conflict, disease, GPS jamming layers have live API overlays on top (GDELT, ProMED/WHO, gpsjam.org). Frontend `ensureLayerData()` fetches once per page load, falls back to embedded `DATA` if server unavailable.
 - Alerts: Web Push + breaking-news detection
-- **NEW (Module 1)**: `server.js` fully refactored — 12-provider tiered AI pool (Speed + Heavy), batch AbortController racing with validation callbacks, X/Twitter syndication ingestion (15 accounts), world headline feeds (BBC, Al Jazeera, Bing, CNBC), 5 new routes (deepdive, report, situation, instability, candle), Overpass geospatial layer (pipelines, undersea cables, nuclear, military, datacenters) with macroeconomic shock payloads, 4 new map routes
-- **NEW (Module 1)**: GitHub → Cloudflare Workers auto-deploy connected via dashboard
+
+**New KV cache key**: `cache:map:layers` (24h TTL) — augmented layer dataset
 
 **Immediate next**:
-- Module 2: `quant.js` — 40-indicator suite (Float64Array), Rough Jump-Diffusion Monte Carlo (Hurst + Poisson), Malliavin Greeks, Heston volatility surface, Roll Model spread decomposition
-- Module 3: `intel.js` — Overpass GeoJSON map rendering, macroeconomic shock UI
-- Module 4: `app.js` / `index.html` — X sentiment gauge, canvas Monte Carlo paths, 1D chart flatline fix
+- Module 4: `app.js` / `index.html` — canvas Monte Carlo path rendering (2,000 paths, RAF batch), 1D chart flatline fix, lower-pane oscillator rendering
+- `worker.js` parity — bring Cloudflare Worker up to same feature level as `server.js` (new routes, map layers, augmented data)
+- Test suite (no coverage yet)
 
 **Branches**: All work on `main` (no feature branches yet).
 
