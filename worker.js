@@ -3626,13 +3626,13 @@ async function fetchPriceAction(env, symbol) {
     return text.includes(symbol.toLowerCase()) || (quote && quote.name && text.includes((quote.name || '').toLowerCase().split(' ')[0]));
   }).slice(0, 6);
 
-  const priceChange = quote && quote.change != null ? quote.change : 0;
-  const pctChange  = quote && quote.changePercent != null ? quote.changePercent : 0;
+  const priceChange = quote && quote.d != null ? quote.d : 0;
+  const pctChange  = quote && quote.dp != null ? quote.dp : 0;
   const direction  = Math.abs(pctChange) < 0.01 ? 'flat' : (pctChange >= 0 ? 'rising' : 'falling');
 
   const prompt = [
     `You are a sell-side equity analyst. Explain concisely in 2-3 sentences why ${symbol} is ${direction} today.`,
-    `Price: $${quote?.price?.toFixed(2) ?? 'N/A'} (${pctChange >= 0 ? '+' : ''}${pctChange.toFixed(2)}%, ${priceChange >= 0 ? '+' : ''}${priceChange.toFixed(2)}).`,
+    `Price: $${quote?.c?.toFixed(2) ?? 'N/A'} (${pctChange >= 0 ? '+' : ''}${pctChange.toFixed(2)}%, ${priceChange >= 0 ? '+' : ''}${priceChange.toFixed(2)}).`,
     relevant.length > 0
       ? `Recent headlines:\n` + relevant.map(n => `- ${n.title}`).join('\n')
       : 'No directly relevant headlines found.',
