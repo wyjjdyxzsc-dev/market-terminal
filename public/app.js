@@ -174,6 +174,8 @@ async function loadSymbol(rawSymbol) {
   loadChart(symbol, state.range);
   loadQuantPanel(symbol);
   subscribeLive(symbol); // real-time trade ticks via Finnhub WS
+  // Auto-refresh "Why is it moving?" if the panel is already open
+  if (whyPanelOpen) loadPriceAction(symbol);
 }
 
 /* ───────────────────────── live trade stream ─────────────────────────

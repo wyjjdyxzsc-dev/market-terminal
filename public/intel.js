@@ -1608,10 +1608,11 @@
   const COLORS = {
     oil: '#e87722', gas: '#ffd23f', water: '#4ecdc4',
     undersea_cable: '#a78bfa', trade_route: '#06b6d4',
+    // status alpha
     active: 1.0, operational: 1.0, partial: 0.65,
-    planned: 0.35, construction: 0.5, sabotaged: 0.25, mothballed: 0.2,
+    planned: 0.35, construction: 0.5, sabotaged: 0.22, mothballed: 0.18,
   };
-  const ROUTE_WIDTH = { trade_route: 3.5, undersea_cable: 1.5, oil: 2.5, gas: 2.0, water: 2.0 };
+  const ROUTE_WIDTH = { trade_route: 3.5, undersea_cable: 1.2, oil: 2.5, gas: 2.0, water: 1.8 };
   const DASH = { planned: [6,4], construction: [3,3], sabotaged: [2,6], mothballed: [4,8] };
 
   // ── Viewport state ────────────────────────────────────────────────────
@@ -1965,10 +1966,10 @@
       .then(r => r.json())
       .then(d => {
         infraData = d;
-        const src = d.cable_source === 'telegeography' ? '📡 TeleGeography' : '📋 Curated';
-        const pCount = (d.pipelines || []).length;
-        const cCount = d.cable_count || (d.cables || []).length;
-        const rCount = (d.routes || []).length;
+        const src    = d.cable_source === 'telegeography' ? '📡 TeleGeography' : '📋 Curated';
+        const cCount = d.cable_count    || (d.cables    || []).length;
+        const pCount = d.pipeline_count || (d.pipelines || []).length;
+        const rCount = d.route_count    || (d.routes    || []).length;
         statusBadge.textContent = `${src} · ${cCount} cables · ${pCount} pipelines · ${rCount} routes`;
         requestRender();
         startFlow();
@@ -2083,9 +2084,10 @@
     legend.innerHTML = [
       `<span style="color:#e87722">━━</span> Oil Pipeline`,
       `<span style="color:#ffd23f">━━</span> Gas Pipeline`,
+      `<span style="color:#4ecdc4">━━</span> Water Pipeline`,
       `<span style="color:#a78bfa">━━</span> Undersea Cable`,
-      `<span style="color:#06b6d4">━━</span> Trade Route`,
-      `<span style="color:#888">╌╌</span> Planned / Damaged`,
+      `<span style="color:#06b6d4">━━</span> Trade / Shipping Route`,
+      `<span style="color:#555">╌╌</span> Planned / Damaged`,
     ].join('<br>');
     container.appendChild(legend);
   }

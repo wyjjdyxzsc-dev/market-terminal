@@ -3603,35 +3603,101 @@ async function buildInfrastructureData(env) {
     }
   } catch (_) { /* fall through to curated */ }
 
-  // ── 2. OSM live pipelines (best-effort) ──────────────────────────────
+  // ── 2. OSM live pipelines — run 4 regional queries in parallel ────────
   let livePipelines = [];
   try {
-    const q = `[out:json][timeout:20];(way["man_made"="pipeline"]["substance"~"oil|gas",i](bbox:-60,-170,75,180););out geom 80;`;
-    const res = await fetchWithTimeout(`https://overpass-api.de/api/interpreter?data=${encodeURIComponent(q)}`, {}, 18000);
-    if (res.ok) {
-      const d = await res.json();
-      livePipelines = (d.elements || []).slice(0, 40).map(el => ({
-        id: `osm_${el.id}`,
-        name: el.tags?.name || `${el.tags?.substance || 'Unknown'} Pipeline (OSM)`,
-        type: (el.tags?.substance || '').toLowerCase().includes('gas') ? 'gas' : 'oil',
-        status: 'operational', capacity_kbd: null,
-        substance: el.tags?.substance || 'unknown',
-        operator: el.tags?.operator || 'Unknown',
-        beneficiaries: [], risks: [],
-        coords: downsample((el.geometry || []).map(n => [n.lon, n.lat]), 25),
-        source: 'osm',
-      })).filter(p => p.coords.length >= 2);
+    // Split into 4 bbox regions so Overpass can return more results within timeout
+    const regions = [
+      '(bbox:-60,-170,75,-30)',   // Americas
+      '(bbox:-60,-30,75,60)',     // Europe / Africa / Middle East
+      '(bbox:-60,60,75,140)',     // Central/South Asia / East Asia
+      '(bbox:-60,140,75,180)',    // SE Asia / Pacific
+    ];
+    const osmRes = await Promise.allSettled(regions.map(bbox => {
+      const q = `[out:json][timeout:25];(way["man_made"="pipeline"]["substance"~"oil|gas|water",i]${bbox};rel["man_made"="pipeline"]["substance"~"oil|gas",i]${bbox};);out geom 60;`;
+      return fetchWithTimeout(`https://overpass-api.de/api/interpreter?data=${encodeURIComponent(q)}`, {}, 22000);
+    }));
+
+    const seen = new Set();
+    for (const r of osmRes) {
+      if (r.status !== 'fulfilled' || !r.value.ok) continue;
+      const d = await r.value.json();
+      for (const el of (d.elements || []).slice(0, 80)) {
+        if (seen.has(el.id)) continue;
+        seen.add(el.id);
+        const sub = (el.tags?.substance || '').toLowerCase();
+        const rawCoords = el.type === 'way'
+          ? (el.geometry || []).map(n => [n.lon, n.lat])
+          : (el.members || []).filter(m => m.geometry).flatMap(m => m.geometry.map(n => [n.lon, n.lat]));
+        const coords = downsample(rawCoords, 30);
+        if (coords.length < 2) continue;
+        livePipelines.push({
+          id: `osm_${el.id}`,
+          name: el.tags?.name || el.tags?.['name:en'] || `${sub || 'Unknown'} Pipeline`,
+          type: sub.includes('gas') ? 'gas' : sub.includes('water') ? 'water' : 'oil',
+          status: el.tags?.operational_status === 'abandoned' ? 'mothballed' : 'operational',
+          capacity_kbd: null,
+          substance: sub || 'unknown',
+          operator: el.tags?.operator || el.tags?.['operator:en'] || 'Unknown',
+          country: el.tags?.['addr:country'] || null,
+          beneficiaries: [], risks: [],
+          coords,
+          source: 'osm',
+        });
+      }
     }
   } catch (_) {}
 
+  // ── 3. OSM live trade routes / shipping lanes ───────────────────────
+  let liveRoutes = [];
+  try {
+    // OSM shipping lanes + ferry routes + international waterways
+    const shippingQ = `[out:json][timeout:25];(
+      way["seamark:type"="separation_zone"](bbox:-80,-180,80,180);
+      way["route"="ferry"]["international"="yes"](bbox:-80,-180,80,180);
+      relation["route"="ferry"]["international"="yes"](bbox:-80,-180,80,180);
+    );out geom 40;`;
+    const sr = await fetchWithTimeout(`https://overpass-api.de/api/interpreter?data=${encodeURIComponent(shippingQ)}`, {}, 20000);
+    if (sr.ok) {
+      const sd = await sr.json();
+      const seen2 = new Set();
+      for (const el of (sd.elements || []).slice(0, 60)) {
+        if (seen2.has(el.id)) continue;
+        seen2.add(el.id);
+        const rawCoords = el.type === 'way'
+          ? (el.geometry || []).map(n => [n.lon, n.lat])
+          : (el.members || []).filter(m => m.geometry).flatMap(m => m.geometry.map(n => [n.lon, n.lat]));
+        const coords = downsample(rawCoords, 25);
+        if (coords.length < 2) continue;
+        liveRoutes.push({
+          id: `osm_r_${el.id}`,
+          name: el.tags?.name || el.tags?.['name:en'] || 'Shipping Lane',
+          type: 'trade_route',
+          status: 'operational',
+          throughput_ships_day: null,
+          cargo_types: ['International shipping'],
+          operator: el.tags?.operator || null,
+          beneficiaries: [], risks: [],
+          coords,
+          source: 'osm',
+        });
+      }
+    }
+  } catch (_) {}
+
+  const allPipelines = [...INFRA_PIPELINES, ...livePipelines];
+  const allRoutes    = [...INFRA_ROUTES,    ...liveRoutes];
+
   return {
-    pipelines: [...INFRA_PIPELINES, ...livePipelines],
-    cables: liveCables.length > 20 ? liveCables : INFRA_CABLES,
-    routes: INFRA_ROUTES,
+    pipelines: allPipelines,
+    cables:    liveCables.length > 20 ? liveCables : INFRA_CABLES,
+    routes:    allRoutes,
     generated: Date.now(),
     ttl: 86400,
-    cable_source: cableSource,
-    cable_count: liveCables.length || INFRA_CABLES.length,
+    cable_source:    cableSource,
+    cable_count:     liveCables.length || INFRA_CABLES.length,
+    pipeline_count:  allPipelines.length,
+    route_count:     allRoutes.length,
   };
 }
 
