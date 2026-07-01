@@ -1365,6 +1365,894 @@ async function fetchWeatherAlerts() {
   return out;
 }
 
+// ───────────── Curated map layer baseline + live augmentation ─────────────
+
+const MAP_LAYERS_BASELINE = {
+  chokepoints: [
+    ['Strait of Hormuz', 26.57, 56.25, '~20% of global oil — Iran can close'],
+    ['Suez Canal', 30.42, 32.35, '~12% of global trade — container lifeline'],
+    ['Strait of Malacca', 1.26, 103.74, '~25% of seaborne trade — piracy risk'],
+    ['Bab-el-Mandeb', 12.58, 43.33, 'Red Sea → Indian Ocean — Houthi threat'],
+    ['Panama Canal', 9.08, -79.68, 'Atlantic ↔ Pacific — drought capacity risk'],
+    ['Turkish Straits (Bosphorus)', 41.12, 29.07, 'Black Sea outlet — Russia grain/oil'],
+    ['Danish Straits', 55.84, 12.67, 'Baltic → North Sea access'],
+    ['Strait of Dover', 51.12, 1.55, 'Busiest shipping lane in the world'],
+    ['Lombok Strait', -8.76, 115.74, 'Malacca bypass for deep-draft tankers'],
+    ['Strait of Sicily', 37.35, 11.51, 'Mediterranean E–W chokepoint'],
+    ['Luzon Strait', 18.84, 121.80, 'South China Sea → Pacific gateway'],
+    ['Windward Passage', 19.81, -74.03, 'Caribbean → Atlantic route'],
+  ],
+  nuclear: [
+    ['Bruce NPP', 44.32, -81.60, 'Canada — largest nuclear station (6,384 MWe)'],
+    ['Zaporizhzhia NPP', 47.51, 34.59, 'Ukraine — largest in Europe (under Russian control)'],
+    ['Palo Verde NPP', 33.39, -112.86, 'Arizona, USA — largest US nuclear plant'],
+    ['Kori NPP', 35.33, 129.30, 'South Korea'],
+    ['Gravelines NPP', 51.01, 2.14, 'France — coastal, English Channel'],
+    ['Tianwan NPP', 34.69, 119.46, 'China — Jiangsu province'],
+    ['Kashiwazaki-Kariwa', 37.43, 138.60, 'Japan — world\'s largest capacity plant'],
+    ['Kudankulam NPP', 8.17, 77.71, 'India — Russian-built, Tamil Nadu'],
+    ['Belene NPP (proposed)', 43.63, 25.18, 'Bulgaria — Russian VVER, stalled'],
+    ['Akkuyu NPP', 36.14, 33.54, 'Turkey — first nuclear plant, Russian-built (under construction)'],
+    ['Barakah NPP', 23.96, 52.23, 'UAE — first Arab world nuclear plant'],
+    ['Olkiluoto NPP', 61.24, 21.44, 'Finland — EPR reactor'],
+  ],
+  militaryBases: [
+    ['Diego Garcia (UK/US)', -7.31, 72.42, 'Indian Ocean — B-52 & carrier staging'],
+    ['Guam (Anderson AFB)', 13.58, 144.93, 'Pacific pivot — F-22/B-2 hub'],
+    ['Ramstein AB', 49.44, 7.60, 'Germany — NATO Europe HQ'],
+    ['Camp Lemonnier', 11.55, 43.15, 'Djibouti — AFRICOM hub, drone base'],
+    ['Al Udeid AB', 25.12, 51.32, 'Qatar — CENTCOM forward HQ'],
+    ['Kadena AB', 26.36, 127.77, 'Okinawa — largest US base in Asia-Pacific'],
+    ['Naval Base Guantanamo', 19.90, -75.15, 'Cuba — US detention facility'],
+    ['Fort Campbell', 36.67, -87.47, 'USA — 101st Airborne Division'],
+    ['RAF Fairford', 51.68, -1.79, 'UK — B-2 stealth bomber deployments'],
+    ['Bagram Airfield', 34.94, 69.26, 'Afghanistan — former NATO hub'],
+    ['Sevastopol (Russia)', 44.62, 33.53, 'Crimea — Black Sea Fleet HQ (disputed)'],
+    ['Tartus Naval Base', 34.89, 35.87, 'Syria — Russia\'s only Mediterranean base'],
+    ['Djibouti China Base', 11.52, 43.03, 'China\'s first overseas military base'],
+    ['Camp Darby', 43.67, 10.33, 'Italy — US Army pre-positioned depot'],
+    ['Prince Sultan AB', 24.07, 47.58, 'Saudi Arabia — USAF redeployed 2019'],
+    ['Yokota AB', 35.75, 139.35, 'Japan — USFJ headquarters'],
+  ],
+  dataCenters: [
+    ['Equinix Ashburn (DC campus)', 39.04, -77.49, 'World\'s largest data center campus'],
+    ['QTS Richmond', 37.54, -77.44, 'US East core'],
+    ['Switch Las Vegas', 36.23, -115.19, 'Nevada — "The Citadel"'],
+    ['CyrusOne Dallas', 32.90, -97.04, 'Texas — largest US campus'],
+    ['Equinix Singapore', 1.29, 103.84, 'Asia internet exchange'],
+    ['China Telecom Beijing', 39.91, 116.41, 'China backbone hub'],
+    ['Interxion Amsterdam', 52.37, 4.89, 'Netherlands — AMS-IX hub'],
+    ['Telehouse London', 51.51, -0.00, 'UK — LINX exchange'],
+    ['Digital Realty Dublin', 53.33, -6.25, 'EU data hub (low tax)'],
+    ['NTT Tokyo', 35.69, 139.69, 'Japan internet backbone'],
+    ['Equinix Frankfurt', 50.11, 8.68, 'DE-CIX host — Europe\'s largest IXP'],
+    ['Yandex Moscow', 55.73, 37.59, 'Russia internet backbone'],
+    ['AIMS Kuala Lumpur', 3.16, 101.71, 'SEA hub'],
+    ['Teraco Johannesburg', -26.11, 28.00, 'Africa\'s largest carrier-neutral DC'],
+  ],
+  exchanges: [
+    ['NYSE', 40.706, -74.011, 'New York Stock Exchange — largest by market cap'],
+    ['NASDAQ', 40.759, -73.985, 'Tech-heavy US exchange'],
+    ['London Stock Exchange', 51.514, -0.098, 'LSE Group — FTSE 100'],
+    ['Tokyo Stock Exchange', 35.681, 139.769, 'Japan — Nikkei 225'],
+    ['Shanghai SE', 31.232, 121.489, 'China A-shares — SSE Composite'],
+    ['Hong Kong Exchanges', 22.279, 114.156, 'Hang Seng — China connect'],
+    ['Euronext Paris', 48.869, 2.336, 'Pan-European exchange'],
+    ['Shenzhen SE', 22.540, 114.058, 'China tech-heavy'],
+    ['Deutsche Börse (Xetra)', 50.118, 8.672, 'DAX — Frankfurt'],
+    ['BSE (Bombay)', 18.935, 72.831, 'India — SENSEX'],
+    ['Toronto SE', 43.649, -79.380, 'TSX — Canadian equities'],
+    ['ASX Sydney', -33.869, 151.208, 'Australia — ASX 200'],
+    ['Saudi Tadawul', 24.689, 46.683, 'Largest Arab exchange'],
+    ['Korea Exchange', 37.530, 126.921, 'KOSPI — Seoul'],
+  ],
+  criticalMinerals: [
+    ['Pilbara (Iron Ore)', -23.0, 118.5, 'Australia — world\'s largest iron ore region'],
+    ['Atacama (Lithium)', -23.5, -68.5, 'Chile/Argentina — lithium triangle, ~55% world supply'],
+    ['DRC Copper Belt', -10.5, 25.5, 'Congo — cobalt & copper (#1 world cobalt)'],
+    ['Sudbury Basin', 46.5, -81.0, 'Canada — nickel & PGMs'],
+    ['Witwatersrand', -26.27, 27.23, 'South Africa — gold belt'],
+    ['Rare Earth (Bayan Obo)', 41.8, 109.9, 'Inner Mongolia — world\'s largest REE deposit'],
+    ['Grasberg Mine', -4.05, 137.11, 'Papua, Indonesia — gold/copper megamine'],
+    ['Escondida (Copper)', -24.27, -69.07, 'Chile — world\'s largest copper mine'],
+    ['Norilsk (Nickel/Palladium)', 69.34, 88.20, 'Russia — 40% world palladium supply'],
+    ['Western Australia (Spodumene)', -32.0, 119.5, 'Lithium spodumene hard rock'],
+    ['Namibia (Uranium)', -22.5, 14.8, 'Rössing & Husab — major uranium export'],
+    ['Oyu Tolgoi (Copper/Gold)', 43.00, 106.85, 'Mongolia — world-class copper-gold mine'],
+  ],
+  techHQs: [
+    ['Apple', 37.335, -122.009, 'Cupertino'], ['Google', 37.422, -122.084, 'Mountain View'], ['Microsoft', 47.640, -122.129, 'Redmond'],
+    ['Nvidia', 37.371, -121.965, 'Santa Clara'], ['Meta', 37.485, -122.148, 'Menlo Park'], ['TSMC', 24.774, 121.001, 'Hsinchu, Taiwan'],
+    ['ASML', 51.41, 5.46, 'Veldhoven, NL'], ['Samsung', 37.258, 127.054, 'Suwon'], ['Tesla', 30.222, -97.617, 'Austin'],
+    ['Amazon', 47.622, -122.337, 'Seattle'], ['ARM', 52.198, 0.127, 'Cambridge UK'],
+    ['OpenAI', 37.777, -122.419, 'San Francisco'], ['Anthropic', 37.785, -122.408, 'San Francisco'],
+    ['Huawei', 22.62, 114.06, 'Shenzhen'], ['SMIC', 31.23, 121.47, 'Shanghai'],
+  ],
+  cloudRegions: [
+    ['AWS us-east-1', 39.04, -77.49, 'N. Virginia — core'], ['AWS us-west-2', 45.87, -119.69, 'Oregon'],
+    ['AWS us-east-2', 39.96, -82.99, 'Ohio'], ['AWS ap-south-1', 19.08, 72.88, 'Mumbai'],
+    ['Azure East US', 37.37, -79.16, 'Virginia'], ['Azure West US 2', 47.60, -122.33, 'Washington'],
+    ['GCP us-central1', 41.26, -95.86, 'Iowa'], ['GCP europe-west1', 50.45, 3.82, 'Belgium'],
+    ['AWS eu-west-1', 53.41, -8.24, 'Ireland'], ['AWS ap-southeast-1', 1.32, 103.69, 'Singapore'],
+    ['Azure West Europe', 52.37, 4.90, 'Netherlands'], ['GCP asia-east1', 24.05, 120.52, 'Taiwan'],
+    ['AWS ap-northeast-1', 35.68, 139.77, 'Tokyo'], ['Azure Southeast Asia', 1.35, 103.82, 'Singapore'],
+    ['GCP southamerica-east1', -23.55, -46.63, 'São Paulo'], ['AWS af-south-1', -33.92, 18.42, 'Cape Town'],
+  ],
+  financialCenters: [
+    ['Wall Street', 40.706, -74.009, 'New York'], ['City of London', 51.515, -0.092, 'London'],
+    ['Hong Kong', 22.281, 114.158, 'HK'], ['Singapore', 1.284, 103.851, 'SG'], ['Tokyo', 35.681, 139.767, 'Marunouchi'],
+    ['Frankfurt', 50.111, 8.679, 'DE'], ['Zurich', 47.369, 8.539, 'CH'], ['Dubai (DIFC)', 25.215, 55.282, 'UAE'],
+    ['Shanghai', 31.240, 121.499, 'Lujiazui'], ['Sydney', -33.87, 151.21, 'AU'], ['Toronto', 43.65, -79.38, 'CA'],
+    ['Mumbai', 19.08, 72.88, 'IN'], ['São Paulo', -23.55, -46.63, 'BR'],
+  ],
+  refugeeHotspots: [
+    ['Syria', 35.0, 38.0, 'Largest displacement crisis'], ['Ukraine', 49.0, 32.0, 'War displacement'],
+    ['Sudan', 15.5, 30.0, 'Conflict displacement'], ['Gaza', 31.5, 34.45, 'Humanitarian crisis'],
+    ['DR Congo', -2.0, 27.0, 'Eastern conflict'], ['Myanmar', 21.0, 96.0, 'Rohingya & internal'],
+    ['Afghanistan', 34.0, 66.0, 'Protracted displacement'], ['Venezuela', 7.0, -66.0, 'Regional migration'],
+    ['Somalia', 5.0, 45.0, 'Prolonged crisis'], ['South Sudan', 7.0, 30.0, 'Internal displacement'],
+    ['Ethiopia', 9.0, 40.0, 'Tigray & Amhara crisis'], ['Sahel', 14.0, -2.0, 'Burkina/Mali/Niger displacement'],
+  ],
+  commodityPorts: [
+    ['Ras Tanura', 26.64, 50.16, 'Saudi — oil export'], ['Rotterdam', 51.95, 4.14, "Europe's largest port"],
+    ['Shanghai', 30.62, 122.06, "World's busiest container port"], ['Houston', 29.73, -95.27, 'US energy export'],
+    ['Singapore', 1.26, 103.75, 'Bunkering & transshipment'], ['Fujairah', 25.16, 56.36, 'UAE oil storage hub'],
+    ['Newcastle', -32.92, 151.80, 'Australia — coal export'], ['Santos', -23.96, -46.30, 'Brazil — soy/sugar'],
+    ['Dalian', 38.91, 121.62, 'China — crude import'], ['Corpus Christi', 27.79, -97.39, 'US LNG export'],
+    ['Dampier', -20.66, 116.72, 'Australia — iron ore'], ['Caofeidian', 39.52, 119.06, 'China — coal/ore hub'],
+  ],
+  conflictZones: [
+    ['Ukraine', 48.3, 37.8, 'Russia–Ukraine war (active front)'], ['Gaza', 31.45, 34.40, 'Israel–Hamas conflict'],
+    ['Sudan', 15.5, 32.5, 'Civil war (RSF vs SAF)'], ['Sahel', 14.0, 0.0, 'Jihadist insurgency belt'],
+    ['Myanmar', 21.5, 96.5, 'Civil war'], ['DR Congo (East)', -1.5, 29.0, 'M23 & militia conflict'],
+    ['Red Sea', 14.5, 42.0, 'Houthi shipping attacks'], ['Taiwan Strait', 24.5, 119.5, 'Cross-strait tensions'],
+    ['Kashmir', 34.0, 76.0, 'India–Pakistan flashpoint'], ['Korean DMZ', 38.0, 127.5, 'North–South standoff'],
+    ['Tigray/Amhara', 12.5, 38.5, 'Ethiopia internal conflict'], ['Haiti', 18.9, -72.3, 'Gang control crisis'],
+  ],
+  sanctions: [
+    ['Russia', 61.5, 100.0, 'Heavily sanctioned (West)'], ['Iran', 32.0, 53.0, 'Oil & banking sanctions'],
+    ['North Korea', 40.0, 127.0, 'UN/US sanctions'], ['Venezuela', 7.0, -66.0, 'US oil sanctions'],
+    ['Syria', 35.0, 38.0, 'Multilateral sanctions'], ['Cuba', 22.0, -79.5, 'US embargo'],
+    ['Belarus', 53.7, 27.9, 'EU/US sanctions'], ['Myanmar', 16.0, 96.0, 'EU/US targeted sanctions'],
+    ['Mali', 17.0, -4.0, 'ECOWAS/EU sanctions'], ['Nicaragua', 12.8, -85.2, 'US democracy sanctions'],
+  ],
+  startupHubs: [
+    ['Silicon Valley', 37.39, -122.08, 'Global #1'], ['New York', 40.74, -73.99, 'Fintech & SaaS'],
+    ['London', 51.52, -0.10, 'Europe #1'], ['Bengaluru', 12.97, 77.59, 'India tech capital'],
+    ['Tel Aviv', 32.07, 34.79, 'Startup Nation'], ['Beijing', 39.98, 116.31, 'Zhongguancun'],
+    ['Berlin', 52.52, 13.40, 'EU growth hub'], ['Singapore', 1.29, 103.85, 'SEA gateway'],
+    ['Shenzhen', 22.54, 114.06, 'Hardware capital'], ['Seoul', 37.56, 126.99, 'K-startup hub'],
+    ['Toronto', 43.65, -79.38, 'AI research hub (Vector Institute)'], ['Paris', 48.86, 2.35, 'Station F ecosystem'],
+    ['Dubai', 25.20, 55.27, 'MENA startup hub'], ['São Paulo', -23.55, -46.63, 'LatAm fintech'],
+  ],
+  gccInvestments: [
+    ['PIF (Saudi)', 24.71, 46.68, '$900B+ sovereign fund'], ['ADIA (Abu Dhabi)', 24.45, 54.38, '~$1T sovereign fund'],
+    ['QIA (Qatar)', 25.29, 51.53, '~$500B fund'], ['Mubadala', 24.50, 54.37, 'Abu Dhabi strategic fund'],
+    ['Kuwait (KIA)', 29.38, 47.99, 'Oldest sovereign fund'], ['NEOM', 28.0, 35.3, '$500B megacity project'],
+    ['ADQ', 24.47, 54.37, 'Abu Dhabi Developmental Holding'], ['DIFC', 25.21, 55.28, 'Dubai financial free zone'],
+  ],
+  diseaseOutbreaks: [
+    ['DR Congo', -4.0, 21.5, 'Mpox / Ebola watch'], ['Uganda', 1.4, 32.3, 'Ebola/Marburg surveillance'],
+    ['DRC/Sudan', 12.0, 30.0, 'Cholera outbreaks'], ['SE Asia', 14.0, 101.0, 'Dengue surge'],
+    ['Global', 30.0, 0.0, 'Avian influenza H5N1 spread'], ['Brazil', -14.24, -51.93, 'Yellow fever alert zones'],
+    ['West Africa', 8.0, -4.0, 'Marburg surveillance'], ['Haiti', 18.9, -72.3, 'Cholera resurgence'],
+  ],
+  economicCenters: [
+    ['New York', 40.71, -74.01, 'Largest economy metro'], ['Tokyo', 35.68, 139.69, 'Japan core'],
+    ['Shanghai', 31.23, 121.47, 'China commerce'], ['London', 51.51, -0.13, 'UK/EU finance'],
+    ['Los Angeles', 34.05, -118.24, 'Trade & media'], ['Paris', 48.86, 2.35, 'EU #2'],
+    ['Mumbai', 19.08, 72.88, 'India finance'], ['São Paulo', -23.55, -46.63, 'LatAm hub'],
+    ['Dubai', 25.20, 55.27, 'MENA gateway'], ['Singapore', 1.35, 103.82, 'SEA financial hub'],
+    ['Frankfurt', 50.11, 8.68, 'EU ECB seat'], ['Chicago', 41.88, -87.63, 'US derivatives hub'],
+  ],
+  internetExchanges: [
+    ['DE-CIX Frankfurt', 50.11, 8.68, "World's largest IXP"], ['AMS-IX', 52.36, 4.95, 'Amsterdam'],
+    ['LINX London', 51.51, -0.09, 'London'], ['Equinix Ashburn', 39.04, -77.49, 'US-East core'],
+    ['Equinix Singapore', 1.29, 103.85, 'SEA core'], ['Equinix Tokyo', 35.69, 139.69, 'Japan'],
+    ['Equinix Palo Alto', 37.44, -122.14, 'Silicon Valley'], ['MIX Milan', 45.46, 9.19, 'Italy'],
+    ['MSK-IX Moscow', 55.75, 37.62, 'Russia largest IXP'], ['TorIX Toronto', 43.65, -79.38, 'Canada'],
+    ['BDIX Dhaka', 23.81, 90.41, 'Bangladesh hub'], ['Nap Africa Johannesburg', -26.20, 28.04, 'Africa core IXP'],
+  ],
+  gpsJamming: [
+    ['Eastern Mediterranean', 33.5, 34.0, 'Persistent GPS spoofing'], ['Black Sea', 44.0, 34.0, 'Conflict-zone jamming'],
+    ['Baltic / Kaliningrad', 55.0, 21.0, 'Jamming affecting aviation'], ['Persian Gulf', 26.5, 52.0, 'Strait of Hormuz interference'],
+    ['Korean Peninsula', 37.8, 126.5, 'DPRK jamming events'], ['Syria/Levant', 34.5, 37.0, 'Active EW operations'],
+    ['Red Sea / Bab-el-Mandeb', 13.0, 43.5, 'Houthi EW interference'], ['Barents Sea', 69.0, 33.0, 'Russian EW exercises'],
+  ],
+  webcams: [
+    ['Times Square', 40.758, -73.985, 'New York City', 'https://www.youtube.com/results?search_query=times+square+live+cam'],
+    ['Shibuya Crossing', 35.659, 139.700, 'Tokyo', 'https://www.youtube.com/results?search_query=shibuya+crossing+live+cam'],
+    ['Las Vegas Strip', 36.115, -115.173, 'Nevada', 'https://www.youtube.com/results?search_query=las+vegas+strip+live+cam'],
+    ["Venice — St Mark's", 45.434, 12.339, 'Italy', 'https://www.youtube.com/results?search_query=venice+st+marks+live+cam'],
+    ['Abbey Road', 51.532, -0.177, 'London', 'https://www.youtube.com/results?search_query=abbey+road+live+cam'],
+    ['Mount Fuji', 35.361, 138.728, 'Japan', 'https://www.youtube.com/results?search_query=mount+fuji+live+cam'],
+    ['Niagara Falls', 43.080, -79.075, 'US/Canada', 'https://www.youtube.com/results?search_query=niagara+falls+live+cam'],
+    ['Reykjavík / Aurora', 64.146, -21.942, 'Iceland', 'https://www.youtube.com/results?search_query=iceland+aurora+live+cam'],
+    ['Bondi Beach', -33.891, 151.277, 'Sydney', 'https://www.youtube.com/results?search_query=bondi+beach+live+cam'],
+    ['Dubai Marina', 25.080, 55.140, 'UAE', 'https://www.youtube.com/results?search_query=dubai+live+cam'],
+    ['Singapore Marina', 1.283, 103.860, 'Singapore', 'https://www.youtube.com/results?search_query=singapore+marina+live+cam'],
+    ['Kyiv', 50.450, 30.523, 'Ukraine', 'https://www.youtube.com/results?search_query=kyiv+live+cam'],
+  ],
+  lines: {
+    tradeRoutes: [
+      ['Asia–Europe (via Suez)',
+        [[31.23, 121.47], [22.28, 114.16], [1.29, 103.85], [5.93, 80.02], [11.59, 43.10],
+         [12.58, 43.33], [21.49, 39.10], [29.97, 32.56], [31.26, 32.31], [37.08, 15.29],
+         [38.12, 15.65], [36.13, -5.35], [43.30, -9.10], [47.50, -8.50], [51.95, 4.14]],
+        'World\'s busiest container lane — 25,000+ ships/yr'],
+      ['Transpacific (Northern Great Circle)',
+        [[35.68, 139.77], [38.00, 145.00], [43.00, 160.00], [47.00, 175.00],
+         [48.00, -175.00], [47.50, -157.00], [21.31, -157.86], [33.72, -118.27]],
+        'Japan/China → US West Coast — 8,000+ TEU/day'],
+      ['Transpacific (Southern)',
+        [[22.28, 114.16], [1.29, 103.85], [0.00, 130.00], [-5.00, 150.00],
+         [-18.00, 178.00], [-8.90, -140.00], [8.90, -79.53]],
+        'SEA → Panama Canal (southerly route)'],
+      ['Transatlantic (North)',
+        [[51.95, 4.14], [50.20, -5.10], [48.00, -16.00], [45.00, -30.00],
+         [42.00, -50.00], [38.00, -65.00], [40.69, -74.04]],
+        'Europe → US East Coast — major container/Ro-Ro lane'],
+      ['Transatlantic (South)',
+        [[51.95, 4.14], [38.71, -9.14], [28.11, -15.43], [14.69, -17.44],
+         [-5.82, -35.21], [-23.96, -46.30]],
+        'Europe → South America — Brazil/Argentina lane'],
+      ['Gulf–Asia Oil Route',
+        [[26.64, 50.16], [26.57, 56.25], [22.00, 60.00], [14.00, 57.00],
+         [5.93, 80.02], [1.29, 103.85], [22.28, 114.16], [31.23, 121.47]],
+        'Persian Gulf crude to Asia (~20 Mbd)'],
+      ['Cape Route (Red Sea bypass)',
+        [[26.64, 50.16], [11.59, 43.10], [0.00, 45.00], [-10.00, 42.00],
+         [-20.00, 38.00], [-34.36, 18.47], [-35.00, 5.00], [-20.00, -10.00],
+         [0.00, -10.00], [15.00, -18.00], [36.13, -5.35], [51.95, 4.14]],
+        'Houthi-driven reroute around Africa (active since 2024)'],
+      ['Intra-Asia (China–Japan–Korea)',
+        [[31.23, 121.47], [37.52, 126.93], [35.68, 139.77], [34.39, 132.46],
+         [22.28, 114.16], [10.82, 106.63], [1.29, 103.85]],
+        'Densest intra-regional trade corridor'],
+      ['US Gulf–Europe',
+        [[29.95, -89.94], [25.78, -80.19], [20.00, -65.00], [30.00, -45.00],
+         [40.00, -30.00], [51.95, 4.14]],
+        'LNG/crude export corridor'],
+      ['Australia–East Asia',
+        [[-33.87, 151.21], [-20.00, 152.00], [-10.00, 147.00], [1.29, 103.85],
+         [22.28, 114.16], [31.23, 121.47]],
+        'Iron ore, coal, LNG to China/Japan/Korea'],
+      ['Northern Sea Route (Arctic)',
+        [[51.95, 4.14], [57.00, 10.00], [62.00, 15.00], [69.65, 18.96],
+         [71.00, 28.00], [73.00, 40.00], [75.00, 60.00], [77.00, 80.00],
+         [76.00, 100.00], [74.00, 120.00], [72.00, 140.00], [68.00, 160.00],
+         [64.00, 175.00], [60.00, -175.00], [53.00, -165.00], [57.03, -135.34]],
+        'Arctic shortcut — 40% faster EU↔Asia, ice-free summers (Russia EEZ)'],
+      ['West Africa – Europe',
+        [[-33.87, 18.47], [-22.90, 14.50], [-8.84, 13.23], [4.05, 9.70],
+         [6.45, 3.39], [14.69, -17.44], [28.11, -15.43], [38.71, -9.14],
+         [51.95, 4.14]],
+        'South Africa → West Africa → Europe (oil tankers, bulk)'],
+      ['East Africa – Asia',
+        [[-33.87, 18.47], [-26.20, 32.60], [-11.70, 43.26], [-4.04, 39.67],
+         [2.04, 45.34], [11.59, 43.10], [22.00, 60.00], [5.93, 80.02],
+         [1.29, 103.85], [31.23, 121.47]],
+        'East Africa ports → Indian Ocean → Asia (oil, gas, minerals)'],
+      ['South America – Asia (Pacific)',
+        [[-23.96, -46.30], [-33.46, -70.65], [-40.00, -75.00], [-35.00, -90.00],
+         [-20.00, -110.00], [-10.00, -130.00], [0.00, -150.00], [10.00, -140.00],
+         [22.28, 114.16]],
+        'Chile/Peru copper → China — fastest Latin America-Asia route'],
+      ['US East Coast – Caribbean – South America',
+        [[40.69, -74.04], [25.78, -80.19], [18.48, -69.94], [10.49, -66.88],
+         [9.00, -79.50], [-8.00, -75.00], [-23.96, -46.30]],
+        'Refined products, container trade, oil'],
+      ['Intra-Europe (North-South)',
+        [[59.91, 10.75], [57.00, 10.00], [55.68, 12.57], [53.55, 9.99],
+         [51.95, 4.14], [48.85, 2.35], [43.30, 5.36], [41.39, 2.16],
+         [38.71, -9.14]],
+        'Scandinavia → Mediterranean ro-ro and container corridor'],
+      ['Black Sea – Mediterranean',
+        [[46.50, 30.73], [43.40, 28.67], [41.01, 28.97], [40.99, 29.03],
+         [38.00, 26.00], [36.00, 28.00], [36.13, -5.35]],
+        'Ukrainian grain, Russian oil via Bosphorus choke'],
+      ['Persian Gulf – East Africa (oil/LNG)',
+        [[26.57, 56.25], [20.00, 60.00], [11.59, 43.10], [2.04, 45.34],
+         [-4.04, 39.67], [-11.70, 43.26], [-26.20, 32.60]],
+        'Gulf exports to East African ports (Mombasa, Dar es Salaam)'],
+      ['China – Africa (Belt & Road)',
+        [[31.23, 121.47], [22.28, 114.16], [1.29, 103.85], [5.93, 80.02],
+         [11.59, 43.10], [2.04, 45.34], [-4.04, 39.67], [-26.20, 32.60],
+         [-33.87, 18.47]],
+        'BRI Maritime Silk Road — China → East Africa → South Africa'],
+    ],
+    cables: [
+      ['MAREA (Microsoft/Facebook, 2017)',
+        [[36.80, -5.60], [37.50, -15.00], [37.50, -30.00], [38.00, -50.00],
+         [38.50, -65.00], [36.83, -76.00]],
+        'Virginia Beach ↔ Bilbao — 160 Tbps capacity'],
+      ['AEConnect-1 (2016)',
+        [[53.34, -6.27], [52.00, -10.00], [50.00, -20.00], [46.00, -35.00],
+         [42.00, -55.00], [40.69, -74.04]],
+        'Dublin ↔ New York — 5.2 Tbps'],
+      ['FASTER (Google, 2016)',
+        [[35.45, 139.63], [35.00, 145.00], [40.00, 160.00], [40.00, 175.00],
+         [35.00, -175.00], [21.31, -157.86], [45.54, -122.67]],
+        'Japan ↔ Oregon — 60 Tbps'],
+      ['JUPITER (Facebook/PLDT/SoftBank, 2020)',
+        [[34.69, 135.18], [30.00, 137.00], [25.00, 135.00], [15.00, 135.00],
+         [13.44, 144.75], [21.31, -157.86], [33.72, -118.27]],
+        'Japan/Philippines ↔ Los Angeles — 60 Tbps'],
+      ['Hawaiki (2018)',
+        [[45.54, -122.67], [21.31, -157.86], [-13.82, -172.00],
+         [-36.85, 174.76], [-33.87, 151.21]],
+        'Oregon ↔ New Zealand ↔ Australia'],
+      ['SEA-ME-WE 5 (2016)',
+        [[1.29, 103.82], [5.93, 80.02], [11.59, 43.10], [21.49, 39.10],
+         [29.97, 32.56], [31.26, 32.31], [37.50, 15.00], [43.30, 5.36],
+         [44.40, 8.92], [38.71, -9.14], [50.80, -1.08]],
+        'Singapore → Marseille → Southampton — 24 Tbps'],
+      ['SEA-ME-WE 3 (1999, longest cable)',
+        [[1.29, 103.82], [5.93, 80.02], [11.59, 43.10], [22.00, 39.10],
+         [30.00, 32.56], [31.26, 32.31], [35.00, 24.00], [40.00, 28.00],
+         [43.30, 5.36], [38.71, -9.14], [51.50, -0.09]],
+        'Singapore → UK — 39,000 km, 20 countries'],
+      ['PEACE Cable (2022)',
+        [[24.86, 67.01], [22.00, 60.00], [11.59, 43.10], [-4.04, 39.67],
+         [-10.00, 40.00], [-20.00, 35.00], [-26.20, 28.04]],
+        'Pakistan → East Africa (Mombasa, Johannesburg)'],
+      ['2Africa (Meta, 2024)',
+        [[51.50, -0.09], [38.71, -9.14], [28.11, -15.43], [14.69, -17.44],
+         [5.35, -4.02], [6.45, 3.39], [4.05, 9.70], [-4.32, 15.32],
+         [-8.84, 13.23], [-22.90, 14.50], [-34.36, 18.47], [-26.20, 28.04],
+         [-4.04, 39.67], [2.04, 45.34], [11.59, 43.10], [21.49, 39.10],
+         [23.62, 58.59], [25.20, 55.27], [25.12, 51.32], [26.22, 50.57],
+         [24.47, 54.37]],
+        'Meta\'s 45,000 km cable circling Africa — 180 Tbps'],
+      ['Africa Coast to Europe (ACE, 2012)',
+        [[51.50, -0.09], [38.71, -9.14], [28.11, -15.43], [18.08, -15.97],
+         [14.69, -17.44], [10.65, -14.42], [5.35, -4.02], [4.05, 9.70],
+         [-4.32, 15.32], [-8.84, 13.23], [-22.90, 14.50], [-34.36, 18.47]],
+        'UK → South Africa — 17,000 km'],
+      ['New Cross Pacific (NCP, 2016)',
+        [[37.56, 126.98], [35.10, 129.07], [35.68, 139.77], [37.00, 143.00],
+         [42.00, 155.00], [45.00, 170.00], [47.00, -175.00], [47.60, -122.33]],
+        'Korea/Japan ↔ Seattle — 80 Tbps'],
+      ['Transatlantic (TAT-14, 2001)',
+        [[51.95, 4.14], [51.50, -0.09], [48.00, -5.00], [47.00, -18.00],
+         [45.00, -35.00], [41.00, -55.00], [40.69, -74.04]],
+        'Netherlands/UK ↔ New Jersey — 3.2 Tbps'],
+      ['South Atlantic Express (SAex)',
+        [[40.69, -74.04], [14.93, -23.51], [-22.90, -43.17]],
+        'New York ↔ Cape Verde ↔ Rio de Janeiro'],
+      ['FLAG Atlantic-1 / Yellow (2000)',
+        [[50.80, -1.08], [48.00, -5.00], [47.00, -15.00], [44.00, -30.00],
+         [41.00, -50.00], [40.69, -74.04]],
+        'UK → New York — 14,000 km'],
+      ['Apollo (2003)',
+        [[51.50, -0.09], [50.00, -8.00], [46.00, -20.00], [42.00, -40.00],
+         [40.00, -65.00], [40.69, -74.04]],
+        'UK/France → New York — 13,000 km'],
+      ['Amitié (Facebook/Microsoft/Aqua Comms, 2022)',
+        [[47.25, -1.55], [46.00, -8.00], [44.00, -20.00], [42.00, -40.00],
+         [40.69, -74.04]],
+        'France/Ireland/UK ↔ Boston — 6,800 km, 400 Tbps'],
+      ['Grace Hopper (Google, 2022)',
+        [[51.50, -0.09], [53.34, -6.27], [52.00, -10.00], [48.00, -20.00],
+         [44.00, -35.00], [40.69, -74.04]],
+        'UK/Ireland/Spain ↔ New York — 6,400 km'],
+      ['EllaLink (2021)',
+        [[38.71, -9.14], [28.11, -15.43], [14.93, -23.51], [3.00, -30.00],
+         [-8.00, -35.00], [-22.90, -43.17]],
+        'Portugal ↔ Brazil — 6,200 km (dedicated EU-LatAm)'],
+      ['Hibernia Express (2015)',
+        [[53.34, -6.27], [53.00, -10.00], [52.00, -20.00], [50.00, -35.00],
+         [46.00, -55.00], [40.69, -74.04]],
+        'Dublin ↔ New York — low-latency financial route'],
+      ['Southern Cross (1999)',
+        [[-33.87, 151.21], [-36.85, 174.76], [-21.13, -175.20],
+         [21.31, -157.86], [37.78, -122.42]],
+        'Australia/NZ ↔ Hawaii ↔ San Francisco'],
+      ['Gondwana-1 (2009)',
+        [[-21.90, 166.00], [-36.85, 174.76]],
+        'New Caledonia ↔ New Zealand'],
+      ['Tonga Cable (2013)',
+        [[-36.85, 174.76], [-21.13, -175.20]],
+        'New Zealand ↔ Tonga'],
+      ['EAC Pacific / Endeavour (2009)',
+        [[35.68, 139.77], [26.07, 119.31], [22.28, 114.16], [1.29, 103.85],
+         [-6.89, 107.62], [-7.25, 112.75], [-8.67, 115.21]],
+        'Japan → China → Singapore → Indonesia'],
+      ['PC-1 (Pacific Crossing, 2000)',
+        [[35.68, 139.77], [40.00, 155.00], [45.00, 170.00], [47.00, -175.00],
+         [45.00, -157.00], [37.78, -122.42]],
+        'Japan ↔ California — 21,000 km'],
+      ['SJC (Southeast Asia-Japan Cable, 2013)',
+        [[22.28, 114.16], [22.10, 114.20], [10.82, 106.63], [1.29, 103.85],
+         [6.93, 79.85], [13.44, 144.75], [35.68, 139.77]],
+        'China/Hong Kong → Vietnam → Singapore → Guam → Japan'],
+      ['AAG (Asia-America Gateway, 2009)',
+        [[22.28, 114.16], [10.82, 106.63], [14.05, 108.20], [1.29, 103.85],
+         [13.00, 100.50], [16.47, 107.60], [21.31, -157.86], [33.72, -118.27]],
+        'SE Asia/HK ↔ Hawaii ↔ Los Angeles'],
+      ['SEACOM (2009)',
+        [[-33.87, 18.47], [-26.20, 32.60], [-19.83, 34.84], [-11.70, 43.26],
+         [-4.04, 39.67], [2.04, 45.34], [11.59, 43.10], [22.00, 54.00],
+         [23.62, 58.59], [25.20, 55.27]],
+        'South Africa → East Africa → India → UAE'],
+      ['EASSy (Eastern Africa Submarine System, 2010)',
+        [[-33.87, 18.47], [-34.05, 25.65], [-26.20, 32.60], [-25.96, 32.59],
+         [-19.83, 34.84], [-15.00, 40.00], [-11.70, 43.26], [-4.04, 39.67],
+         [2.04, 45.34], [11.30, 43.15], [12.36, 43.51], [15.33, 42.72]],
+        'South Africa → East Africa → Sudan — 10,500 km'],
+      ['TEAMS (The East Africa Marine System, 2009)',
+        [[1.29, 103.85], [5.93, 80.02], [22.00, 54.00], [2.04, 45.34],
+         [-4.04, 39.67]],
+        'UAE → India → Kenya'],
+      ['LION/LION2 (2009/2012)',
+        [[-20.16, 57.50], [-11.70, 43.26], [-4.04, 39.67], [-12.97, 40.52],
+         [-18.91, 47.54]],
+        'Mauritius → Comoros → Kenya → Mozambique → Madagascar'],
+      ['SAFE (South Africa Far East, 2002)',
+        [[-33.87, 18.47], [-26.20, 32.60], [-11.70, 43.26], [5.93, 80.02],
+         [1.29, 103.85], [22.28, 114.16], [35.68, 139.77]],
+        'South Africa → India → Malaysia → Japan — 28,000 km'],
+      ['Bay of Bengal Gateway (BBG, 2017)',
+        [[22.28, 114.16], [10.82, 106.63], [1.29, 103.85], [13.00, 100.50],
+         [16.87, 96.12], [23.73, 90.41], [13.08, 80.27]],
+        'HK/Singapore → Thailand → Bangladesh → India (Chennai)'],
+      ['MedNautilus/Bosphorus (2011)',
+        [[51.50, -0.09], [43.30, 5.36], [37.98, 23.73], [41.01, 28.97],
+         [40.97, 28.82], [36.83, 34.63]],
+        'UK → France → Greece → Turkey → Middle East'],
+      ['TE North (2012)',
+        [[36.83, 34.63], [31.26, 32.31], [25.20, 55.27], [23.62, 58.59]],
+        'Turkey → Egypt → UAE — 13,000 km'],
+      ['Cadmos (2005)',
+        [[43.30, 5.36], [37.98, 23.73], [35.15, 33.36], [33.89, 35.49]],
+        'Marseille → Greece → Cyprus → Lebanon'],
+      ['Blue Raman (2023)',
+        [[44.40, 8.92], [38.00, 14.00], [32.00, 34.00], [25.20, 55.27],
+         [23.62, 58.59], [22.00, 60.00], [20.00, 63.00], [16.00, 68.00],
+         [13.08, 80.27], [1.29, 103.85]],
+        'Italy → Israel → UAE → India → Singapore — 15,000 km'],
+      ['Baltic Sea Cable',
+        [[59.33, 18.07], [56.16, 15.59], [54.52, 13.65], [53.55, 9.99],
+         [55.68, 12.57], [55.68, 12.58], [60.39, 5.32]],
+        'Sweden → Germany → Denmark → Norway (Baltic grid)'],
+      ['WACS (West Africa Cable System, 2012)',
+        [[51.50, -0.09], [38.71, -9.14], [28.11, -15.43], [14.69, -17.44],
+         [10.65, -14.42], [8.49, -13.23], [5.35, -4.02], [4.05, 9.70],
+         [-4.32, 15.32], [-8.84, 13.23], [-22.90, 14.50], [-33.87, 18.47]],
+        'UK → Portugal → West Africa → South Africa — 14,500 km'],
+      ['SAT-3/WASC (2002)',
+        [[51.50, -0.09], [38.71, -9.14], [28.11, -15.43], [14.69, -17.44],
+         [10.65, -14.42], [5.35, -4.02], [4.05, 9.70], [-4.32, 15.32],
+         [-8.84, 13.23], [-22.90, 14.50], [-33.87, 18.47]],
+        'Europe → West Africa → South Africa — 14,350 km'],
+      ['MainOne (2010)',
+        [[38.71, -9.14], [28.11, -15.43], [14.69, -17.44], [5.35, -4.02],
+         [6.45, 3.39]],
+        'Portugal → West Africa (Senegal → Côte d\'Ivoire → Nigeria)'],
+      ['Americas-II (1999)',
+        [[40.69, -74.04], [25.78, -80.19], [18.48, -69.94], [10.49, -66.88],
+         [-8.00, -35.00], [-22.90, -43.17], [-34.92, -56.19]],
+        'US → Caribbean → Brazil → Uruguay'],
+      ['ARCOS (Americas Region Caribbean Optical-ring System)',
+        [[25.78, -80.19], [21.52, -80.00], [17.99, -76.79], [15.85, -61.70],
+         [17.13, -61.84], [18.02, -76.78], [15.29, -90.03], [10.49, -85.86],
+         [8.99, -79.53]],
+        'Florida → Cuba → Caribbean → Central America'],
+      ['Firmina (Google, 2023)',
+        [[40.69, -74.04], [-8.00, -35.00], [-22.90, -43.17], [-34.92, -56.19],
+         [-33.46, -70.65]],
+        'New York → Brazil → Uruguay → Chile — 24,000 km, longest single-cable'],
+    ],
+    pipelines: [
+      ['Nord Stream 1 (Baltic Sea gas)',
+        [[60.71, 28.74], [59.50, 25.00], [57.50, 20.00], [55.50, 16.50], [54.52, 13.65]],
+        'Vyborg → Lubmin, Germany (55 bcm/yr, flows halted 2022)'],
+      ['Nord Stream 2 (Baltic Sea gas)',
+        [[60.30, 28.20], [58.80, 24.00], [56.50, 19.00], [55.00, 15.50], [54.11, 13.64]],
+        'Ust-Luga → Lubmin (damaged Sept 2022)'],
+      ['TurkStream (Black Sea gas)',
+        [[44.89, 37.32], [43.50, 35.00], [42.00, 32.00], [41.25, 29.00],
+         [39.90, 27.00], [37.00, 27.00]],
+        'Anapa → Turkey (31.5 bcm/yr, operational)'],
+      ['Druzhba — Northern Branch (oil)',
+        [[53.90, 53.30], [54.00, 49.00], [53.70, 45.00], [53.20, 40.00],
+         [52.30, 35.00], [52.05, 30.00], [52.10, 24.00], [52.20, 20.00],
+         [52.40, 14.50], [52.53, 13.41]],
+        'Almetyevsk → Poland/Germany (1.2 Mbd oil)'],
+      ['Druzhba — Southern Branch (oil)',
+        [[52.05, 30.00], [50.50, 30.70], [48.50, 31.50], [47.00, 32.00],
+         [46.30, 30.70], [44.00, 29.00]],
+        'Belarus → Ukraine → Slovakia/Hungary/Czech Republic'],
+      ['Yamal-Europe (gas)',
+        [[67.64, 77.00], [63.00, 70.00], [60.00, 60.00], [57.00, 50.00],
+         [55.70, 37.80], [53.00, 29.00], [52.10, 23.00], [52.20, 20.00], [52.40, 14.50]],
+        'West Siberia → Germany via Poland (33 bcm/yr)'],
+      ['Baku–Tbilisi–Ceyhan / BTC (oil)',
+        [[40.41, 49.87], [41.40, 46.00], [41.70, 44.78], [40.90, 43.00],
+         [39.90, 41.00], [39.73, 39.49], [37.70, 37.50], [36.63, 35.51]],
+        'Azeri crude → Mediterranean (1 Mbd) — BTC pipeline'],
+      ['Trans-Anatolian / TANAP (gas)',
+        [[41.58, 41.56], [40.80, 40.00], [40.20, 38.00], [39.90, 35.00],
+         [39.90, 32.80], [39.80, 30.50], [40.10, 28.00], [40.38, 26.00], [41.70, 26.47]],
+        'Azerbaijani gas → Turkey/Europe (16 bcm/yr)'],
+      ['Trans-Adriatic / TAP (gas)',
+        [[41.70, 26.47], [41.50, 23.00], [40.63, 22.94], [40.80, 20.00],
+         [41.33, 19.82], [40.83, 18.16]],
+        'Greece → Albania → Italy — connects to TANAP'],
+      ['East Siberia–Pacific Ocean / ESPO (oil)',
+        [[55.93, 98.00], [56.00, 103.00], [57.00, 110.00], [56.50, 115.00],
+         [55.00, 120.00], [53.98, 123.89], [52.00, 128.00], [48.00, 133.00], [42.93, 133.52]],
+        'Taishet → Kozmino (Pacific export terminal) — 1.6 Mbd'],
+      ['Trans-Alaska Pipeline (TAPS, oil)',
+        [[70.30, -148.63], [67.00, -151.00], [64.84, -147.72], [62.00, -148.00], [61.13, -146.36]],
+        'Prudhoe Bay → Valdez (800 miles, 1.5 Mbd peak)'],
+      ['Colonial Pipeline (US refined products)',
+        [[29.76, -95.37], [30.45, -91.15], [32.36, -86.82], [33.75, -84.39],
+         [35.23, -80.85], [37.54, -77.44], [38.89, -77.04], [40.69, -74.04]],
+        'Houston → New York — largest US pipeline (2.5 Mbd, 5,500 miles)'],
+      ['Keystone (oil sands crude)',
+        [[52.67, -111.33], [49.00, -104.00], [46.50, -100.00], [43.00, -98.00],
+         [40.00, -97.35], [37.00, -96.00], [35.46, -97.52], [29.90, -93.93]],
+        'Alberta → US Gulf Coast refineries (830 kbd)'],
+      ['Arab Gas Pipeline',
+        [[31.26, 32.31], [30.80, 34.00], [31.00, 35.09], [32.60, 36.10],
+         [33.50, 36.30], [33.89, 35.49]],
+        'Egypt → Jordan → Syria → Lebanon (regional gas)'],
+      ['West–East Gas Pipeline (China)',
+        [[39.47, 75.99], [40.00, 80.00], [40.00, 90.00], [38.00, 97.00],
+         [36.06, 103.83], [34.80, 113.70], [32.00, 118.00], [31.23, 121.47]],
+        'Xinjiang → Shanghai (4,000 km, 30 bcm/yr)'],
+      ['Power of Siberia (Russia-China gas)',
+        [[52.00, 120.00], [53.00, 125.00], [53.98, 123.89], [49.00, 130.00],
+         [48.47, 135.07], [47.00, 133.00], [44.00, 131.00], [43.80, 131.88]],
+        'Chayanda/Kovykta → Heihe, China (38 bcm/yr, operational 2019)'],
+      ['Central Asia–China Gas Pipeline (CAGP)',
+        [[39.65, 66.96], [41.00, 63.00], [42.00, 60.00], [41.00, 65.00],
+         [39.47, 75.99], [38.00, 80.00], [36.06, 103.83], [34.80, 113.70], [31.23, 121.47]],
+        'Turkmenistan/Kazakhstan/Uzbekistan → China (55 bcm/yr)'],
+      ['Medgaz (Algeria–Spain, 2011)',
+        [[36.91, 2.43], [37.30, 0.50], [37.50, -1.00], [37.60, -0.80], [38.35, -0.48]],
+        'Algeria → Spain (8 bcm/yr)'],
+      ['Transmed / Enrico Mattei (1983)',
+        [[36.91, 2.43], [37.00, 8.00], [37.50, 10.00], [37.50, 11.00],
+         [38.11, 13.37], [40.85, 14.27], [44.40, 8.92], [45.46, 9.19]],
+        'Algeria → Tunisia → Sicily → Italy (30 bcm/yr)'],
+      ['Trans Mountain (Canada, expanded 2024)',
+        [[53.54, -113.49], [51.50, -116.50], [49.40, -117.00], [49.35, -122.90], [49.28, -123.11]],
+        'Alberta → Vancouver (890 kbd, tripled capacity 2024)'],
+      ['Enbridge Mainline (largest oil pipeline system)',
+        [[53.54, -113.49], [52.00, -107.00], [50.00, -100.00], [47.00, -95.00],
+         [46.50, -91.00], [42.30, -83.00], [41.88, -87.63]],
+        'Alberta → US Midwest (3 Mbd, world\'s longest)'],
+      ['Baltic Pipe (Norway-Poland, 2022)',
+        [[58.97, 5.73], [57.70, 7.00], [57.00, 9.00], [56.50, 10.50],
+         [56.50, 12.00], [55.68, 12.57], [54.52, 14.00], [54.35, 18.64]],
+        'Norway → Denmark → Poland (10 bcm/yr, bypasses Russian gas)'],
+      ['Iraq–Turkey Pipeline (Kirkuk–Ceyhan)',
+        [[35.47, 44.39], [36.00, 42.00], [37.00, 40.00], [37.50, 38.00],
+         [37.00, 37.00], [36.63, 35.51]],
+        'Kirkuk oilfield → Ceyhan, Turkey (1.6 Mbd)'],
+      ['Abu Dhabi Crude Oil Pipeline (ADCOP)',
+        [[24.47, 54.37], [24.00, 56.00], [22.70, 59.52]],
+        'Abu Dhabi → Fujairah (bypass Hormuz, 1.5 Mbd)'],
+      ['Sino-Burma Oil & Gas Pipeline',
+        [[22.80, 98.52], [24.50, 97.00], [25.00, 96.00], [24.00, 93.00], [23.73, 90.41]],
+        'Myanmar coast → Yunnan, China (oil+gas dual pipeline)'],
+      ['West African Gas Pipeline (WAGP, 2010)',
+        [[6.45, 3.39], [6.10, 1.22], [5.55, -0.20], [5.35, -4.02]],
+        'Nigeria → Benin → Togo → Ghana (678 km)'],
+      ['Mozambique–South Africa (ROMPCO)',
+        [[-25.96, 32.59], [-26.82, 32.08], [-25.90, 32.04], [-26.20, 28.04]],
+        'Mozambique gas → South Africa (865 MMcf/d)'],
+      ['Trans-Saharan Gas Pipeline (proposed)',
+        [[3.87, 11.52], [13.52, 2.11], [23.00, 3.00], [30.00, 3.00], [36.91, 2.43]],
+        'Nigeria → Niger → Algeria → Europe (4,130 km, proposed)'],
+      ['Dakota Access Pipeline (DAPL)',
+        [[47.50, -102.80], [46.50, -100.00], [45.00, -97.00], [43.00, -95.00], [41.88, -87.63]],
+        'Bakken shale → Illinois (570 kbd)'],
+      ['Permian Basin pipelines (US)',
+        [[31.84, -102.37], [30.00, -98.00], [29.76, -95.37]],
+        'Permian Basin → Houston (multiple lines, 5+ Mbd capacity)'],
+    ],
+  },
+};
+
+// Query Overpass API for real OSM pipeline/cable geodata (with 25s timeout).
+// Returns { cables: [...], pipelines: [...] } in the same [name, coords, desc] format.
+async function fetchOverpassLines() {
+  const OVERPASS = 'https://overpass-api.de/api/interpreter';
+  const out = { cables: [], pipelines: [] };
+
+  // ── Submarine cables ──────────────────────────────────────────────────────
+  try {
+    const cableQ = `[out:json][timeout:25];
+way["telecom"="cable"]["location"="underwater"]["name"];
+out 80 geom;`;
+    const r = await fetchWithTimeout(OVERPASS, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': BROWSER_UA },
+      body: 'data=' + encodeURIComponent(cableQ),
+    }, 28000);
+    if (r.ok) {
+      const d = await r.json();
+      for (const el of (d.elements || [])) {
+        const name = el.tags?.name || el.tags?.['name:en'] || '';
+        if (!name || !Array.isArray(el.geometry) || el.geometry.length < 2) continue;
+        const pts = el.geometry;
+        const step = pts.length > 30 ? Math.ceil(pts.length / 20) : 1;
+        const coords = pts.filter((_, i) => i % step === 0 || i === pts.length - 1).map((p) => [p.lat, p.lon]);
+        const op = el.tags?.operator || '';
+        out.cables.push([name, coords, `Submarine cable${op ? ' · ' + op : ''}`]);
+      }
+    }
+  } catch { /* Overpass cable query timed out or failed */ }
+
+  // ── Major oil/gas pipelines ───────────────────────────────────────────────
+  try {
+    const pipeQ = `[out:json][timeout:25];
+way["man_made"="pipeline"]["substance"~"^(oil|gas|natural_gas)$"]["name"];
+out 80 geom;`;
+    const r = await fetchWithTimeout(OVERPASS, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': BROWSER_UA },
+      body: 'data=' + encodeURIComponent(pipeQ),
+    }, 28000);
+    if (r.ok) {
+      const d = await r.json();
+      for (const el of (d.elements || [])) {
+        const name = el.tags?.name || el.tags?.['name:en'] || '';
+        if (!name || !Array.isArray(el.geometry) || el.geometry.length < 2) continue;
+        const pts = el.geometry;
+        const step = pts.length > 30 ? Math.ceil(pts.length / 20) : 1;
+        const coords = pts.filter((_, i) => i % step === 0 || i === pts.length - 1).map((p) => [p.lat, p.lon]);
+        const sub = el.tags?.substance || 'oil/gas';
+        out.pipelines.push([name, coords, `${sub.charAt(0).toUpperCase() + sub.slice(1)} pipeline${el.tags?.operator ? ' · ' + el.tags.operator : ''}`]);
+      }
+    }
+  } catch { /* Overpass pipeline query timed out or failed */ }
+
+  return out;
+}
+
+// Merge live augmentations (IAEA, UNHCR, Wikidata, Overpass) into the baseline.
+// All failures are swallowed — baseline is always returned.
+async function fetchAugmentedLayers() {
+  const out = JSON.parse(JSON.stringify(MAP_LAYERS_BASELINE)); // deep clone
+
+  // ── 1. IAEA PRIS — nuclear reactor operational status ────────────────────
+  try {
+    const iaRes = await fetchWithTimeout(
+      'https://pris.iaea.org/api/reactors?status=operational&format=json',
+      { headers: { 'User-Agent': BROWSER_UA } }, 8000
+    );
+    if (iaRes.ok) {
+      const iaData = await iaRes.json();
+      const reactors = Array.isArray(iaData) ? iaData : (iaData.data || iaData.reactors || []);
+      for (const rx of reactors.slice(0, 80)) {
+        if (rx.latitude == null || rx.longitude == null) continue;
+        const name = rx.name || rx.reactor_name || rx.unitName || 'Unknown reactor';
+        const country = rx.country || '';
+        const capacity = rx.capacity || rx.netCapacity || '';
+        const label = `${name}${country ? ' (' + country + ')' : ''}`;
+        const desc = `Operational NPP${capacity ? ' · ' + capacity + ' MWe' : ''}`;
+        const isDupe = out.nuclear.some(([n]) => n.toLowerCase().includes(name.toLowerCase().slice(0, 6)));
+        if (!isDupe) out.nuclear.push([label, +rx.latitude, +rx.longitude, desc]);
+      }
+    }
+  } catch { /* IAEA unreachable */ }
+
+  // ── 2. UNHCR Refugee Situations API ──────────────────────────────────────
+  try {
+    const uhRes = await fetchWithTimeout(
+      'https://api.unhcr.org/population/v1/unsd/?limit=50&sortBy=refugeesUnderUNHCRsMandate&sortOrder=desc',
+      { headers: { 'User-Agent': BROWSER_UA } }, 8000
+    );
+    if (uhRes.ok) {
+      const uhData = await uhRes.json();
+      for (const item of (uhData.items || uhData.data || []).slice(0, 20)) {
+        if (!item.countryOfOriginName) continue;
+        const name = item.countryOfOriginName;
+        const count = item.refugeesUnderUNHCRsMandate || item.total || 0;
+        const fmt = count > 1e6 ? (count / 1e6).toFixed(1) + 'M' : count > 1000 ? (count / 1000).toFixed(0) + 'K' : String(count);
+        const idx = out.refugeeHotspots.findIndex(([n]) => name && n.toLowerCase().includes(name.toLowerCase().slice(0, 5)));
+        if (idx >= 0) out.refugeeHotspots[idx][3] = `${out.refugeeHotspots[idx][3]} — ${fmt} refugees`;
+      }
+    }
+  } catch { /* UNHCR unreachable */ }
+
+  // ── 3. Wikidata SPARQL — additional military bases ────────────────────────
+  try {
+    const sparql = `SELECT ?item ?label ?lat ?lon ?country WHERE {
+      ?item wdt:P31 wd:Q179049;
+            wdt:P17 ?countryItem;
+            p:P625 [ psv:P625 [ wikibase:geoLatitude ?lat; wikibase:geoLongitude ?lon ] ].
+      ?countryItem rdfs:label ?country FILTER(LANG(?country)="en").
+      ?item rdfs:label ?label FILTER(LANG(?label)="en").
+      FILTER(?lat > -90 && ?lat < 90 && ?lon > -180 && ?lon < 180)
+    } LIMIT 40`;
+    const wdRes = await fetchWithTimeout(
+      'https://query.wikidata.org/sparql?query=' + encodeURIComponent(sparql) + '&format=json',
+      { headers: { 'User-Agent': BROWSER_UA, Accept: 'application/sparql-results+json' } }, 10000
+    );
+    if (wdRes.ok) {
+      const wdData = await wdRes.json();
+      for (const b of (wdData.results?.bindings || [])) {
+        const name = b.label?.value || '';
+        const lat = parseFloat(b.lat?.value), lon = parseFloat(b.lon?.value);
+        const country = b.country?.value || '';
+        if (!name || isNaN(lat) || isNaN(lon)) continue;
+        const isDupe = out.militaryBases.some(([n]) => n.toLowerCase().includes(name.toLowerCase().slice(0, 8)));
+        if (!isDupe) out.militaryBases.push([name, lat, lon, `Military installation — ${country}`]);
+      }
+    }
+  } catch { /* Wikidata unreachable */ }
+
+  // ── 4. Overpass — real OSM pipeline/cable geodata (daily refresh) ─────────
+  try {
+    const ov = await fetchOverpassLines();
+    for (const [name, coords, desc] of ov.cables) {
+      const isDupe = out.lines.cables.some(([n]) => n.toLowerCase().slice(0, 8) === name.toLowerCase().slice(0, 8));
+      if (!isDupe && coords.length >= 2) out.lines.cables.push([name, coords, desc]);
+    }
+    for (const [name, coords, desc] of ov.pipelines) {
+      const isDupe = out.lines.pipelines.some(([n]) => n.toLowerCase().slice(0, 8) === name.toLowerCase().slice(0, 8));
+      if (!isDupe && coords.length >= 2) out.lines.pipelines.push([name, coords, desc]);
+    }
+  } catch { /* Overpass step failed */ }
+
+  out._updated = new Date().toISOString();
+  return out;
+}
+
+// REST ship snapshot — global vessel positions (secondary to WS stream).
+async function fetchRestShips(env) {
+  const vessels = [];
+  const AISSTREAM_KEY = env.AISSTREAM_API_KEY;
+
+  // Source 1: AISStream REST snapshot
+  if (AISSTREAM_KEY) {
+    try {
+      const r = await fetchWithTimeout('https://api.aisstream.io/v0/vessels', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${AISSTREAM_KEY}` },
+        body: JSON.stringify({ BoundingBoxes: [[[-89.9, -180], [89.9, 180]]], FilterShipMMSI: [], IncludeSatellite: true }),
+      }, 10000);
+      if (r.ok) {
+        const d = await r.json();
+        for (const v of (d.vessels || d || [])) {
+          if (v.Latitude == null || v.Longitude == null) continue;
+          vessels.push({ mmsi: v.MMSI || v.mmsi, lat: v.Latitude || v.latitude, lon: v.Longitude || v.longitude, name: (v.ShipName || v.Name || v.name || '').trim(), sog: v.Sog || v.sog, cog: v.Cog || v.cog, type: v.ShipType || v.type });
+        }
+      }
+    } catch { /* AISStream REST unavailable */ }
+  }
+
+  // Source 2: AISHub REST (free, ~15 min delayed, global)
+  if (vessels.length < 100) {
+    try {
+      const r = await fetchWithTimeout(
+        'https://data.aishub.net/ws.php?username=Z1456&format=1&output=json&compress=0&latmin=-90&latmax=90&lonmin=-180&lonmax=180',
+        { headers: { 'User-Agent': BROWSER_UA } }, 10000
+      );
+      if (r.ok) {
+        const raw = await r.json();
+        const rows = Array.isArray(raw) ? raw.filter(Array.isArray).flat() : [];
+        for (const v of rows) {
+          if (v.LATITUDE == null || v.LONGITUDE == null) continue;
+          vessels.push({ mmsi: v.MMSI, lat: +v.LATITUDE, lon: +v.LONGITUDE, name: (v.NAME || '').trim(), sog: v.SPEED != null ? v.SPEED / 10 : undefined, cog: v.COURSE, type: v.SHIPTYPE });
+        }
+      }
+    } catch { /* AISHub unavailable */ }
+  }
+
+  const seen = new Set();
+  const unique = vessels.filter((v) => { if (!v.mmsi || seen.has(v.mmsi)) return false; seen.add(v.mmsi); return true; });
+  return { vessels: unique, count: unique.length, source: 'rest', ts: Date.now() };
+}
+
+// Live map data: Disease Outbreaks (ProMED RSS + WHO DON)
+async function fetchDiseaseOutbreaks() {
+  const parseRSS = async (url, srcName) => {
+    try {
+      const res = await fetchWithTimeout(url, { headers: { 'User-Agent': BROWSER_UA, Accept: 'application/rss+xml,application/xml,text/xml,*/*' } }, 12000);
+      if (!res.ok) return [];
+      const xml = await res.text();
+      const items = [];
+      const itemRE = /<(?:item|entry)[^>]*>([\s\S]*?)<\/(?:item|entry)>/gi;
+      let m;
+      while ((m = itemRE.exec(xml)) !== null) {
+        const block = m[1];
+        const title = (/<title[^>]*><!\[CDATA\[(.*?)\]\]>/i.exec(block) || [])[1] || (/<title[^>]*>(.*?)<\/title>/i.exec(block) || [])[1] || '';
+        const desc  = (/<description[^>]*><!\[CDATA\[([\s\S]*?)\]\]>/i.exec(block) || [])[1] || (/<description[^>]*>([\s\S]*?)<\/description>/i.exec(block) || [])[1] || '';
+        const link  = (/<link[^>]*>(.*?)<\/link>/i.exec(block) || [])[1] || '';
+        const pubDate = (/<pubDate>(.*?)<\/pubDate>|<published>(.*?)<\/published>/i.exec(block) || [])[1] || '';
+        if (title) items.push({ title: title.trim(), desc: desc.replace(/<[^>]+>/g, ' ').trim().slice(0, 200), link, pubDate, source: srcName });
+      }
+      return items.slice(0, 20);
+    } catch { return []; }
+  };
+  const REGION_COORDS = {
+    'africa': [0, 20], 'west africa': [10, -10], 'east africa': [-5, 37], 'central africa': [-4, 22],
+    'asia': [25, 90], 'south asia': [20, 78], 'southeast asia': [10, 108], 'east asia': [35, 118],
+    'china': [35, 105], 'india': [20, 78], 'pakistan': [30, 69], 'indonesia': [-5, 120],
+    'middle east': [27, 45], 'north america': [40, -95], 'south america': [-15, -60],
+    'europe': [50, 15], 'brazil': [-10, -55], 'congo': [-4, 23], 'nigeria': [9, 8],
+    'kenya': [-1, 38], 'ethiopia': [9, 40], 'myanmar': [21, 96], 'philippines': [13, 122],
+    'ukraine': [49, 32], 'united states': [38, -97], 'mexico': [23, -102],
+  };
+  const geoTag = (title, desc) => {
+    const text = (title + ' ' + desc).toLowerCase();
+    for (const [region, coords] of Object.entries(REGION_COORDS)) { if (text.includes(region)) return coords; }
+    return null;
+  };
+  const [proMed, who] = await Promise.all([
+    parseRSS('https://promedmail.org/feed/', 'ProMED'),
+    parseRSS('https://www.who.int/rss-feeds/news-releases-do.xml', 'WHO'),
+  ]);
+  const features = [];
+  for (const item of [...proMed, ...who]) {
+    const coords = geoTag(item.title, item.desc);
+    if (!coords) continue;
+    const jitter = () => (Math.random() - 0.5) * 2.5;
+    features.push({ type: 'Feature', geometry: { type: 'Point', coordinates: [coords[1] + jitter(), coords[0] + jitter()] }, properties: { layer: 'disease', title: item.title, desc: item.desc, source: item.source, link: item.link, pubDate: item.pubDate } });
+  }
+  return { type: 'FeatureCollection', features };
+}
+
+// Live map data: GPS Jamming (gpsjam.org daily CSV)
+async function fetchGpsJamming() {
+  const today = new Date().toISOString().slice(0, 10);
+  const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+  for (const date of [today, yesterday]) {
+    try {
+      const res = await fetchWithTimeout(`https://gpsjam.org/jamscore/${date}.csv`, { headers: { 'User-Agent': BROWSER_UA, Accept: 'text/csv,text/plain,*/*' } }, 15000);
+      if (!res.ok) continue;
+      const csv = await res.text();
+      const lines = csv.trim().split('\n');
+      if (lines.length < 2) continue;
+      const features = [];
+      for (const line of lines.slice(1)) {
+        const parts = line.split(',');
+        if (parts.length < 3) continue;
+        const lat = parseFloat(parts[0]), lon = parseFloat(parts[1]), score = parseFloat(parts[2]);
+        if (!Number.isFinite(lat) || !Number.isFinite(lon) || !Number.isFinite(score) || score < 0.3) continue;
+        features.push({ type: 'Feature', geometry: { type: 'Point', coordinates: [lon, lat] }, properties: { layer: 'gpsJam', score, date } });
+      }
+      if (features.length) return { type: 'FeatureCollection', features, date };
+    } catch { /* try next date */ }
+  }
+  return { type: 'FeatureCollection', features: [], fallback: true };
+}
+
+// Live map data: Active Conflicts (GDELT GKG + ACLED)
+async function fetchConflictZones() {
+  const GDELT_URL = 'https://api.gdeltproject.org/api/v2/geo/geo?query=conflict%20OR%20attack%20OR%20war%20OR%20battle&mode=pointdata&startdatetime=now-24h&lang=English&maxrecords=100&format=GeoJSON';
+  const ACLED_URL = 'https://acleddata.com/api/acled/read?key=public&email=public@acleddata.com&event_type=Battles:Violence+against+civilians:Explosions%2FRemote+violence&limit=50&fields=event_date,event_type,country,latitude,longitude,fatalities,notes&format=json';
+  const features = [];
+  try {
+    const res = await fetchWithTimeout(GDELT_URL, { headers: { 'User-Agent': BROWSER_UA, Accept: 'application/json' } }, 12000);
+    if (res.ok) {
+      const geo = await res.json();
+      for (const f of (geo.features || [])) {
+        const p = f.properties || {};
+        features.push({ type: 'Feature', geometry: f.geometry, properties: { layer: 'conflict', title: p.name || p.title || 'Conflict event', tone: p.tone, source: 'GDELT' } });
+      }
+    }
+  } catch { /* fallback to ACLED */ }
+  try {
+    const res = await fetchWithTimeout(ACLED_URL, { headers: { 'User-Agent': BROWSER_UA, Accept: 'application/json' } }, 12000);
+    if (res.ok) {
+      const j = await res.json();
+      for (const ev of (j.data || [])) {
+        const lat = parseFloat(ev.latitude), lon = parseFloat(ev.longitude);
+        if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+        features.push({ type: 'Feature', geometry: { type: 'Point', coordinates: [lon, lat] }, properties: { layer: 'conflict', title: `${ev.event_type} — ${ev.country}`, fatalities: ev.fatalities, date: ev.event_date, notes: (ev.notes || '').slice(0, 160), source: 'ACLED' } });
+      }
+    }
+  } catch { /* degrade gracefully */ }
+  return { type: 'FeatureCollection', features };
+}
+
 // ───────────────────────── KV-backed SWR cache ─────────────────────────
 
 // An empty payload is never worth serving from cache — treat it as a miss so a
@@ -1720,6 +2608,28 @@ async function handleApi(request, env, ctx, url) {
   }
 
   // --- GLOBAL MAP layers (free public feeds, normalized + cached) ---
+
+  if (p === '/api/map/layers') {
+    try { const { data, fresh } = await getData(env, ctx, 'map:layers', fetchAugmentedLayers, 86400 * 1000); return json({ cached: !fresh, ...data }); }
+    catch (err) { return json({ error: true, message: friendlyError(err) }, 502); }
+  }
+  if (p === '/api/map/ships') {
+    try { const { data, fresh } = await getData(env, ctx, 'map:ships', () => fetchRestShips(env), 60 * 1000); return json({ cached: !fresh, ...data }); }
+    catch (err) { return json({ error: true, message: friendlyError(err) }, 502); }
+  }
+  if (p === '/api/map/conflict') {
+    try { const { data, fresh } = await getData(env, ctx, 'map:conflict', fetchConflictZones, 900 * 1000); return json({ cached: !fresh, ...data }); }
+    catch (err) { return json({ error: true, message: friendlyError(err) }, 502); }
+  }
+  if (p === '/api/map/disease') {
+    try { const { data, fresh } = await getData(env, ctx, 'map:disease', fetchDiseaseOutbreaks, 900 * 1000); return json({ cached: !fresh, ...data }); }
+    catch (err) { return json({ error: true, message: friendlyError(err) }, 502); }
+  }
+  if (p === '/api/map/gpsjam') {
+    try { const { data, fresh } = await getData(env, ctx, 'map:gpsjam', fetchGpsJamming, 21600 * 1000); return json({ cached: !fresh, ...data }); }
+    catch (err) { return json({ error: true, message: friendlyError(err) }, 502); }
+  }
+
   if (p === '/api/map/earthquakes') {
     try { const { data, fresh } = await getData(env, ctx, 'map:quakes', fetchQuakes); return json({ cached: !fresh, points: data }); }
     catch (err) { return json({ error: true, message: friendlyError(err) }, 502); }

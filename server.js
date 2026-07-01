@@ -2355,10 +2355,60 @@ const MAP_LAYERS_BASELINE = {
   },
 };
 
+// ── Overpass API — real OSM pipeline/cable geodata (daily refresh) ──────────
+async function fetchOverpassLines() {
+  const OVERPASS = 'https://overpass-api.de/api/interpreter';
+  const out = { cables: [], pipelines: [] };
+
+  // Submarine cables
+  try {
+    const cableQ = `[out:json][timeout:25];\nway["telecom"="cable"]["location"="underwater"]["name"];\nout 80 geom;`;
+    const r = await fetchWithTimeout(OVERPASS, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': BROWSER_UA },
+      body: 'data=' + encodeURIComponent(cableQ),
+    }, 28000);
+    if (r.ok) {
+      const d = await r.json();
+      for (const el of (d.elements || [])) {
+        const name = el.tags?.name || el.tags?.['name:en'] || '';
+        if (!name || !Array.isArray(el.geometry) || el.geometry.length < 2) continue;
+        const pts = el.geometry;
+        const step = pts.length > 30 ? Math.ceil(pts.length / 20) : 1;
+        const coords = pts.filter((_, i) => i % step === 0 || i === pts.length - 1).map((p) => [p.lat, p.lon]);
+        out.cables.push([name, coords, `Submarine cable${el.tags?.operator ? ' · ' + el.tags.operator : ''}`]);
+      }
+    }
+  } catch { /* Overpass cable query failed */ }
+
+  // Major oil/gas pipelines
+  try {
+    const pipeQ = `[out:json][timeout:25];\nway["man_made"="pipeline"]["substance"~"^(oil|gas|natural_gas)$"]["name"];\nout 80 geom;`;
+    const r = await fetchWithTimeout(OVERPASS, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': BROWSER_UA },
+      body: 'data=' + encodeURIComponent(pipeQ),
+    }, 28000);
+    if (r.ok) {
+      const d = await r.json();
+      for (const el of (d.elements || [])) {
+        const name = el.tags?.name || el.tags?.['name:en'] || '';
+        if (!name || !Array.isArray(el.geometry) || el.geometry.length < 2) continue;
+        const pts = el.geometry;
+        const step = pts.length > 30 ? Math.ceil(pts.length / 20) : 1;
+        const coords = pts.filter((_, i) => i % step === 0 || i === pts.length - 1).map((p) => [p.lat, p.lon]);
+        const sub = el.tags?.substance || 'oil/gas';
+        out.pipelines.push([name, coords, `${sub.charAt(0).toUpperCase() + sub.slice(1)} pipeline${el.tags?.operator ? ' · ' + el.tags.operator : ''}`]);
+      }
+    }
+  } catch { /* Overpass pipeline query failed */ }
+
+  return out;
+}
+
 /**
  * Fetch live augmentations and merge into MAP_LAYERS_BASELINE.
- * Tries: IAEA PRIS (nuclear status), UNHCR displacement API,
- * Wikidata SPARQL (additional military installations).
+ * Tries: IAEA PRIS, UNHCR, Wikidata, Overpass (real OSM geodata).
  * Failures are silently swallowed — baseline is always returned.
  */
 // ── REST ship snapshot — global vessel positions (secondary to WS stream) ──
@@ -2523,6 +2573,19 @@ async function fetchAugmentedLayers() {
       }
     }
   } catch { /* Wikidata unreachable — baseline military data used */ }
+
+  // ── 4. Overpass — real OSM pipeline/cable geodata ────────────────────────
+  try {
+    const ov = await fetchOverpassLines();
+    for (const [name, coords, desc] of ov.cables) {
+      const isDupe = out.lines.cables.some(([n]) => n.toLowerCase().slice(0, 8) === name.toLowerCase().slice(0, 8));
+      if (!isDupe && coords.length >= 2) out.lines.cables.push([name, coords, desc]);
+    }
+    for (const [name, coords, desc] of ov.pipelines) {
+      const isDupe = out.lines.pipelines.some(([n]) => n.toLowerCase().slice(0, 8) === name.toLowerCase().slice(0, 8));
+      if (!isDupe && coords.length >= 2) out.lines.pipelines.push([name, coords, desc]);
+    }
+  } catch { /* Overpass step failed */ }
 
   out._updated = new Date().toISOString();
   return out;
