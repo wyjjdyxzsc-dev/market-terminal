@@ -25,7 +25,7 @@ const state = {
 };
 
 // MC fan state — generated per symbol/range, drawn via RAF
-const _mc = { symbol: null, range: null, paths: null, rafId: null };
+const _mc = { symbol: null, range: null, paths: null, rafId: null, model: 'RJD' };
 
 // ───────────────────────── tiny helpers ─────────────────────────
 const $ = (id) => document.getElementById(id);
@@ -825,17 +825,23 @@ function scheduleMcFan(points, lastX, padL, padR, padT, plotH, W, min, max, xOf,
   const sym = state.symbol + '|' + state.range;
   if (_mc.rafId) { cancelAnimationFrame(_mc.rafId); _mc.rafId = null; }
 
-  // Only recompute if symbol/range changed
-  if (_mc.symbol !== sym || !_mc.paths) {
+  // Only recompute if symbol/range/model changed
+  const modelKey = sym + '|' + _mc.model;
+  if (_mc.symbol !== modelKey || !_mc.paths) {
     try {
       const closes = new Float64Array(points.map((p) => p.c));
-      const rets = Quant.dailyReturns(closes);
-      const mu    = Quant.mean(rets);
-      const sigma = Quant.stdev(rets);
-      const S0    = closes[closes.length - 1];
-      const rawPaths = Quant.monteCarloGBM({ S0, mu, sigma, days: 20, paths: 500 });
+      const rets   = Quant.dailyReturns(closes);
+      const mu     = Quant.mean(rets);
+      const sigma  = Quant.stdev(rets);
+      const S0     = closes[closes.length - 1];
+      let rawPaths;
+      if (_mc.model === 'RJD' && Quant.roughJumpDiffusion) {
+        rawPaths = Quant.roughJumpDiffusion({ S0, mu, sigma, days: 20, paths: 500, H: 0.45, lambda: 2, muJ: -0.03, sigmaJ: 0.06 });
+      } else {
+        rawPaths = Quant.monteCarloGBM({ S0, mu, sigma, days: 20, paths: 500 });
+      }
       _mc.paths = rawPaths;
-      _mc.symbol = sym;
+      _mc.symbol = modelKey;
     } catch { return; }
   }
 
@@ -1133,6 +1139,8 @@ function setupOscButtons() {
       state.showMC = !state.showMC;
       btn.dataset.active = state.showMC ? '1' : '0';
       btn.classList.toggle('active', state.showMC);
+      const modelToggle = $('mcModelToggle');
+      if (modelToggle) modelToggle.classList.toggle('visible', state.showMC);
       if (_mc.rafId) { cancelAnimationFrame(_mc.rafId); _mc.rafId = null; }
       if (state.chart) drawChart();
       return;
@@ -1148,6 +1156,19 @@ function setupOscButtons() {
     });
     if (state.chart) drawChart();
   });
+
+  // MC model switcher (RJD / GBM)
+  const mcModel = $('mcModelToggle');
+  if (mcModel) {
+    mcModel.addEventListener('click', (e) => {
+      const btn = e.target.closest('.mc-model-btn');
+      if (!btn) return;
+      _mc.model = btn.dataset.model;
+      _mc.paths = null; // force recompute
+      [...mcModel.children].forEach(b => b.classList.toggle('active', b === btn));
+      if (state.showMC && state.chart) drawChart();
+    });
+  }
 
   // Set initial active state visually
   $('kcToggle').classList.toggle('active', state.showKC);
@@ -1336,6 +1357,7 @@ function boot() {
   setupCommandBar();
   setupRangeButtons();
   setupQuantPanel();
+  setupSentimentPanel();
 
   loadTape();
   setInterval(() => { if (!document.hidden) loadTape(); }, TAPE_REFRESH_MS);
@@ -1383,5 +1405,118 @@ function boot() {
     resizeTimer = setTimeout(() => { if (state.chart) drawChart(); if (quantActiveInd) drawQuantIndicator(); }, 150);
   });
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// X/TWITTER SENTIMENT GAUGE
+// ═══════════════════════════════════════════════════════════════════════════
+
+const SENT_COLORS = {
+  'Strongly Bullish': '#2bd97c',
+  'Bullish': '#5ac8fa',
+  'Neutral': '#ffa028',
+  'Bearish': '#ff8c42',
+  'Strongly Bearish': '#ff453a',
+};
+
+async function loadSentiment(handles) {
+  const sentSummary = $('sentSummary');
+  const sentLabel   = $('sentLabel');
+  const sentScore   = $('sentScore');
+  const sentFill    = $('sentFill');
+  const sentNeedle  = $('sentNeedle');
+  if (!sentSummary) return;
+
+  sentSummary.textContent = 'Loading X/Twitter sentiment…';
+  sentLabel.textContent = '—';
+  sentScore.textContent = '';
+
+  const qs = handles ? `?handle=${encodeURIComponent(handles)}` : '';
+  let d;
+  try { d = await getJSON(`/api/sentiment/twitter${qs}`); }
+  catch { sentSummary.textContent = 'Sentiment unavailable.'; return; }
+
+  const score = Math.max(-1, Math.min(1, d.score || 0));
+  const pct   = ((score + 1) / 2) * 100; // 0% = -1, 50% = 0, 100% = +1
+  const color = SENT_COLORS[d.label] || '#ffa028';
+
+  sentFill.style.width    = pct + '%';
+  sentFill.style.background = color;
+  sentNeedle.style.left   = pct + '%';
+  sentNeedle.style.borderTopColor = color;
+
+  sentLabel.textContent = d.label || 'Neutral';
+  sentLabel.style.color = color;
+  sentScore.textContent = score >= 0 ? `+${score.toFixed(2)}` : score.toFixed(2);
+  sentSummary.textContent = d.summary || '';
+
+  const tweetCount = $('sentTweets');
+  if (tweetCount) tweetCount.textContent = d.tweetCount ? `${d.tweetCount} tweets analysed` : '';
+}
+
+function setupSentimentPanel() {
+  const btn = $('sentRefreshBtn');
+  if (btn) btn.addEventListener('click', () => loadSentiment());
+  // Load once on boot
+  loadSentiment();
+  // Refresh every 15 min
+  setInterval(() => loadSentiment(), 15 * 60 * 1000);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MACRO SHOCK SIMULATOR
+// ═══════════════════════════════════════════════════════════════════════════
+
+async function loadMacroShock() {
+  const spotEl  = $('shockSpot');
+  const tableEl = $('shockTable');
+  if (!tableEl) return;
+
+  tableEl.innerHTML = '<div class="status">Loading pipeline shock data…</div>';
+
+  let d;
+  try { d = await getJSON('/api/macro/shock'); }
+  catch { tableEl.innerHTML = '<div class="status">Shock simulator unavailable.</div>'; return; }
+
+  if (spotEl) {
+    spotEl.innerHTML = `
+      <span class="shock-price-chip">
+        <span class="shock-commodity">WTI Crude</span>
+        <span class="shock-price">$${(d.oil_price || 0).toFixed(2)}/bbl</span>
+      </span>
+      <span class="shock-price-chip">
+        <span class="shock-commodity">Nat Gas</span>
+        <span class="shock-price">$${(d.gas_price || 0).toFixed(2)}/MMBtu</span>
+      </span>
+    `;
+  }
+
+  const rows = (d.pipelines || []).map(p => {
+    const shock = p.price_shock_pct < 0 ? p.price_shock_pct.toFixed(1) : '+' + p.price_shock_pct.toFixed(1);
+    const riskColor = p.risk_score >= 70 ? '#ff453a' : p.risk_score >= 40 ? '#ffa028' : '#5ac8fa';
+    const bar = `<div class="shock-bar-track"><div class="shock-bar-fill" style="width:${p.risk_score}%;background:${riskColor}"></div></div>`;
+    return `<tr>
+      <td class="shock-name">${p.name}</td>
+      <td class="shock-comm">${p.commodity === 'oil' ? '🛢' : '🔥'} ${p.commodity}</td>
+      <td class="shock-tp">${p.throughput}</td>
+      <td class="shock-loss">$${p.daily_loss_musd.toLocaleString()}M/day</td>
+      <td class="shock-pct" style="color:${riskColor}">${shock}%</td>
+      <td class="shock-risk">${bar}<span style="color:${riskColor}">${p.risk_score}</span></td>
+    </tr>`;
+  }).join('');
+
+  tableEl.innerHTML = `
+    <table class="shock-tbl">
+      <thead><tr>
+        <th>Pipeline</th><th>Commodity</th><th>Throughput</th>
+        <th>Daily Loss</th><th>Price Shock</th><th>Risk Score</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
+}
+
+document.addEventListener('tabshown', (e) => {
+  if (e.detail && e.detail.view === 'supply') loadMacroShock();
+});
 
 document.addEventListener('DOMContentLoaded', boot);

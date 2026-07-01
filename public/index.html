@@ -14,7 +14,7 @@
   <meta name="apple-mobile-web-app-title" content="MktTerminal" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
     integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-  <link rel="stylesheet" href="style.css?v=20260701f" />
+  <link rel="stylesheet" href="style.css?v=20260701g" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%230a0a0a'/><text x='8' y='12' font-size='11' text-anchor='middle' fill='%23ffa028' font-family='monospace'>M</text></svg>" />
 </head>
 <body>
@@ -102,6 +102,30 @@
             </div>
           </div>
 
+          <div class="panel panel-sentiment" id="sentimentPanel">
+            <div class="panel-head">
+              <span>X/TWITTER SENTIMENT</span>
+              <button class="sent-refresh-btn" id="sentRefreshBtn" type="button" title="Refresh sentiment">↺</button>
+            </div>
+            <div class="panel-body sentiment-body">
+              <div class="sent-gauge-wrap">
+                <div class="sent-track">
+                  <div class="sent-fill" id="sentFill"></div>
+                  <div class="sent-needle" id="sentNeedle"></div>
+                </div>
+                <div class="sent-scale">
+                  <span>Bearish</span><span>Neutral</span><span>Bullish</span>
+                </div>
+              </div>
+              <div class="sent-meta">
+                <span class="sent-label" id="sentLabel">—</span>
+                <span class="sent-score" id="sentScore"></span>
+              </div>
+              <div class="sent-summary" id="sentSummary">Loading X/Twitter sentiment…</div>
+              <div class="sent-tweets" id="sentTweets"></div>
+            </div>
+          </div>
+
           <div class="panel panel-chart" id="chartPanel">
             <div class="panel-head">
               <span>PRICE</span>
@@ -128,6 +152,10 @@
                 <span class="osc-divider">|</span>
                 <button class="osc-btn" id="kcToggle" data-active="1" type="button" title="Keltner Channel overlay">KC</button>
                 <button class="osc-btn" id="mcToggle" data-active="0" type="button" title="Monte Carlo forward fan (500 paths)">MC</button>
+                <div class="mc-model-toggle" id="mcModelToggle">
+                  <button class="mc-model-btn active" data-model="RJD" type="button" title="Rough Jump-Diffusion (Hurst H=0.45)">RJD</button>
+                  <button class="mc-model-btn" data-model="GBM" type="button" title="Geometric Brownian Motion">GBM</button>
+                </div>
               </div>
             </div>
           </div>
@@ -313,6 +341,14 @@
       <div id="scGraph" class="sc-graph"></div>
       <div id="scGrid" class="sc-grid"></div>
       <div id="scPeers" class="sc-peers"></div>
+
+      <!-- Macroeconomic Shock Simulator -->
+      <div class="intel-head" style="margin-top:32px">
+        <h2 class="intel-title">PIPELINE SHOCK SIMULATOR</h2>
+        <span class="intel-sub">Live oil/gas prices · Estimated daily loss &amp; market price shock if pipeline disrupted</span>
+      </div>
+      <div id="shockSpot" class="shock-spot"></div>
+      <div id="shockTable" class="shock-table"></div>
     </section>
 
     <!-- ═══════════ WATCHLIST VIEW ═══════════ -->
@@ -362,12 +398,12 @@
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
     integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-  <script src="quant.js?v=20260701f"></script>
-  <script src="app.js?v=20260701f"></script>
-  <script src="intel.js?v=20260701f"></script>
-  <script src="ships.js?v=20260701f"></script>
-  <script src="mapintel.js?v=20260701f"></script>
+  <script src="quant.js?v=20260701g"></script>
+  <script src="app.js?v=20260701g"></script>
+  <script src="intel.js?v=20260701g"></script>
+  <script src="ships.js?v=20260701g"></script>
+  <script src="mapintel.js?v=20260701g"></script>
   <script src="https://unpkg.com/globe.gl@2.34.0/dist/globe.gl.min.js"></script>
-  <script src="globe.js?v=20260701f"></script>
+  <script src="globe.js?v=20260701g"></script>
 </body>
 </html>

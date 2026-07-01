@@ -2630,6 +2630,88 @@ async function handleApi(request, env, ctx, url) {
     catch (err) { return json({ error: true, message: friendlyError(err) }, 502); }
   }
 
+  // ── X/Twitter sentiment ──────────────────────────────────────────────────
+  if (p === '/api/sentiment/twitter') {
+    const raw = (qs.get('handle') || '').replace(/[^a-zA-Z0-9_,]/g, '').slice(0, 200);
+    const handles = raw ? raw.split(',').filter(Boolean) : X_ACCOUNTS;
+    const cacheKey = `sentiment:twitter:${handles.slice(0, 5).join(',')}`;
+    try {
+      const { data, fresh } = await getData(env, ctx, cacheKey, async () => {
+        const lists = await Promise.all(handles.slice(0, 8).map((h, i) =>
+          sleep(i * 300).then(() => fetchXAccountFeed(h))
+        ));
+        const tweets = lists.flat().slice(0, 30);
+        if (!tweets.length) return { score: 0, label: 'Neutral', summary: 'No tweets retrieved.', tweetCount: 0 };
+        const block = tweets.map((t, i) => `${i + 1}. [${t.source}] ${t.title}`).join('\n');
+        const SENT_SYS = `You are a financial sentiment analyst. Given recent market tweets, return JSON: {"score": float -1.0 to 1.0, "label": "Strongly Bullish"|"Bullish"|"Neutral"|"Bearish"|"Strongly Bearish", "summary": one sentence}. Return ONLY the JSON object.`;
+        const result = await runAIJson(env, SENT_SYS,
+          `Score market sentiment:\n\n${block}`,
+          d => typeof d.score === 'number' && d.label && d.summary
+        );
+        return { ...result, tweetCount: tweets.length };
+      }, 900 * 1000);
+      return json({ cached: !fresh, ...data });
+    } catch (err) { return json({ error: true, message: friendlyError(err) }, 502); }
+  }
+
+  // ── Macroeconomic shock simulator ────────────────────────────────────────
+  if (p === '/api/macro/shock') {
+    try {
+      const { data, fresh } = await getData(env, ctx, 'macro:shock', async () => {
+        const PIPELINE_META = {
+          'Trans-Alaska Pipeline':              { commodity: 'oil', throughput_kbpd: 500   },
+          'Keystone Pipeline':                  { commodity: 'oil', throughput_kbpd: 622   },
+          'Enbridge Line 5':                    { commodity: 'oil', throughput_kbpd: 540   },
+          'Colonial Pipeline':                  { commodity: 'oil', throughput_kbpd: 2500  },
+          'Dakota Access Pipeline':             { commodity: 'oil', throughput_kbpd: 570   },
+          'BTC Pipeline':                       { commodity: 'oil', throughput_kbpd: 1200  },
+          'East Siberia–Pacific Ocean pipeline':{ commodity: 'oil', throughput_kbpd: 1600  },
+          'Druzhba Pipeline':                   { commodity: 'oil', throughput_kbpd: 1200  },
+          'Kirkuk–Ceyhan Pipeline':             { commodity: 'oil', throughput_kbpd: 600   },
+          'Kazakhstan–China Pipeline':          { commodity: 'oil', throughput_kbpd: 400   },
+          'SUMED Pipeline':                     { commodity: 'oil', throughput_kbpd: 2500  },
+          'Nord Stream 1':                      { commodity: 'gas', throughput_mmcfd: 6000  },
+          'Nord Stream 2':                      { commodity: 'gas', throughput_mmcfd: 6000  },
+          'TurkStream':                         { commodity: 'gas', throughput_mmcfd: 3200  },
+          'Southern Gas Corridor':              { commodity: 'gas', throughput_mmcfd: 900   },
+          'Trans-Saharan Gas Pipeline':         { commodity: 'gas', throughput_mmcfd: 1060  },
+          'Medgaz Pipeline':                    { commodity: 'gas', throughput_mmcfd: 400   },
+        };
+        let oilPrice = 75, gasPrice = 3;
+        try {
+          const [oilQ, gasQ] = await Promise.all([
+            getQuoteCached(env, 'CL=F'), getQuoteCached(env, 'NG=F'),
+          ]);
+          if (oilQ?.c > 0) oilPrice = oilQ.c;
+          if (gasQ?.c > 0) gasPrice = gasQ.c;
+        } catch { /* use defaults */ }
+        const shocks = Object.entries(PIPELINE_META).map(([name, meta]) => {
+          let daily_loss_musd, disrupted_fraction;
+          if (meta.commodity === 'oil') {
+            daily_loss_musd    = (meta.throughput_kbpd * 1000 * oilPrice) / 1e6;
+            disrupted_fraction = meta.throughput_kbpd / 100_000;
+          } else {
+            daily_loss_musd    = (meta.throughput_mmcfd * gasPrice * 1.036) / 1000;
+            disrupted_fraction = meta.throughput_mmcfd / 100_000;
+          }
+          const price_shock_pct = -(1 / 0.1) * disrupted_fraction * 100;
+          return {
+            name, commodity: meta.commodity,
+            throughput: meta.commodity === 'oil' ? `${meta.throughput_kbpd.toLocaleString()} kbpd` : `${meta.throughput_mmcfd.toLocaleString()} MMcfd`,
+            spot_price: meta.commodity === 'oil' ? oilPrice : gasPrice,
+            spot_unit:  meta.commodity === 'oil' ? 'USD/bbl' : 'USD/MMBtu',
+            daily_loss_musd: +daily_loss_musd.toFixed(1),
+            price_shock_pct: +price_shock_pct.toFixed(2),
+            risk_score: Math.min(100, Math.round(Math.abs(price_shock_pct) * 2 + daily_loss_musd / 10)),
+          };
+        });
+        shocks.sort((a, b) => b.risk_score - a.risk_score);
+        return { pipelines: shocks, oil_price: oilPrice, gas_price: gasPrice, updated: Date.now() };
+      }, 300 * 1000);
+      return json({ cached: !fresh, ...data });
+    } catch (err) { return json({ error: true, message: friendlyError(err) }, 502); }
+  }
+
   if (p === '/api/map/earthquakes') {
     try { const { data, fresh } = await getData(env, ctx, 'map:quakes', fetchQuakes); return json({ cached: !fresh, points: data }); }
     catch (err) { return json({ error: true, message: friendlyError(err) }, 502); }
