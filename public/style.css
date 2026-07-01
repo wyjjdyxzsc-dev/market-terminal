@@ -1308,8 +1308,16 @@ a { color: inherit; }
   font-family: var(--mono); font-size: 11px; letter-spacing: .5px; padding: 6px 14px; border-radius: 7px; cursor: pointer; transition: all .15s; }
 .maplayer-btn.active { background: rgba(6,182,212,.12); color: #06b6d4; border-color: #06b6d4; }
 
+/* Live data map (Leaflet base) */
+.ship-map { height: 540px; border: 1px solid var(--border-bright); border-radius: 10px; overflow: hidden; background: #0a0a0a; }
+.leaflet-container { background: #0a0a0a; font-family: var(--mono); }
+.ship-popup .leaflet-popup-content-wrapper { background: var(--panel); color: var(--text); border: 1px solid var(--border-bright); border-radius: 8px; }
+.ship-popup .leaflet-popup-tip { background: var(--panel); }
+.ship-pop { font-size: 12px; line-height: 1.5; }
+
 @media (max-width: 720px) {
   .themes-wrap, .report-foot { grid-template-columns: 1fr; }
+  .ship-map { height: 420px; }
 }
 
 /* ═══════════ GLOBAL MAP — layer panel ═══════════ */

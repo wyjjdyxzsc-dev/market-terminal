@@ -105,4 +105,23 @@
     hide() { /* keep state; the container is hidden by the toggle */ },
   };
 
+  // 2D / 3D toggle wiring
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('.mapmode-btn');
+    if (!btn) return;
+    const mode = btn.dataset.mode;
+    document.querySelectorAll('.mapmode-btn').forEach((b) => b.classList.toggle('active', b === btn));
+    const liveEl = document.getElementById('liveMap');
+    const globeEl = document.getElementById('globeMap');
+    if (mode === '3d') {
+      if (liveEl) liveEl.hidden = true;
+      if (globeEl) globeEl.hidden = false;
+      window.GlobeView.show();
+    } else {
+      if (globeEl) globeEl.hidden = true;
+      if (liveEl) liveEl.hidden = false;
+      if (window.LiveMap) window.LiveMap.open();
+    }
+  });
+
 })();

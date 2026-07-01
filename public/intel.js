@@ -1492,18 +1492,21 @@
     document.querySelectorAll('.gi-panel').forEach((pnl) => pnl.classList.toggle('active', pnl.id === 'gi-' + sub));
     if (sub === 'situation' && !situationLoaded) loadSituation();
     if (sub === 'report' && !reportLoaded) loadReport();
-    if (sub === 'map' && window.WorldMap) window.WorldMap.init();
+    if (sub === 'map') { if (window.LiveMap) window.LiveMap.open(); }
   }
   document.querySelectorAll('.gi-subtab').forEach((b) => b.addEventListener('click', () => showGiSub(b.dataset.sub)));
 
-  // ── Infrastructure layer toggle ───────────────────────────────────────
-  let activeMapLayer = 'infra';
+  // ── Live data / Infrastructure layer toggle ───────────────────────────
+  let activeMapLayer = 'livedata';
   function showMapLayer(layer) {
     activeMapLayer = layer;
     document.querySelectorAll('.maplayer-btn').forEach(b => b.classList.toggle('active', b.dataset.layer === layer));
+    const liveEl  = document.getElementById('mapLayerLivedata');
     const infraEl = document.getElementById('mapLayerInfra');
+    if (liveEl)  liveEl.hidden  = layer !== 'livedata';
     if (infraEl) infraEl.hidden = layer !== 'infra';
-    if (layer === 'infra' && window.WorldMap) window.WorldMap.init();
+    if (layer === 'livedata' && window.LiveMap) window.LiveMap.open();
+    if (layer === 'infra'    && window.WorldMap) window.WorldMap.init();
   }
   document.querySelectorAll('.maplayer-btn').forEach(b => b.addEventListener('click', () => showMapLayer(b.dataset.layer)));
 

@@ -606,14 +606,14 @@
   // Expose curated + line data so the 3D globe can plot the same layers.
   window.MapData = { DATA, LINES };
 
-  // ── init when the infra map is ready ──
-  document.addEventListener('inframap:ready', (e) => {
+  // ── init when the Leaflet base map is ready ──
+  document.addEventListener('mapready', (e) => {
     map = e.detail.map;
     if (!map || panel) return;
     buildPanel();
     // Sensible defaults on first open.
     setTimeout(() => {
-      document.querySelectorAll('.map-layer-panel input[data-layer="earthquakes"], .map-layer-panel input[data-layer="daynight"], .map-layer-panel input[data-layer="flights"]').forEach((cb) => { cb.checked = true; setLayer(cb.dataset.layer, true); });
+      document.querySelectorAll('.map-layer-panel input[data-layer="earthquakes"], .map-layer-panel input[data-layer="daynight"], .map-layer-panel input[data-layer="flights"], .map-layer-panel input[data-layer="ships"]').forEach((cb) => { cb.checked = true; setLayer(cb.dataset.layer, true); });
     }, 300);
   });
 })();
