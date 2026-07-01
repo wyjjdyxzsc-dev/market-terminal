@@ -3630,8 +3630,17 @@ async function fetchPriceAction(env, symbol) {
   const pctChange  = quote && quote.dp != null ? quote.dp : 0;
   const direction  = Math.abs(pctChange) < 0.01 ? 'flat' : (pctChange >= 0 ? 'rising' : 'falling');
 
-  const prompt = [
-    `You are a sell-side equity analyst. Explain concisely in 2-3 sentences why ${symbol} is ${direction} today.`,
+  const system = `You are a sell-side equity analyst. Explain concisely in 2-3 sentences why a stock is moving the way it is today.
+Return ONE JSON object of the form:
+{
+  "explanation": 2-3 sentence explanation of the price move,
+  "catalysts": array of short strings naming specific catalysts (empty array if none identified),
+  "sentiment": "bullish" | "bearish" | "neutral"
+}
+Return ONLY the JSON object. No markdown, no commentary.`;
+
+  const userPrompt = [
+    `Explain why ${symbol} is ${direction} today.`,
     `Price: $${quote?.c?.toFixed(2) ?? 'N/A'} (${pctChange >= 0 ? '+' : ''}${pctChange.toFixed(2)}%, ${priceChange >= 0 ? '+' : ''}${priceChange.toFixed(2)}).`,
     relevant.length > 0
       ? `Recent headlines:\n` + relevant.map(n => `- ${n.title}`).join('\n')
@@ -3640,10 +3649,8 @@ async function fetchPriceAction(env, symbol) {
   ].join('\n');
 
   try {
-    const explanation = await runAIJson(env, prompt, {
-      task_type: 'nlp',
-      schema: { type: 'object', properties: { explanation: { type: 'string' }, catalysts: { type: 'array', items: { type: 'string' } }, sentiment: { type: 'string', enum: ['bullish','bearish','neutral'] } }, required: ['explanation','catalysts','sentiment'] },
-    });
+    const explanation = await runAIJson(env, system, userPrompt,
+      (d) => d && typeof d.explanation === 'string' && Array.isArray(d.catalysts) && ['bullish', 'bearish', 'neutral'].includes(d.sentiment));
     return { symbol, quote, direction, change: pctChange, explanation: explanation.explanation, catalysts: explanation.catalysts || [], sentiment: explanation.sentiment || 'neutral', headlines: relevant };
   } catch (_) {
     return { symbol, quote, direction, change: pctChange, explanation: `${symbol} is ${direction === 'flat' ? 'roughly flat' : direction} ${Math.abs(pctChange).toFixed(2)}% today. No AI analysis available.`, catalysts: [], sentiment: Math.abs(pctChange) < 0.01 ? 'neutral' : (pctChange >= 0 ? 'bullish' : 'bearish'), headlines: relevant };
