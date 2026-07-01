@@ -23,7 +23,7 @@
 html, body {
   margin: 0;
   padding: 0;
-  height: 100%;
+  min-height: 100%;
 }
 
 body {
@@ -410,6 +410,22 @@ a { color: inherit; }
   color: #1a1205;
 }
 
+/* Chart type toggle (Line / Candle) */
+.chart-type-toggle { display: flex; gap: 4px; margin-right: auto; margin-left: 14px; }
+.ctype-btn {
+  background: transparent;
+  border: 1px solid var(--border-bright);
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  padding: 3px 9px;
+  cursor: pointer;
+}
+.ctype-btn:hover { color: var(--text); border-color: #333a44; }
+.ctype-btn.active { background: #1b2129; border-color: #333a44; color: var(--text); }
+
 /* Company */
 .company { display: flex; gap: 12px; align-items: flex-start; }
 .company-logo {
@@ -432,6 +448,160 @@ a { color: inherit; }
 .company-row .stat-val { text-align: right; }
 .link { color: var(--cyan); text-decoration: none; }
 .link:hover { text-decoration: underline; }
+
+/* Quant Lab (Terminal) */
+.quant-tech-toggle { display: flex; gap: 4px; }
+.qind-btn {
+  background: transparent;
+  border: 1px solid var(--border-bright);
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 1px;
+  padding: 3px 8px;
+  cursor: pointer;
+  text-transform: uppercase;
+}
+.qind-btn:hover { color: var(--text); border-color: #333a44; }
+.qind-btn.active { background: #1b2129; border-color: #333a44; color: var(--amber); }
+.quant-msg { color: var(--muted); font-size: 12px; padding: 4px 0; }
+.quant-risk-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1px;
+  background: var(--border);
+  border: 1px solid var(--border);
+  margin-bottom: 8px;
+}
+#quantIndCanvas { display: block; width: 100%; height: 90px; }
+
+/* Quant Lab (Deep Dive) */
+.quant-lab {
+  margin-top: 18px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+}
+.quant-lab-head {
+  background: var(--panel-2);
+  border-bottom: 1px solid var(--border);
+  color: var(--amber);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  padding: 6px 11px;
+  text-transform: uppercase;
+}
+.quant-lab-body { padding: 14px; display: flex; flex-direction: column; gap: 16px; }
+.ql-section-title { color: var(--cyan); font-size: 11px; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 8px; }
+.ql-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
+.ql-field { display: flex; flex-direction: column; gap: 3px; }
+.ql-field label { color: var(--muted); font-size: 10px; letter-spacing: 1px; text-transform: uppercase; }
+.ql-field input, .ql-field select {
+  background: var(--bg);
+  border: 1px solid var(--border-bright);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 12px;
+  padding: 5px 7px;
+  width: 90px;
+}
+.ql-btn {
+  background: #1b2129;
+  border: 1px solid #333a44;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  padding: 6px 14px;
+  cursor: pointer;
+  align-self: flex-end;
+}
+.ql-btn:hover { border-color: var(--amber); color: var(--amber); }
+.ql-btn.active, .ql-toggle-btn.active { background: #1b2129; border-color: var(--amber); color: var(--amber); }
+.ql-toggle-btn {
+  background: transparent;
+  border: 1px solid var(--border-bright);
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 5px 12px;
+  cursor: pointer;
+  text-transform: uppercase;
+}
+#mcCanvas { display: block; width: 100%; height: 220px; margin-top: 10px; }
+.ql-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1px;
+  background: var(--border);
+  border: 1px solid var(--border);
+  margin-top: 10px;
+}
+.ql-greeks-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 1px;
+  background: var(--border);
+  border: 1px solid var(--border);
+  margin-top: 10px;
+}
+.ql-price-out { font-size: 22px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
+.ql-ai-note {
+  margin-top: 10px;
+  padding: 10px 12px;
+  background: var(--panel-2);
+  border: 1px solid var(--border-bright);
+  border-left: 2px solid var(--amber);
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.55;
+}
+/* Quant Lab — model sub-param rows */
+.ql-sub-row { margin-top: -4px; padding: 8px 10px; background: var(--panel-2); border: 1px solid var(--border); border-radius: 4px; margin-bottom: 10px; }
+
+/* Quant Lab — 40-indicator grid */
+.ql-ind-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+}
+.ql-ind-group {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.ql-ind-group-label {
+  padding: 5px 10px;
+  font-size: 9px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--cyan);
+  background: rgba(69,200,220,0.07);
+  border-bottom: 1px solid var(--border);
+}
+.ql-ind-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 4px 10px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  font-size: 11px;
+}
+.ql-ind-row:last-child { border-bottom: none; }
+.ql-ind-name { color: var(--muted); flex: 0 0 110px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ql-ind-val  { color: var(--text); font-variant-numeric: tabular-nums; flex: 0 0 80px; text-align: right; }
+.ql-ind-note { color: var(--muted); font-size: 10px; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Volume profile canvas */
+#qlVolProfile { display: block; width: 100%; border-radius: 4px; margin-top: 6px; }
+
+@media (max-width: 720px) {
+  .ql-stat-grid { grid-template-columns: repeat(2, 1fr); }
+  .ql-greeks-grid { grid-template-columns: repeat(2, 1fr); }
+  .ql-ind-grid { grid-template-columns: 1fr; }
+}
 
 /* News */
 .panel-news { flex: 1 1 auto; min-height: 260px; }
@@ -489,17 +659,33 @@ a { color: inherit; }
 
 /* ───────────────────────── Responsive ───────────────────────── */
 @media (max-width: 860px) {
-  .grid { grid-template-columns: 1fr; }
+  /* Stacked single column: CSS Grid's default align-items:stretch otherwise
+     forces both columns to match the taller one's height, and flex:1 1 auto
+     panels (chart/news) then balloon to absorb that forced height as blank
+     space below their real content — the cause of huge empty mobile gaps. */
+  .grid { grid-template-columns: 1fr; align-items: start; }
+  .panel-chart { flex: 0 0 auto; min-height: 0; }
+  .chart-body { min-height: 240px; }
+  .panel-news { flex: 0 0 auto; min-height: 0; }
+  .news-body { max-height: 360px; }
   .stat-grid { grid-template-columns: repeat(2, 1fr); }
   .quote-symbol { font-size: 24px; }
   .quote-price { font-size: 28px; }
   .status-disclaimer { display: none; }
   .topbar { flex-wrap: wrap; gap: 6px; }
+  .panel-head { flex-wrap: wrap; gap: 8px; }
+  .range-buttons, .chart-type-toggle { flex-wrap: wrap; margin-left: 0; }
+  .quant-risk-grid { grid-template-columns: repeat(2, 1fr); }
+  .quant-tech-toggle { flex-wrap: wrap; }
 }
 
 @media (max-width: 480px) {
   .commandbar { flex-wrap: wrap; }
   .go-btn { flex: 1; }
+  .quote-price-block { text-align: left; }
+  #quoteBody { flex-direction: column; align-items: flex-start; gap: 8px; }
+  .stat-grid { grid-template-columns: 1fr 1fr; }
+  .company-row { flex-wrap: wrap; }
 }
 
 /* ════════════════════════ Tab bar + views ════════════════════════ */
@@ -529,9 +715,14 @@ a { color: inherit; }
 .ttab:hover { color: var(--text); }
 .ttab.active { color: var(--amber); border-bottom-color: var(--amber); }
 
-.views { flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0; }
+/* flex:0 1 auto (not 1 1 auto) — .views must size to its actual content, not
+   force-fill the remaining body height. Forcing it taller than content (the
+   old behaviour) left a big empty void between short view content and the
+   footer below. The footer's margin-top:auto on .statusbar still pins it to
+   the bottom of the screen on short pages, without creating that gap. */
+.views { flex: 0 0 auto; display: flex; flex-direction: column; min-height: 0; }
 .view { display: none; }
-.view.active { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+.view.active { display: flex; flex-direction: column; flex: 1 0 auto; min-height: 0; }
 .view.intel.active { display: block; overflow-y: auto; padding: 18px 16px 48px; }
 .view.intel > * { max-width: 860px; margin-left: auto; margin-right: auto; }
 
@@ -1088,6 +1279,7 @@ a { color: inherit; }
 .mlp-spin.on { border: 2px solid var(--border-bright); border-top-color: var(--amber); animation: spin .7s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .plane-icon { color: #cfe8ff; font-size: 14px; line-height: 16px; text-align: center; text-shadow: 0 0 3px #000; }
+.plane-icon div { transition: transform 0.05s linear; will-change: transform; }
 .leaflet-popup-content { margin: 10px 12px; font-family: var(--mono); font-size: 12px; line-height: 1.5; }
 .leaflet-popup-content b { color: var(--amber); }
 @media (max-width: 720px) { .map-layer-panel { width: 168px; max-height: 320px; } }

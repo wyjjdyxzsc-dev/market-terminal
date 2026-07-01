@@ -105,6 +105,12 @@
   }
 
   function renderNews() {
+    // Sort newest first by timestamp before rendering.
+    newsItems.sort((a, b) => {
+      const ta = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+      const tb = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+      return tb - ta;
+    });
     const breaking = newsItems.filter((n) => n.priority === 'high');
     const breakingSec = $('#breaking');
     if (breaking.length) {
@@ -632,12 +638,14 @@
   }
 
   function supplyGraphSVG(d) {
-    const W = 1060, H = 720;
+    const W = 1060;
     const NW = 170, NH = 46, FW = 200, FH = 84, PW = 150, PH = 34;
-    const cx = W / 2, cy = (H - 110) / 2 + 12;
-    const suppliers = (d.suppliers || []).slice(0, 8);
-    const customers = (d.customers || []).slice(0, 8);
+    const suppliers = d.suppliers || [];
+    const customers = d.customers || [];
     const peers = (d.peers || []).slice(0, 6);
+    const maxCol = Math.max(suppliers.length, customers.length, 1);
+    const H = Math.max(720, maxCol * (NH + 14) + 200);
+    const cx = W / 2, cy = (H - 110) / 2 + 12;
 
     const topPad = 30, bandBot = H - 150;
     const colY = (i, n) => (n <= 1 ? cy - NH / 2 : topPad + (bandBot - topPad - NH) * (i / (n - 1)));
@@ -818,6 +826,93 @@
 
         <button class="dd-open" data-ticker="${esc(d.ticker)}">Open ${esc(d.ticker)} in Terminal →</button>
         <p class="dd-disclaimer">AI-generated analysis from live data — educational only, not investment advice.</p>
+      </div>
+
+      <div class="quant-lab" id="quantLab">
+        <div class="quant-lab-head">QUANT LAB — ${esc(d.ticker)}</div>
+        <div class="quant-lab-body">
+
+          <!-- ── Monte Carlo simulator ── -->
+          <div>
+            <div class="ql-section-title">Monte Carlo Simulator</div>
+            <div class="ql-row">
+              <div class="ql-field">
+                <label>Model</label>
+                <select id="qlMcModel">
+                  <option value="gbm">GBM (Classic)</option>
+                  <option value="rjd" selected>Rough Jump-Diffusion</option>
+                  <option value="heston">Heston Stoch-Vol</option>
+                </select>
+              </div>
+              <div class="ql-field"><label>Horizon (days)</label><input id="qlMcDays" type="number" value="63" min="1" max="2520" /></div>
+              <div class="ql-field"><label>Target price</label><input id="qlMcTarget" type="number" step="0.01" placeholder="—" /></div>
+              <div class="ql-field"><label>Paths</label><input id="qlMcPaths" type="number" value="2000" min="200" max="10000" step="100" /></div>
+              <button class="ql-btn" id="qlMcRun" type="button">Run</button>
+            </div>
+            <div id="qlRjdParams" class="ql-row ql-sub-row">
+              <div class="ql-field"><label>Hurst (H)</label><input id="qlHurst" type="number" step="0.01" value="0.35" min="0.01" max="0.49" /></div>
+              <div class="ql-field"><label>Jump λ/yr</label><input id="qlLambda" type="number" step="0.5" value="2" min="0" max="50" /></div>
+              <div class="ql-field"><label>Jump μ</label><input id="qlJumpMu" type="number" step="0.01" value="-0.05" /></div>
+              <div class="ql-field"><label>Jump σ</label><input id="qlJumpSig" type="number" step="0.01" value="0.08" min="0.001" /></div>
+            </div>
+            <div id="qlHestonParams" class="ql-row ql-sub-row" style="display:none">
+              <div class="ql-field"><label>v₀</label><input id="qlHv0" type="number" step="0.005" value="0.04" min="0.001" /></div>
+              <div class="ql-field"><label>κ (reversion)</label><input id="qlHkappa" type="number" step="0.1" value="2.0" min="0.1" /></div>
+              <div class="ql-field"><label>θ (long-var)</label><input id="qlHtheta" type="number" step="0.005" value="0.04" min="0.001" /></div>
+              <div class="ql-field"><label>ξ (vol-of-vol)</label><input id="qlHxi" type="number" step="0.05" value="0.5" min="0.01" /></div>
+              <div class="ql-field"><label>ρ (corr)</label><input id="qlHrho" type="number" step="0.05" value="-0.7" min="-0.99" max="0.99" /></div>
+            </div>
+            <div id="qlMcStatus" class="status">Loading 1Y price history…</div>
+            <canvas id="mcCanvas" hidden></canvas>
+            <div class="ql-stat-grid" id="qlMcStats" hidden>
+              <div class="stat"><span class="stat-label">EXP. PRICE (MEDIAN)</span><span class="stat-val" id="qlMedian">—</span></div>
+              <div class="stat"><span class="stat-label">VaR 95%</span><span class="stat-val" id="qlVar95">—</span></div>
+              <div class="stat"><span class="stat-label">CVaR 95%</span><span class="stat-val" id="qlCvar95">—</span></div>
+              <div class="stat"><span class="stat-label">PROB ≥ TARGET</span><span class="stat-val" id="qlProbAbove">—</span></div>
+              <div class="stat"><span class="stat-label">MODEL</span><span class="stat-val" id="qlModelLabel">—</span></div>
+            </div>
+            <div class="ql-ai-note" id="qlMcNote" hidden></div>
+          </div>
+
+          <!-- ── Options pricer + Greeks ── -->
+          <div>
+            <div class="ql-section-title">Options Pricer &amp; Greeks</div>
+            <div class="ql-row">
+              <div class="ql-field"><label>Strike</label><input id="qlBsStrike" type="number" step="0.01" placeholder="—" /></div>
+              <div class="ql-field"><label>Expiry (days)</label><input id="qlBsExpiry" type="number" value="30" min="1" max="2520" /></div>
+              <div class="ql-field"><label>IV (%)</label><input id="qlBsIv" type="number" step="0.1" placeholder="—" /></div>
+              <div class="ql-field"><label>Risk-free (%)</label><input id="qlBsR" type="number" step="0.1" value="4.5" /></div>
+              <button class="ql-toggle-btn active" id="qlBsCall" type="button" data-type="call">Call</button>
+              <button class="ql-toggle-btn" id="qlBsPut" type="button" data-type="put">Put</button>
+              <button class="ql-btn" id="qlBsRun" type="button">Price</button>
+            </div>
+            <div class="ql-price-out" id="qlBsPrice">—</div>
+            <div class="ql-section-title" style="font-size:10px;margin:6px 0 4px">BLACK-SCHOLES GREEKS</div>
+            <div class="ql-greeks-grid" id="qlBsGreeks">
+              <div class="stat"><span class="stat-label">DELTA</span><span class="stat-val" id="qlDelta">—</span></div>
+              <div class="stat"><span class="stat-label">GAMMA</span><span class="stat-val" id="qlGamma">—</span></div>
+              <div class="stat"><span class="stat-label">THETA/DAY</span><span class="stat-val" id="qlTheta">—</span></div>
+              <div class="stat"><span class="stat-label">VEGA</span><span class="stat-val" id="qlVega">—</span></div>
+              <div class="stat"><span class="stat-label">RHO</span><span class="stat-val" id="qlRho">—</span></div>
+            </div>
+            <div class="ql-section-title" style="font-size:10px;margin:10px 0 4px">MALLIAVIN PATH-GREEKS <span style="font-weight:400;opacity:0.6">(from last MC run)</span></div>
+            <div class="ql-greeks-grid" id="qlMalliavinGreeks">
+              <div class="stat"><span class="stat-label">Δ (Malliavin)</span><span class="stat-val" id="qlMDelta">—</span></div>
+              <div class="stat"><span class="stat-label">Γ (Malliavin)</span><span class="stat-val" id="qlMGamma">—</span></div>
+              <div class="stat"><span class="stat-label">ν (Malliavin)</span><span class="stat-val" id="qlMVega">—</span></div>
+            </div>
+          </div>
+
+          <!-- ── Technical indicator suite ── -->
+          <div>
+            <div class="ql-section-title">40-Indicator Technical Suite</div>
+            <div id="qlMcStatus2" class="status" style="font-size:11px"></div>
+            <div class="ql-ind-grid" id="qlIndGrid"></div>
+            <div class="ql-section-title" style="margin-top:14px">Volume Profile (50 bins)</div>
+            <canvas id="qlVolProfile" height="80" hidden></canvas>
+          </div>
+
+        </div>
       </div>`;
     const wrap = $('#ddResult');
     wrap.innerHTML = html;
@@ -825,6 +920,391 @@
       el.style.cursor = 'pointer';
       el.addEventListener('click', () => drillTo(el.dataset.ticker));
     });
+    setupQuantLab(d.ticker, d.quote && d.quote.price);
+  }
+
+  // Plain-English read of a Monte Carlo run — computed instantly from the
+  // simulation's own output (no extra AI call, so re-running with different
+  // horizon/target/paths updates the note immediately with no added latency).
+  function buildMcNote({ ticker, S0, days, paths, target, medianPrice, p5, p95, probAbove, varAtH, cvarAtH }) {
+    const pctChg = (medianPrice / S0 - 1) * 100;
+    const dir = pctChg >= 0 ? 'up' : 'down';
+    const oddsWord = probAbove >= 0.65 ? 'favors' : probAbove <= 0.35 ? 'leans against' : 'is roughly a coin flip on';
+    return `Across ${paths.toLocaleString()} simulated paths over ${days} trading days, ${ticker}'s median outcome is `
+      + `$${medianPrice.toFixed(2)} (${dir} ${Math.abs(pctChg).toFixed(1)}% from $${S0.toFixed(2)}), with a 90% range of `
+      + `$${p5.toFixed(2)}–$${p95.toFixed(2)}. The model ${oddsWord} finishing above your $${target.toFixed(2)} target `
+      + `(${(probAbove * 100).toFixed(0)}% of paths). At 95% confidence, downside risk over this horizon is a `
+      + `${(varAtH * 100).toFixed(1)}% loss (VaR), averaging ${(cvarAtH * 100).toFixed(1)}% in the worst-case tail (CVaR). `
+      + `This is a statistical projection from historical volatility and drift, not a forecast — actual prices can and do break outside these bands.`;
+  }
+
+  // ---------- Quant Lab: Monte Carlo (GBM/RJD/Heston) + B-S + Malliavin + 40 indicators ----------
+  async function setupQuantLab(ticker, lastPrice) {
+    const status = $('#qlMcStatus');
+    let points = null, closes = null, highs = null, lows = null, volumes = null;
+    let S0 = lastPrice || null, mu = 0.08, sigma = 0.25;
+    let lastMcResult = null; // store for Malliavin re-use
+
+    try {
+      const data = await fetchJSON(`/api/chart?symbol=${encodeURIComponent(ticker)}&range=1Y`);
+      if (data.points && data.points.length > 20) {
+        points  = data.points;
+        closes  = points.map((p) => p.c);
+        highs   = points.map((p) => p.h || p.c * 1.005);
+        lows    = points.map((p) => p.l || p.c * 0.995);
+        volumes = points.map((p) => p.v || 0);
+        if (!S0) S0 = closes[closes.length - 1];
+        const rets = Quant.dailyReturns(closes);
+        mu    = Quant.annualizedReturn(rets);
+        sigma = Quant.annualizedVol(rets);
+        status.textContent = '';
+        renderIndicatorSuite(closes, highs, lows, volumes, ticker);
+      } else {
+        status.textContent = 'Not enough history — using rough defaults.';
+      }
+    } catch {
+      status.textContent = 'Could not load price history — using rough defaults.';
+    }
+    if (!S0) S0 = 100;
+    if (!isFinite(mu)) mu = 0.08;
+    if (!isFinite(sigma) || sigma <= 0) sigma = 0.25;
+
+    $('#qlMcTarget').value = S0.toFixed(2);
+    $('#qlBsStrike').value = S0.toFixed(2);
+    $('#qlBsIv').value    = (sigma * 100).toFixed(1);
+
+    // ── Model selector: show/hide sub-param rows ──
+    function syncParamRows() {
+      const model = $('#qlMcModel').value;
+      $('#qlRjdParams').style.display  = model === 'rjd'    ? '' : 'none';
+      $('#qlHestonParams').style.display = model === 'heston' ? '' : 'none';
+    }
+    syncParamRows();
+    $('#qlMcModel').addEventListener('change', syncParamRows);
+
+    // ── Monte Carlo runner ──
+    function runMonteCarlo() {
+      const model  = $('#qlMcModel').value;
+      const days   = Math.max(1, Math.min(2520, Number($('#qlMcDays').value) || 63));
+      const paths  = Math.max(200, Math.min(10000, Number($('#qlMcPaths').value) || 2000));
+      const target = Number($('#qlMcTarget').value) || S0;
+
+      let mc;
+      if (model === 'heston') {
+        const v0    = Math.max(0.001, Number($('#qlHv0').value)    || 0.04);
+        const kappa = Math.max(0.1,   Number($('#qlHkappa').value) || 2.0);
+        const theta = Math.max(0.001, Number($('#qlHtheta').value) || 0.04);
+        const xi    = Math.max(0.01,  Number($('#qlHxi').value)    || 0.5);
+        const rho   = Math.max(-0.99, Math.min(0.99, Number($('#qlHrho').value) || -0.7));
+        mc = Quant.hestonMC({ S0, mu, v0, kappa, theta, xi, rho, days, paths });
+        $('#qlModelLabel').textContent = 'Heston';
+      } else if (model === 'rjd') {
+        const H       = Math.max(0.01, Math.min(0.49, Number($('#qlHurst').value)    || 0.35));
+        const lambda  = Math.max(0,    Number($('#qlLambda').value)  || 2);
+        const muJ     = Number($('#qlJumpMu').value)  || -0.05;
+        const sigmaJ  = Math.max(0.001, Number($('#qlJumpSig').value) || 0.08);
+        mc = Quant.roughJumpDiffusion({ S0, mu, sigma, days, paths, H, lambda, muJ, sigmaJ });
+        $('#qlModelLabel').textContent = `RJD  H=${H}`;
+      } else {
+        mc = Quant.monteCarloGBM({ S0, mu, sigma, days, paths });
+        $('#qlModelLabel').textContent = 'GBM';
+      }
+      lastMcResult = { mc, sigma, days };
+      drawMcFanChart(mc, S0);
+
+      const { var: varAtH, cvar: cvarAtH } = Quant.valueAtRisk(mc.terminalReturns, 0.95);
+      const probAbove  = Quant.probAbove(mc.terminal, target);
+      const medianPrice = Quant.percentile([...mc.terminal].sort((a, b) => a - b), 0.5);
+
+      $('#qlMedian').textContent   = '$' + medianPrice.toFixed(2);
+      $('#qlVar95').textContent    = (varAtH * 100).toFixed(1) + '%';
+      $('#qlCvar95').textContent   = (cvarAtH * 100).toFixed(1) + '%';
+      $('#qlProbAbove').textContent = (probAbove * 100).toFixed(1) + '%';
+      $('#qlMcStats').hidden = false;
+
+      const lastBand = mc.bands[mc.bands.length - 1];
+      const noteEl   = $('#qlMcNote');
+      noteEl.textContent = buildMcNote({
+        ticker, S0, days, paths, target, medianPrice,
+        p5: lastBand[0.05] ?? lastBand[0.05], p95: lastBand[0.95],
+        probAbove, varAtH, cvarAtH,
+      });
+      noteEl.hidden = false;
+
+      // Auto-refresh Malliavin Greeks with new MC result
+      const K  = Number($('#qlBsStrike').value) || S0;
+      const T  = Math.max(1, Number($('#qlBsExpiry').value) || 30) / 365;
+      const bsT = (typeof bsType !== 'undefined') ? bsType : 'call';
+      updateMalliavin(mc, sigma, T, K, bsT);
+    }
+
+    $('#qlMcRun').addEventListener('click', runMonteCarlo);
+    runMonteCarlo();
+
+    // ── Black-Scholes + Malliavin Greeks ──
+    let bsType = 'call';
+    $('#qlBsCall').addEventListener('click', () => { bsType = 'call'; $('#qlBsCall').classList.add('active'); $('#qlBsPut').classList.remove('active'); });
+    $('#qlBsPut').addEventListener('click',  () => { bsType = 'put';  $('#qlBsPut').classList.add('active');  $('#qlBsCall').classList.remove('active'); });
+
+    function updateMalliavin(mc, sig, T, K, type) {
+      if (!mc || !mc.terminal || mc.terminal.length < 100) return;
+      const mg = Quant.malliavinGreeks({ terminal: mc.terminal, S0, sigma: sig, T, K, r: 0.045, type });
+      if (!mg) return;
+      $('#qlMDelta').textContent = isFinite(mg.delta) ? mg.delta.toFixed(4) : '—';
+      $('#qlMGamma').textContent = isFinite(mg.gamma) ? mg.gamma.toFixed(6) : '—';
+      $('#qlMVega').textContent  = isFinite(mg.vega)  ? mg.vega.toFixed(4)  : '—';
+    }
+
+    function runBlackScholes() {
+      const K  = Number($('#qlBsStrike').value) || S0;
+      const T  = Math.max(1, Number($('#qlBsExpiry').value) || 30) / 365;
+      const iv = Math.max(0.01, Number($('#qlBsIv').value) || sigma * 100) / 100;
+      const r  = (Number($('#qlBsR').value) || 4.5) / 100;
+      const res = Quant.blackScholes({ S: S0, K, T, r, sigma: iv, type: bsType });
+      if (!res) return;
+      $('#qlBsPrice').textContent = '$' + res.price.toFixed(2) + ' per share';
+      $('#qlDelta').textContent   = res.delta.toFixed(4);
+      $('#qlGamma').textContent   = res.gamma.toFixed(6);
+      $('#qlTheta').textContent   = res.theta.toFixed(4);
+      $('#qlVega').textContent    = res.vega.toFixed(4);
+      $('#qlRho').textContent     = res.rho.toFixed(4);
+      if (lastMcResult) updateMalliavin(lastMcResult.mc, iv, T, K, bsType);
+    }
+    $('#qlBsRun').addEventListener('click', runBlackScholes);
+    runBlackScholes();
+  }
+
+  // ── Indicator suite renderer (40 indicators) ──
+  function renderIndicatorSuite(closes, highs, lows, volumes, ticker) {
+    const n = closes.length;
+    const last = (arr) => { for (let i = arr.length - 1; i >= 0; i--) { if (arr[i] !== null && isFinite(arr[i])) return arr[i]; } return null; };
+    const fmt = (v, dp = 2) => v !== null && isFinite(v) ? v.toFixed(dp) : '—';
+    const fmtPct = (v) => v !== null && isFinite(v) ? (v * 100).toFixed(1) + '%' : '—';
+    const color = (v, lo, hi) => {
+      if (v === null || !isFinite(v)) return '';
+      if (v > hi) return 'color:#2bd97c';
+      if (v < lo) return 'color:#ff453a';
+      return 'color:#ffd23f';
+    };
+
+    const rets = Quant.dailyReturns(closes);
+    const adxR = Quant.adx(highs, lows, closes);
+    const ich  = Quant.ichimoku(highs, lows, closes);
+    const rsiV = last(Quant.rsi(closes));
+    const cmoV = last(Quant.cmo(closes));
+    const mfiV = volumes.some(v => v > 0) ? last(Quant.mfi(highs, lows, closes, volumes)) : null;
+    const aoV  = last(Quant.awesomeOscillator(highs, lows));
+    const adxV = last(adxR.adx);
+    const diP  = last(adxR.diPlus);
+    const diM  = last(adxR.diMinus);
+    const macdR = Quant.macd(closes);
+    const macdV  = last(macdR.macdLine);
+    const macdSig = last(macdR.signalLine);
+    const macdHist = last(macdR.histogram);
+    const hmaV  = last(Quant.hullMA(closes));
+    const sma20 = last(Quant.sma(closes, 20));
+    const sma50 = last(Quant.sma(closes, 50));
+    const sma200 = last(Quant.sma(closes, 200));
+    const ema12 = last(Quant.ema(closes, 12));
+    const ema26 = last(Quant.ema(closes, 26));
+    const sarV  = last(Quant.parabolicSar(highs, lows));
+    const roc   = last(Quant.rateOfChange(closes));
+    const wrV   = last(Quant.williamsR(closes, highs, lows));
+    const cciV  = last(Quant.cci(closes, highs, lows));
+    const stoch = Quant.stochastic(closes, highs, lows);
+    const stochK = last(stoch.k);
+    const stochD = last(stoch.d);
+    const bb    = Quant.bollingerBands(closes);
+    const bbUp  = last(bb.upper), bbLo = last(bb.lower), bbMid = last(bb.mid);
+    const atrV  = last(Quant.atr(closes.map((c,i) => ({c, h: highs[i], l: lows[i], o: c})), 14));
+    const kcR   = Quant.keltnerChannels(closes, highs, lows);
+    const kcUp  = last(kcR.upper), kcLo = last(kcR.lower);
+    const dcR   = Quant.donchianChannels(highs, lows);
+    const dcUp  = last(dcR.upper), dcLo = last(dcR.lower);
+    const cvV   = last(Quant.chaikinVolatility(highs, lows));
+    const sdV   = last(Quant.rollingStdDev(closes));
+    const hvV   = last(Quant.historicalVolatility(closes));
+    const ulcV  = Quant.ulcerIndex(closes);
+    const obvV  = volumes.some(v => v > 0) ? last(Quant.obv(closes, volumes)) : null;
+    const cmfV  = volumes.some(v => v > 0) ? last(Quant.cmf(highs, lows, closes, volumes)) : null;
+    const vwapV = volumes.some(v => v > 0) ? last(Quant.vwap(closes, volumes, highs, lows)) : null;
+    const adV   = volumes.some(v => v > 0) ? last(Quant.adLine(highs, lows, closes, volumes)) : null;
+    const fiV   = volumes.some(v => v > 0) ? last(Quant.forceIndex(closes, volumes)) : null;
+    const sharpe = Quant.sharpeRatio(rets);
+    const sortino = Quant.sortinoRatio(rets);
+    const mdd   = Quant.maxDrawdown(closes).pct;
+    const calmar = Quant.calmarRatio(closes, closes.length / 252);
+    const kelly  = Quant.kellyCriterion(rets);
+    const hVaR  = Quant.historicalVaR(rets);
+    const omega  = Quant.omegaRatio(rets);
+    const lastClose = closes[closes.length - 1];
+
+    // Trend signal for Ichimoku
+    const tenkanL = last(ich.tenkan), kijunL = last(ich.kijun);
+    const senkouAL = ich.senkouA ? last(ich.senkouA.slice(0, n)) : null;
+    const senkouBL = ich.senkouB ? last(ich.senkouB.slice(0, n)) : null;
+    const ichAboveCloud = senkouAL && senkouBL ? (lastClose > Math.max(senkouAL, senkouBL) ? '☁ Above cloud' : lastClose < Math.min(senkouAL, senkouBL) ? '☁ Below cloud' : '☁ In cloud') : '—';
+
+    const indicators = [
+      // Trend
+      { g: 'TREND', name: 'SMA 20',          val: fmt(sma20),     note: sma20 ? (lastClose > sma20 ? '▲ Price above' : '▼ Price below') : '' },
+      { g: 'TREND', name: 'SMA 50',           val: fmt(sma50),     note: sma50 ? (lastClose > sma50 ? '▲ Price above' : '▼ Price below') : '' },
+      { g: 'TREND', name: 'SMA 200',          val: fmt(sma200),    note: sma200 ? (lastClose > sma200 ? '▲ Price above (bull)' : '▼ Price below (bear)') : '' },
+      { g: 'TREND', name: 'EMA 12',           val: fmt(ema12),     note: '' },
+      { g: 'TREND', name: 'EMA 26',           val: fmt(ema26),     note: '' },
+      { g: 'TREND', name: 'Hull MA (20)',      val: fmt(hmaV),      note: hmaV ? (lastClose > hmaV ? '▲ Bullish' : '▼ Bearish') : '' },
+      { g: 'TREND', name: 'Parabolic SAR',     val: fmt(sarV),      note: sarV ? (lastClose > sarV ? '▲ Uptrend' : '▼ Downtrend') : '' },
+      { g: 'TREND', name: 'ADX (14)',          val: fmt(adxV, 1),   note: adxV ? (adxV > 25 ? (diP > diM ? '▲ Strong up' : '▼ Strong dn') : 'Weak / range') : '' },
+      { g: 'TREND', name: '+DI / −DI',         val: `${fmt(diP,1)} / ${fmt(diM,1)}`, note: '' },
+      { g: 'TREND', name: 'Ichimoku',          val: ichAboveCloud,  note: `T=${fmt(tenkanL)} K=${fmt(kijunL)}` },
+      { g: 'TREND', name: 'MACD Line',         val: fmt(macdV, 3),  note: macdHist ? (macdHist > 0 ? '▲ Bullish' : '▼ Bearish') : '' },
+      { g: 'TREND', name: 'MACD Signal',       val: fmt(macdSig, 3), note: '' },
+      { g: 'TREND', name: 'MACD Histogram',    val: fmt(macdHist, 3), note: '' },
+      // Momentum
+      { g: 'MOMENTUM', name: 'RSI (14)',        val: fmt(rsiV, 1),   note: rsiV ? (rsiV > 70 ? 'Overbought' : rsiV < 30 ? 'Oversold' : 'Neutral') : '' },
+      { g: 'MOMENTUM', name: 'Williams %R',     val: fmt(wrV, 1),    note: wrV ? (wrV > -20 ? 'Overbought' : wrV < -80 ? 'Oversold' : 'Neutral') : '' },
+      { g: 'MOMENTUM', name: 'CCI (20)',        val: fmt(cciV, 0),   note: cciV ? (cciV > 100 ? 'Overbought' : cciV < -100 ? 'Oversold' : 'Neutral') : '' },
+      { g: 'MOMENTUM', name: 'CMO (14)',        val: fmt(cmoV, 1),   note: cmoV ? (cmoV > 50 ? 'Bullish' : cmoV < -50 ? 'Bearish' : 'Neutral') : '' },
+      { g: 'MOMENTUM', name: 'Stoch %K',       val: fmt(stochK, 1), note: stochK ? (stochK > 80 ? 'Overbought' : stochK < 20 ? 'Oversold' : '') : '' },
+      { g: 'MOMENTUM', name: 'Stoch %D',       val: fmt(stochD, 1), note: '' },
+      { g: 'MOMENTUM', name: 'ROC (12)',        val: roc !== null ? roc.toFixed(2) + '%' : '—', note: '' },
+      { g: 'MOMENTUM', name: 'MFI (14)',        val: fmt(mfiV, 1),   note: mfiV ? (mfiV > 80 ? 'Overbought' : mfiV < 20 ? 'Oversold' : '') : '' },
+      { g: 'MOMENTUM', name: 'Awesome Osc',    val: fmt(aoV, 3),    note: aoV ? (aoV > 0 ? '▲ Bullish' : '▼ Bearish') : '' },
+      // Volatility
+      { g: 'VOLATILITY', name: 'BB Upper',     val: fmt(bbUp),      note: '' },
+      { g: 'VOLATILITY', name: 'BB Mid',       val: fmt(bbMid),     note: '' },
+      { g: 'VOLATILITY', name: 'BB Lower',     val: fmt(bbLo),      note: '' },
+      { g: 'VOLATILITY', name: 'ATR (14)',      val: fmt(atrV, 3),   note: atrV && lastClose ? `${(atrV/lastClose*100).toFixed(1)}% of price` : '' },
+      { g: 'VOLATILITY', name: 'Keltner Upper', val: fmt(kcUp),     note: '' },
+      { g: 'VOLATILITY', name: 'Keltner Lower', val: fmt(kcLo),     note: '' },
+      { g: 'VOLATILITY', name: 'Donchian Upper', val: fmt(dcUp),    note: '' },
+      { g: 'VOLATILITY', name: 'Donchian Lower', val: fmt(dcLo),    note: '' },
+      { g: 'VOLATILITY', name: 'Chaikin Vol',  val: cvV !== null ? cvV.toFixed(1) + '%' : '—', note: '' },
+      { g: 'VOLATILITY', name: 'Std Dev (20)', val: fmt(sdV, 3),    note: '' },
+      { g: 'VOLATILITY', name: 'Hist. Vol (30d)', val: hvV !== null ? (hvV*100).toFixed(1)+'%' : '—', note: '' },
+      { g: 'VOLATILITY', name: 'Ulcer Index',  val: fmt(ulcV, 2),   note: '' },
+      // Volume
+      { g: 'VOLUME', name: 'OBV',              val: obvV !== null ? (obvV/1e6).toFixed(1)+'M' : '—', note: '' },
+      { g: 'VOLUME', name: 'CMF (21)',          val: fmt(cmfV, 4),   note: cmfV ? (cmfV > 0 ? 'Accumulation' : 'Distribution') : '' },
+      { g: 'VOLUME', name: 'VWAP',             val: fmt(vwapV),     note: vwapV ? (lastClose > vwapV ? '▲ Above VWAP' : '▼ Below VWAP') : '' },
+      { g: 'VOLUME', name: 'A/D Line',         val: adV !== null ? (adV/1e6).toFixed(1)+'M' : '—', note: '' },
+      { g: 'VOLUME', name: 'Force Index (13)',  val: fiV !== null ? fiV.toExponential(2) : '—', note: '' },
+      // Risk / Portfolio
+      { g: 'RISK', name: 'Sharpe (1Y)',        val: sharpe !== null ? sharpe.toFixed(2) : '—', note: sharpe ? (sharpe > 1 ? '★ Excellent' : sharpe > 0 ? 'Positive' : 'Negative') : '' },
+      { g: 'RISK', name: 'Sortino (1Y)',       val: sortino !== null ? sortino.toFixed(2) : '—', note: '' },
+      { g: 'RISK', name: 'Max Drawdown',       val: mdd !== null ? (mdd*100).toFixed(1)+'%' : '—', note: '' },
+      { g: 'RISK', name: 'Calmar Ratio',       val: calmar !== null ? calmar.toFixed(2) : '—', note: '' },
+      { g: 'RISK', name: 'Kelly Fraction',     val: kelly !== null ? (kelly*100).toFixed(1)+'%' : '—', note: '' },
+      { g: 'RISK', name: 'Hist VaR 95%',       val: hVaR ? (hVaR.var*100).toFixed(2)+'%' : '—', note: '' },
+      { g: 'RISK', name: 'CVaR 95%',          val: hVaR ? (hVaR.cvar*100).toFixed(2)+'%' : '—', note: '' },
+      { g: 'RISK', name: 'Omega Ratio',        val: omega !== null ? omega.toFixed(2) : '—', note: '' },
+    ];
+
+    const groups = ['TREND', 'MOMENTUM', 'VOLATILITY', 'VOLUME', 'RISK'];
+    let html = '';
+    for (const g of groups) {
+      const rows = indicators.filter(ind => ind.g === g);
+      html += `<div class="ql-ind-group"><div class="ql-ind-group-label">${g}</div>`;
+      for (const ind of rows) {
+        html += `<div class="ql-ind-row"><span class="ql-ind-name">${esc(ind.name)}</span><span class="ql-ind-val">${esc(ind.val)}</span>${ind.note ? `<span class="ql-ind-note">${esc(ind.note)}</span>` : ''}</div>`;
+      }
+      html += '</div>';
+    }
+    $('#qlIndGrid').innerHTML = html;
+    $('#qlMcStatus2').textContent = `${indicators.length} indicators computed from ${n} trading days`;
+
+    // Volume profile canvas
+    if (volumes.some(v => v > 0)) {
+      const profile = Quant.volumeProfile(closes, volumes, 50);
+      drawVolumeProfile(profile);
+    }
+  }
+
+  function drawVolumeProfile(profile) {
+    const canvas = $('#qlVolProfile');
+    if (!canvas || !profile.length) return;
+    canvas.hidden = false;
+    const dpr = window.devicePixelRatio || 1;
+    const W = canvas.offsetWidth || 300, H = 80;
+    canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+    const bins = profile.length;
+    const bw = W / bins;
+    for (let i = 0; i < bins; i++) {
+      const b = profile[i];
+      const barH = b.pct * H;
+      ctx.fillStyle = `rgba(255,191,46,${0.15 + 0.7 * b.pct})`;
+      ctx.fillRect(i * bw, H - barH, bw - 1, barH);
+    }
+    // Label min / max price
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.font = '9px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText('$' + profile[0].priceLow.toFixed(1), 2, H - 2);
+    ctx.textAlign = 'right';
+    ctx.fillText('$' + profile[bins - 1].priceHigh.toFixed(1), W - 2, H - 2);
+  }
+
+  function drawMcFanChart(mc, S0) {
+    const canvas = $('#mcCanvas');
+    canvas.hidden = false;
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    const W = rect.width, H = rect.height || 220;
+    canvas.width = Math.round(W * dpr);
+    canvas.height = Math.round(H * dpr);
+    const ctx2 = canvas.getContext('2d');
+    ctx2.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx2.clearRect(0, 0, W, H);
+
+    const padL = 50, padR = 10, padT = 10, padB = 18;
+    const plotW = W - padL - padR, plotH = H - padT - padB;
+    const n = mc.bands.length;
+    const p5 = mc.bands.map((row) => row[0.05]);
+    const p25 = mc.bands.map((row) => row[0.25]);
+    const p50 = mc.bands.map((row) => row[0.5]);
+    const p75 = mc.bands.map((row) => row[0.75]);
+    const p95 = mc.bands.map((row) => row[0.95]);
+    const allVals = [...p5, ...p95, S0];
+    const min = Math.min(...allVals), max = Math.max(...allVals);
+    const xOf = (i) => padL + (i / (n - 1)) * plotW;
+    const yOf = (v) => padT + (1 - (v - min) / (max - min || 1)) * plotH;
+
+    function band(lo, hi, fill) {
+      ctx2.beginPath();
+      for (let i = 0; i < n; i++) ctx2[i === 0 ? 'moveTo' : 'lineTo'](xOf(i), yOf(hi[i]));
+      for (let i = n - 1; i >= 0; i--) ctx2.lineTo(xOf(i), yOf(lo[i]));
+      ctx2.closePath();
+      ctx2.fillStyle = fill;
+      ctx2.fill();
+    }
+    band(p5, p95, 'rgba(255,191,46,0.10)');
+    band(p25, p75, 'rgba(255,191,46,0.18)');
+
+    ctx2.beginPath();
+    ctx2.strokeStyle = '#ffbf2e';
+    ctx2.lineWidth = 1.6;
+    for (let i = 0; i < n; i++) ctx2[i === 0 ? 'moveTo' : 'lineTo'](xOf(i), yOf(p50[i]));
+    ctx2.stroke();
+
+    // S0 reference line
+    ctx2.beginPath();
+    ctx2.strokeStyle = 'rgba(255,255,255,0.3)';
+    ctx2.lineWidth = 1;
+    ctx2.setLineDash([3, 3]);
+    ctx2.moveTo(padL, yOf(S0));
+    ctx2.lineTo(W - padR, yOf(S0));
+    ctx2.stroke();
+    ctx2.setLineDash([]);
+
+    ctx2.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx2.font = '10px "SF Mono", Menlo, monospace';
+    ctx2.textAlign = 'right';
+    ctx2.fillText('$' + max.toFixed(2), padL - 6, yOf(max) + 8);
+    ctx2.fillText('$' + min.toFixed(2), padL - 6, yOf(min) + 2);
+    ctx2.fillText('$' + S0.toFixed(2), padL - 6, yOf(S0) + 3);
   }
 
   async function loadDeepDive(query) {
@@ -1050,6 +1530,17 @@
       Promise.resolve(refreshCurrent()).finally(() => setTimeout(() => refreshBtn.classList.remove('spinning'), 600));
     });
   }
+
+  // When the tab regains focus, re-sync the open intelligence view immediately
+  // (app.js owns the terminal view). Server-side SWR caching keeps the AI budget
+  // safe — a focus refresh usually returns the cached payload and only does real
+  // work when it's actually stale.
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && currentView && currentView !== 'terminal') refreshCurrent();
+  });
+  window.addEventListener('focus', () => {
+    if (currentView && currentView !== 'terminal') refreshCurrent();
+  });
 
   document.addEventListener('tabshown', (e) => {
     const view = e.detail && e.detail.view;

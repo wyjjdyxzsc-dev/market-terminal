@@ -205,7 +205,7 @@
 
   // ── Layer registry ──
   const LAYERS = [
-    { id: 'earthquakes', label: 'Earthquakes', icon: '🌐', group: 'Hazards', live: true, refresh: 300000,
+    { id: 'earthquakes', label: 'Earthquakes', icon: '🌐', group: 'Hazards', live: true, refresh: 60000,
       load: async (lg) => {
         const d = await getJSON('/api/map/earthquakes');
         (d.points || []).forEach((q) => {
@@ -223,7 +223,7 @@
             .bindPopup(`<b>${esc(e.title || '')}</b><br>${esc(e.categoryTitle || '')}${e.date ? '<br><small>' + new Date(e.date).toUTCString() + '</small>' : ''}`).addTo(lg);
         });
       } },
-    { id: 'weather', label: 'US Weather Alerts', icon: '⛈', group: 'Hazards', live: true, refresh: 600000,
+    { id: 'weather', label: 'US Weather Alerts', icon: '⛈', group: 'Hazards', live: true, refresh: 60000,
       load: async (lg) => {
         const d = await getJSON('/api/map/weather');
         (d.points || []).forEach((w) => {
@@ -233,39 +233,62 @@
             .bindPopup(`<b>${esc(w.event || '')}</b><br>${esc(w.area || '')}<br><small>${esc(w.severity || '')} · ${esc(w.urgency || '')}</small>`).addTo(lg);
         });
       } },
-    { id: 'flights', label: 'Aircraft (live)', icon: '✈', group: 'Movement', live: true, refresh: 20000, viewport: true,
+    { id: 'flights', label: 'Aircraft (live)', icon: '✈', group: 'Movement', live: true, refresh: 8000, viewport: true,
       load: async (lg) => {
-        const c = map.getCenter();
+        if (!groups.flights) { groups.flights = L.layerGroup().addTo(lg); window.__flightMarkers = window.__flightMarkers || new Map(); }
         const b = map.getBounds();
-        const km = c.distanceTo(b.getNorthEast()) / 1000;
-        const dist = Math.min(250, Math.max(25, Math.round(km / 1.852)));
-        const bbox = [b.getSouth().toFixed(2), b.getWest().toFixed(2), b.getNorth().toFixed(2), b.getEast().toFixed(2)].join(',');
-        // Two paths, merged & deduped by hex: airplanes.live straight from the
-        // browser (CORS, our IP) + the worker's union of adsb.lol/adsb.fi/OpenSky.
-        const [live, merged] = await Promise.all([
-          getJSON(`https://api.airplanes.live/v2/point/${c.lat.toFixed(3)}/${c.lng.toFixed(3)}/${dist}`).then((d) => d.ac || []).catch(() => []),
-          getJSON('/api/map/flights?bbox=' + bbox).then((d) => d.points || []).catch(() => []),
-        ]);
+        const s = b.getSouth(), n = b.getNorth(), w = b.getWest(), e = b.getEast();
+        const midLat = (s + n) / 2;
+        const widthKm = Math.abs(e - w) * 111 * Math.cos((midLat * Math.PI) / 180);
+        const heightKm = Math.abs(n - s) * 111;
+        // airplanes.live caps a /point query at a 250nm radius, so a single query
+        // only covers the centre when zoomed out. Tile the viewport into a small
+        // grid of overlapping circles (capped) so the whole visible area is covered.
+        const TILE_KM = 700;
+        const cols = Math.max(1, Math.min(4, Math.ceil(widthKm / TILE_KM)));
+        const rows = Math.max(1, Math.min(3, Math.ceil(heightKm / TILE_KM)));
+        const radiusNm = Math.min(250, Math.max(60, Math.round((Math.max(widthKm / cols, heightKm / rows) / 1.852) * 0.75)));
+        const centers = [];
+        for (let i = 0; i < cols; i++) for (let j = 0; j < rows; j++) {
+          centers.push([s + (n - s) * (j + 0.5) / rows, w + (e - w) * (i + 0.5) / cols]);
+        }
+        const bbox = [s.toFixed(2), w.toFixed(2), n.toFixed(2), e.toFixed(2)].join(',');
+        const tiles = centers.map(([la, lo]) =>
+          getJSON(`https://api.airplanes.live/v2/point/${la.toFixed(3)}/${lo.toFixed(3)}/${radiusNm}`).then((d) => d.ac || []).catch(() => []));
+        const all = await Promise.all([...tiles, getJSON('/api/map/flights?bbox=' + bbox).then((d) => d.points || []).catch(() => [])]);
+        const live = all.slice(0, centers.length).flat();
+        const merged = all[all.length - 1];
         const seen = new Set();
         const planes = [];
         for (const a of live) {
           const hex = (a.hex || '').toLowerCase();
           if (a.lat == null || a.lon == null || a.alt_baro === 'ground') continue;
           seen.add(hex);
-          planes.push({ lat: a.lat, lon: a.lon, cs: (a.flight || a.r || a.hex || '').trim(), t: a.t, alt: typeof a.alt_baro === 'number' ? Math.round(a.alt_baro * 0.3048) : null, gs: a.gs, hdg: a.track != null ? a.track : a.true_heading });
+          planes.push({ id: hex, lat: a.lat, lon: a.lon, cs: (a.flight || a.r || a.hex || '').trim(), t: a.t, alt: typeof a.alt_baro === 'number' ? Math.round(a.alt_baro * 0.3048) : null, gs: a.gs, hdg: a.track != null ? a.track : a.true_heading });
         }
         for (const a of merged) {
+          const id = a.icao || Math.random();
           if (a.icao && seen.has(a.icao)) continue;
-          planes.push({ lat: a.lat, lon: a.lon, cs: (a.callsign || a.reg || a.icao || '').trim(), t: a.type, alt: a.alt, gs: a.velocity != null ? a.velocity * 1.944 : null, hdg: a.heading });
+          planes.push({ id, lat: a.lat, lon: a.lon, cs: (a.callsign || a.reg || a.icao || '').trim(), t: a.type, alt: a.alt, gs: a.velocity != null ? a.velocity * 1.944 : null, hdg: a.heading });
         }
+        const markers = window.__flightMarkers;
+        const now = Date.now();
         planes.forEach((p) => {
-          L.marker([p.lat, p.lon], { icon: planeIcon(p.hdg || 0), interactive: true })
-            .bindPopup(`<b>${esc(p.cs || 'aircraft')}</b>${p.t ? ' · ' + esc(p.t) : ''}<br><small>${p.alt != null ? p.alt + ' m' : ''}${p.gs != null ? ' · ' + Math.round(p.gs) + ' kn' : ''}${p.hdg != null ? ' · ' + Math.round(p.hdg) + '°' : ''}</small>`).addTo(lg);
+          let m = markers.get(p.id);
+          if (!m) {
+            m = L.marker([p.lat, p.lon], { icon: planeIcon(p.hdg || 0), interactive: true }).bindPopup(`<b>${esc(p.cs || 'aircraft')}</b>${p.t ? ' · ' + esc(p.t) : ''}<br><small>${p.alt != null ? p.alt + ' m' : ''}${p.gs != null ? ' · ' + Math.round(p.gs) + ' kn' : ''}${p.hdg != null ? ' · ' + Math.round(p.hdg) + '°' : ''}</small>`).addTo(groups.flights);
+            markers.set(p.id, { marker: m, lat: p.lat, lon: p.lon, hdg: p.hdg, lastUpdate: now, cs: p.cs, t: p.t, alt: p.alt, gs: p.gs });
+          } else {
+            m.state = { targetLat: p.lat, targetLon: p.lon, targetHdg: p.hdg, targetAlt: p.alt, targetGs: p.gs, lastUpdate: now };
+            m.state.cs = p.cs; m.state.t = p.t;
+          }
         });
+        // Clean up stale markers (not updated in 90s).
+        for (const [id, m] of markers) { if (now - m.lastUpdate > 90000) { groups.flights.removeLayer(m.marker); markers.delete(id); } }
         const sc = document.querySelector('.mlp-row[data-id="flights"] .mlp-lbl');
         if (sc) sc.textContent = `Aircraft · ${planes.length}`;
       } },
-    { id: 'fires', label: 'Active Fires (NASA)', icon: '🔥', group: 'Hazards', live: true, refresh: 1800000,
+    { id: 'fires', label: 'Active Fires (NASA)', icon: '🔥', group: 'Hazards', live: true, refresh: 120000,
       load: async (lg) => {
         const d = await getJSON('/api/map/fires');
         if (d.error) return;
@@ -274,7 +297,7 @@
             .bindPopup(`<b>🔥 Active fire</b><br><small>${f.bright ? 'Brightness ' + Math.round(f.bright) + 'K · ' : ''}conf ${esc(String(f.conf))}<br>${esc(f.date || '')}</small>`).addTo(lg);
         });
       } },
-    { id: 'instability', label: 'Country Instability (AI)', icon: '⚠', group: 'Hazards', live: true, refresh: 1800000,
+    { id: 'instability', label: 'Country Instability (AI)', icon: '⚠', group: 'Hazards', live: true, refresh: 180000,
       load: async (lg) => {
         const d = await getJSON('/api/intel/instability');
         (d.countries || []).forEach((c) => {
@@ -312,12 +335,57 @@
       load: (lg) => DATA.criticalMinerals.forEach(([n, la, lo, d]) => diamond(la, lo, '#6fd3c9', `<b>💎 ${esc(n)}</b><br>${esc(d)}`).addTo(lg)) },
     { id: 'refugeeHotspots', label: 'Displacement', icon: '👥', group: 'Geopolitics',
       load: (lg) => DATA.refugeeHotspots.forEach(([n, la, lo, d]) => diamond(la, lo, '#ff6b9d', `<b>👥 ${esc(n)}</b><br>${esc(d)}`).addTo(lg)) },
-    { id: 'conflictZones', label: 'Conflict Zones', icon: '⚔', group: 'Geopolitics',
-      load: (lg) => DATA.conflictZones.forEach(([n, la, lo, d]) => { diamond(la, lo, '#ff453a', `<b>⚔ ${esc(n)}</b><br>${esc(d)}`).addTo(lg); L.circle([la, lo], { radius: 220000, color: '#ff453a', weight: 1, fillColor: '#ff453a', fillOpacity: 0.08, interactive: false }).addTo(lg); }) },
+    { id: 'conflictZones', label: 'Conflict Zones', icon: '⚔', group: 'Geopolitics', live: true, refresh: 900000,
+      load: async (lg) => {
+        // Static curated zones always shown as background context
+        DATA.conflictZones.forEach(([n, la, lo, d]) => {
+          diamond(la, lo, '#ff453a', `<b>⚔ ${esc(n)}</b><br>${esc(d)}`).addTo(lg);
+          L.circle([la, lo], { radius: 220000, color: '#ff453a', weight: 1, fillColor: '#ff453a', fillOpacity: 0.06, interactive: false }).addTo(lg);
+        });
+        // Live GDELT + ACLED events on top
+        try {
+          const geo = await getJSON('/api/map/conflict');
+          let count = 0;
+          for (const f of (geo.features || [])) {
+            const [lon, lat] = f.geometry.coordinates;
+            const p = f.properties || {};
+            const isFatal = p.fatalities > 0;
+            const col = isFatal ? '#ff2222' : '#ff8c00';
+            L.circleMarker([lat, lon], { renderer: r(), radius: isFatal ? 5 : 3, weight: 1, color: col, fillColor: col, fillOpacity: 0.55 })
+              .bindPopup(`<b>⚔ ${esc(p.title || 'Conflict')}</b>${p.fatalities ? `<br>💀 ${p.fatalities} fatalities` : ''}`
+                + `${p.date ? `<br><small>${esc(p.date)}</small>` : ''}${p.notes ? `<br><small style="color:#7a8290">${esc(p.notes)}</small>` : ''}`
+                + `<br><small style="color:#555">via ${esc(p.source || '?')}</small>`).addTo(lg);
+            count++;
+          }
+          const lbl = document.querySelector('.mlp-row[data-id="conflictZones"] .mlp-lbl');
+          if (lbl) lbl.textContent = `Conflict Zones · ${count} live`;
+        } catch { /* leave static layer intact */ }
+      } },
     { id: 'sanctions', label: 'Sanctioned States', icon: '🚫', group: 'Geopolitics',
       load: (lg) => DATA.sanctions.forEach(([n, la, lo, d]) => diamond(la, lo, '#f0883e', `<b>🚫 ${esc(n)}</b><br>${esc(d)}`).addTo(lg)) },
-    { id: 'diseaseOutbreaks', label: 'Disease Outbreaks', icon: '🦠', group: 'Hazards',
-      load: (lg) => DATA.diseaseOutbreaks.forEach(([n, la, lo, d]) => diamond(la, lo, '#a3e635', `<b>🦠 ${esc(n)}</b><br>${esc(d)}`).addTo(lg)) },
+    { id: 'diseaseOutbreaks', label: 'Disease Outbreaks', icon: '🦠', group: 'Hazards', live: true, refresh: 900000,
+      load: async (lg) => {
+        // Always render the curated baseline
+        DATA.diseaseOutbreaks.forEach(([n, la, lo, d]) => diamond(la, lo, '#a3e635', `<b>🦠 ${esc(n)}</b><br>${esc(d)}`).addTo(lg));
+        // Layer live ProMED + WHO alerts on top
+        try {
+          const geo = await getJSON('/api/map/disease');
+          let count = 0;
+          for (const f of (geo.features || [])) {
+            const [lon, lat] = f.geometry.coordinates;
+            const p = f.properties || {};
+            L.circleMarker([lat, lon], { renderer: r(), radius: 6, weight: 1.5, color: '#a3e635', fillColor: '#a3e635', fillOpacity: 0.5 })
+              .bindPopup(`<b>🦠 ${esc(p.title || 'Disease alert')}</b>`
+                + (p.desc ? `<br><small>${esc(p.desc)}</small>` : '')
+                + (p.pubDate ? `<br><small style="color:#7a8290">${esc(p.pubDate)}</small>` : '')
+                + `<br><small style="color:#555">via ${esc(p.source || '?')}</small>`)
+              .addTo(lg);
+            count++;
+          }
+          const lbl = document.querySelector('.mlp-row[data-id="diseaseOutbreaks"] .mlp-lbl');
+          if (lbl) lbl.textContent = `Disease Outbreaks · ${count} live`;
+        } catch { /* degrade to static layer */ }
+      } },
     // Tech & infrastructure
     { id: 'techHQs', label: 'Tech HQs', icon: '🏢', group: 'Infrastructure',
       load: (lg) => DATA.techHQs.forEach(([n, la, lo, d]) => diamond(la, lo, '#7aa2f7', `<b>🏢 ${esc(n)}</b><br>${esc(d)}`).addTo(lg)) },
@@ -331,20 +399,52 @@
       load: (lg) => DATA.economicCenters.forEach(([n, la, lo, d]) => diamond(la, lo, '#f7c948', `<b>🌆 ${esc(n)}</b><br>${esc(d)}`).addTo(lg)) },
     { id: 'internetExchanges', label: 'Internet Exchanges', icon: '🌐', group: 'Infrastructure',
       load: (lg) => DATA.internetExchanges.forEach(([n, la, lo, d]) => diamond(la, lo, '#73daca', `<b>🌐 ${esc(n)}</b><br>${esc(d)}`).addTo(lg)) },
-    { id: 'gpsJamming', label: 'GPS Jamming', icon: '📡', group: 'Geopolitics',
-      load: (lg) => DATA.gpsJamming.forEach(([n, la, lo, d]) => { diamond(la, lo, '#f0883e', `<b>📡 ${esc(n)}</b><br>${esc(d)}`).addTo(lg); L.circle([la, lo], { radius: 300000, color: '#f0883e', weight: 1, fillColor: '#f0883e', fillOpacity: 0.06, interactive: false }).addTo(lg); }) },
+    { id: 'gpsJamming', label: 'GPS Jamming', icon: '📡', group: 'Geopolitics', live: true, refresh: 21600000,
+      load: async (lg) => {
+        // Curated known hotspots as baseline
+        DATA.gpsJamming.forEach(([n, la, lo, d]) => {
+          diamond(la, lo, '#f0883e', `<b>📡 ${esc(n)}</b><br>${esc(d)}`).addTo(lg);
+          L.circle([la, lo], { radius: 300000, color: '#f0883e', weight: 1, fillColor: '#f0883e', fillOpacity: 0.06, interactive: false }).addTo(lg);
+        });
+        // Live gpsjam.org probability grid
+        try {
+          const geo = await getJSON('/api/map/gpsjam');
+          let count = 0;
+          for (const f of (geo.features || [])) {
+            const [lon, lat] = f.geometry.coordinates;
+            const score = f.properties.score || 0;
+            const opacity = 0.15 + score * 0.55;
+            // Draw as a heatmap circle — larger radius for high-score cells
+            L.circle([lat, lon], {
+              radius: 80000 + score * 120000,
+              color: '#f0883e', weight: 0,
+              fillColor: '#f0883e', fillOpacity: opacity,
+              interactive: false,
+            }).addTo(lg);
+            if (score > 0.7) {
+              L.circleMarker([lat, lon], { renderer: r(), radius: 4, weight: 0, fillColor: '#ff453a', fillOpacity: 0.9 })
+                .bindPopup(`<b>📡 GPS interference</b><br>Score: ${(score * 100).toFixed(0)}%<br><small>${esc(geo.date || '')}</small>`)
+                .addTo(lg);
+            }
+            count++;
+          }
+          const lbl = document.querySelector('.mlp-row[data-id="gpsJamming"] .mlp-lbl');
+          if (lbl) lbl.textContent = `GPS Jamming · ${count} cells${geo.fallback ? ' (curated)' : ' (live)'}`;
+        } catch { /* keep static baseline */ }
+      } },
     { id: 'webcams', label: 'Curated Webcams', icon: '📷', group: 'Overlays',
       load: (lg) => DATA.webcams.forEach(([n, la, lo, d, url]) => L.circleMarker([la, lo], { renderer: r(), radius: 5, weight: 1.5, color: '#45c8dc', fillColor: '#0a0a0a', fillOpacity: 0.9 })
         .bindPopup(`<b>📷 ${esc(n)}</b><br>${esc(d)}<br><a href="${esc(url)}" target="_blank" rel="noopener" style="color:#45c8dc">▶ Watch live</a>`).addTo(lg)) },
-    { id: 'webcams-live', label: 'Live Webcams (Windy)', icon: '📹', group: 'Overlays', live: true, refresh: 3600000,
+    { id: 'webcams-live', label: 'Live Webcams (Windy)', icon: '📹', group: 'Overlays', live: true, refresh: 600000,
       load: async (lg) => {
         const d = await getJSON('/api/map/webcams-live');
         if (d.error) return;
         (d.points || []).forEach((w) => {
           const pop = `<b>📹 ${esc(w.title || 'Webcam')}</b>` +
-            (w.img ? `<br><img src="${esc(w.img)}" style="width:220px;border-radius:6px;margin-top:5px" loading="lazy">` : '') +
+            (w.place ? `<br><small style="color:#7a8290">${esc(w.place)}</small>` : '') +
+            (w.img ? `<br><img src="${esc(w.img)}" style="width:240px;border-radius:6px;margin-top:5px" loading="lazy" onerror="this.style.display='none'">` : '') +
             (w.url ? `<br><a href="${esc(w.url)}" target="_blank" rel="noopener" style="color:#73daca">▶ Watch live on Windy</a>` : '');
-          L.circleMarker([w.lat, w.lon], { renderer: r(), radius: 2.5, weight: 0.5, color: '#73daca', fillColor: '#73daca', fillOpacity: 0.5 }).bindPopup(pop).addTo(lg);
+          L.circleMarker([w.lat, w.lon], { renderer: r(), radius: 3, weight: 1, color: '#0a0a0a', fillColor: '#73daca', fillOpacity: 0.85 }).bindPopup(pop, { minWidth: 250 }).addTo(lg);
         });
         const sc = document.querySelector('.mlp-row[data-id="webcams-live"] .mlp-lbl');
         if (sc) sc.textContent = `Live Webcams · ${(d.points || []).length}`;
@@ -372,6 +472,24 @@
   function planeIcon(heading) {
     return L.divIcon({ className: 'plane-icon', html: `<div style="transform:rotate(${heading}deg)">✈</div>`, iconSize: [16, 16] });
   }
+
+  // Smooth animation loop for aircraft markers.
+  function animateFlights() {
+    const markers = window.__flightMarkers;
+    if (!markers) return;
+    const now = Date.now();
+    for (const m of markers.values()) {
+      if (!m.state) continue;
+      const elapsed = Math.min(15000, now - m.state.lastUpdate); // 0–15s interpolation window
+      const t = Math.min(1, elapsed / 15000); // 0 = just updated, 1 = 15s old
+      const lat = m.lat + (m.state.targetLat - m.lat) * t;
+      const lon = m.lon + (m.state.targetLon - m.lon) * t;
+      const hdg = m.hdg + ((m.state.targetHdg || 0) - (m.hdg || 0)) * t;
+      m.marker.setLatLng([lat, lon]).setIcon(planeIcon(hdg));
+      m.lat = lat; m.lon = lon; m.hdg = hdg;
+    }
+  }
+  setInterval(animateFlights, 50); // 20 fps
 
   // ── Day/night terminator (computed) ──
   function drawTerminator(lg) {
@@ -482,7 +600,7 @@
     buildPanel();
     // Sensible defaults on first open.
     setTimeout(() => {
-      document.querySelectorAll('.map-layer-panel input[data-layer="earthquakes"], .map-layer-panel input[data-layer="daynight"]').forEach((cb) => { cb.checked = true; setLayer(cb.dataset.layer, true); });
+      document.querySelectorAll('.map-layer-panel input[data-layer="earthquakes"], .map-layer-panel input[data-layer="daynight"], .map-layer-panel input[data-layer="flights"], .map-layer-panel input[data-layer="ships"]').forEach((cb) => { cb.checked = true; setLayer(cb.dataset.layer, true); });
     }, 300);
   });
 })();
