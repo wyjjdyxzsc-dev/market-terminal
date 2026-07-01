@@ -17,7 +17,7 @@
  */
 
 const FINNHUB_BASE = 'https://finnhub.io/api/v1';
-const CACHE_MS = 60 * 60 * 1000;
+const CACHE_MS = 15 * 60 * 1000; // news refreshes every 15 min
 const BROWSER_UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 ' +
   '(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
@@ -43,12 +43,27 @@ async function fetchWithTimeout(url, opts = {}, timeoutMs = 9000) {
   }
 }
 
+// Round-robin across up to 5 Finnhub keys (FINNHUB_API_KEY … FINNHUB_API_KEY_5).
+// More keys = more rate-limit headroom at zero extra cost.
+let _fhKeyIdx = 0;
+function pickFinnhubKey(env) {
+  const keys = [
+    env.FINNHUB_API_KEY,
+    env.FINNHUB_API_KEY_2,
+    env.FINNHUB_API_KEY_3,
+    env.FINNHUB_API_KEY_4,
+    env.FINNHUB_API_KEY_5,
+  ].filter(Boolean);
+  if (!keys.length) return '';
+  return keys[_fhKeyIdx++ % keys.length];
+}
+
 async function finnhub(env, endpoint, params = {}) {
   const url = new URL(FINNHUB_BASE + endpoint);
   for (const [k, v] of Object.entries(params)) {
     if (v !== undefined && v !== null && v !== '') url.searchParams.set(k, v);
   }
-  url.searchParams.set('token', env.FINNHUB_API_KEY || '');
+  url.searchParams.set('token', pickFinnhubKey(env));
   const res = await fetch(url, { headers: { Accept: 'application/json' } });
   if (res.status === 429) throw new Error('Rate limit reached (Finnhub free tier). Wait a moment and retry.');
   if (!res.ok) throw new Error(`Finnhub responded ${res.status} for ${endpoint}`);
@@ -56,55 +71,115 @@ async function finnhub(env, endpoint, params = {}) {
 }
 
 // ───────────────────── market-data quote pool ─────────────────────
-// Finnhub is primary; AlphaVantage / Twelve Data / FMP back it up and each
-// activates when its key is present. getQuotePooled tries them in order and
-// returns the first that yields a real price, so a single provider's rate
-// limit or outage never blanks a quote. All return the Finnhub quote shape:
-//   { c: current, d: change, dp: %change, h: high, l: low, o: open, pc: prevClose, src }
+// Up to 5 Finnhub keys + 5 third-party providers (Twelve Data, FMP, Alpha
+// Vantage, Polygon, Yahoo). Each is a { name, fn } entry; getQuotePooled
+// tries them in order and returns the first real price. Yahoo is a keyless
+// fallback always at the end. All fns return the canonical shape or null:
+//   { c, d, dp, h, l, o, pc, src }
 const qnum = (v) => { const n = parseFloat(v); return Number.isFinite(n) ? n : null; };
 
-async function quoteFinnhub(env, sym) {
-  const q = await finnhub(env, '/quote', { symbol: sym });
+// ── Finnhub: one pool entry per key present ──
+const _makeFhQuoter = (keyName, label) => async (env, sym) => {
+  const key = env[keyName]; if (!key) return null;
+  const r = await fetchWithTimeout(`${FINNHUB_BASE}/quote?symbol=${encodeURIComponent(sym)}&token=${key}`, { headers: { Accept: 'application/json' } }, 8000);
+  if (r.status === 429) throw new Error(`${label} rate limited`);
+  if (!r.ok) return null;
+  const q = await r.json();
   if (!q || (!q.c && !q.pc)) return null;
-  return { c: q.c, d: q.d, dp: q.dp, h: q.h, l: q.l, o: q.o, pc: q.pc, src: 'finnhub' };
-}
-async function quoteTwelve(env, sym) {
+  return { c: q.c, d: q.d, dp: q.dp, h: q.h, l: q.l, o: q.o, pc: q.pc, src: label };
+};
+const _fhQ1 = _makeFhQuoter('FINNHUB_API_KEY',   'finnhub');
+const _fhQ2 = _makeFhQuoter('FINNHUB_API_KEY_2',  'finnhub2');
+const _fhQ3 = _makeFhQuoter('FINNHUB_API_KEY_3',  'finnhub3');
+const _fhQ4 = _makeFhQuoter('FINNHUB_API_KEY_4',  'finnhub4');
+const _fhQ5 = _makeFhQuoter('FINNHUB_API_KEY_5',  'finnhub5');
+
+// ── Third-party providers ──
+async function _quoteTwelve(env, sym) {
+  if (!env.TWELVEDATA_KEY) return null;
   const r = await fetchWithTimeout(`https://api.twelvedata.com/quote?symbol=${encodeURIComponent(sym)}&apikey=${env.TWELVEDATA_KEY}`, {}, 10000);
   const j = await r.json();
   if (!j || j.status === 'error' || j.close == null) return null;
   const c = qnum(j.close), pc = qnum(j.previous_close);
   return { c, d: qnum(j.change), dp: qnum(j.percent_change), h: qnum(j.high), l: qnum(j.low), o: qnum(j.open), pc, src: 'twelvedata' };
 }
-async function quoteFMP(env, sym) {
+async function _quoteFMP(env, sym) {
+  if (!env.FMP_KEY) return null;
   const r = await fetchWithTimeout(`https://financialmodelingprep.com/api/v3/quote/${encodeURIComponent(sym)}?apikey=${env.FMP_KEY}`, {}, 10000);
   const j = await r.json();
   const q = Array.isArray(j) && j[0];
   if (!q || q.price == null) return null;
   return { c: qnum(q.price), d: qnum(q.change), dp: qnum(q.changesPercentage), h: qnum(q.dayHigh), l: qnum(q.dayLow), o: qnum(q.open), pc: qnum(q.previousClose), src: 'fmp' };
 }
-async function quoteAlpha(env, sym) {
+async function _quoteAlpha(env, sym) {
+  if (!env.ALPHAVANTAGE_KEY) return null;
   const r = await fetchWithTimeout(`https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${encodeURIComponent(sym)}&apikey=${env.ALPHAVANTAGE_KEY}`, {}, 10000);
   const j = await r.json();
   const q = j && j['Global Quote'];
   if (!q || !q['05. price']) return null;
   return { c: qnum(q['05. price']), d: qnum(q['09. change']), dp: qnum((q['10. change percent'] || '').replace('%', '')), h: qnum(q['03. high']), l: qnum(q['04. low']), o: qnum(q['02. open']), pc: qnum(q['08. previous close']), src: 'alphavantage' };
 }
+async function _quotePolygon(env, sym) {
+  if (!env.POLYGON_KEY) return null;
+  const r = await fetchWithTimeout(`https://api.polygon.io/v2/snapshot/locale/us/markets/stocks/tickers/${encodeURIComponent(sym)}?apiKey=${env.POLYGON_KEY}`, {}, 10000);
+  if (!r.ok) return null;
+  const j = await r.json();
+  const t = j && j.ticker; if (!t) return null;
+  const day = t.day || {}, prev = t.prevDay || {};
+  const c = (t.lastTrade && t.lastTrade.p) || day.c; if (!c) return null;
+  const pc = prev.c || null;
+  return { c, d: pc ? c - pc : qnum(t.todaysChange), dp: pc ? ((c - pc) / pc) * 100 : qnum(t.todaysChangePerc), h: day.h || c, l: day.l || c, o: day.o || c, pc, src: 'polygon' };
+}
+async function _quoteYahoo(_env, sym) {
+  try {
+    const r = await fetchWithTimeout(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?range=1d&interval=1m&includePrePost=false`, { headers: { 'User-Agent': BROWSER_UA, Accept: 'application/json' } }, 9000);
+    if (!r.ok) return null;
+    const j = await r.json();
+    const meta = j?.chart?.result?.[0]?.meta; if (!meta || !meta.regularMarketPrice) return null;
+    const c = meta.regularMarketPrice, pc = meta.chartPreviousClose || meta.previousClose || null;
+    return { c, d: pc ? c - pc : null, dp: pc ? ((c - pc) / pc) * 100 : null, h: meta.regularMarketDayHigh || c, l: meta.regularMarketDayLow || c, o: meta.regularMarketOpen || c, pc, src: 'yahoo' };
+  } catch { return null; }
+}
 
 function quotePool(env) {
   const pool = [];
-  if (env.FINNHUB_API_KEY) pool.push(quoteFinnhub);
-  if (env.TWELVEDATA_KEY) pool.push(quoteTwelve);
-  if (env.FMP_KEY) pool.push(quoteFMP);
-  if (env.ALPHAVANTAGE_KEY) pool.push(quoteAlpha);
+  if (env.FINNHUB_API_KEY)   pool.push({ name: 'finnhub',      fn: _fhQ1 });
+  if (env.FINNHUB_API_KEY_2) pool.push({ name: 'finnhub2',     fn: _fhQ2 });
+  if (env.FINNHUB_API_KEY_3) pool.push({ name: 'finnhub3',     fn: _fhQ3 });
+  if (env.FINNHUB_API_KEY_4) pool.push({ name: 'finnhub4',     fn: _fhQ4 });
+  if (env.FINNHUB_API_KEY_5) pool.push({ name: 'finnhub5',     fn: _fhQ5 });
+  if (env.TWELVEDATA_KEY)    pool.push({ name: 'twelvedata',   fn: _quoteTwelve });
+  if (env.FMP_KEY)           pool.push({ name: 'fmp',          fn: _quoteFMP });
+  if (env.ALPHAVANTAGE_KEY)  pool.push({ name: 'alphavantage', fn: _quoteAlpha });
+  if (env.POLYGON_KEY)       pool.push({ name: 'polygon',      fn: _quotePolygon });
+  pool.push({ name: 'yahoo', fn: _quoteYahoo });
   return pool;
 }
 async function getQuotePooled(env, sym) {
   let lastErr;
-  for (const fn of quotePool(env)) {
+  for (const { fn } of quotePool(env)) {
     try { const q = await fn(env, sym); if (q) return q; } catch (e) { lastErr = e; }
   }
   if (lastErr) throw lastErr;
   return { c: 0, d: 0, dp: 0, h: 0, l: 0, o: 0, pc: 0, src: 'none' };
+}
+
+// In-isolate micro-cache for quotes. The terminal polls every ~2s for a live
+// feel; without this, fast polling exhausts the free quote providers (they start
+// returning nulls) and the displayed price jitters as the pool fails over between
+// providers that disagree by a few cents. Caching the first good quote for a few
+// seconds coalesces the burst onto one provider and one stable price.
+const _quoteMemo = new Map(); // sym -> { data, exp }
+const QUOTE_MEMO_MS = 3000;
+async function getQuoteCached(env, sym) {
+  const now = Date.now();
+  const hit = _quoteMemo.get(sym);
+  if (hit && hit.exp > now) return hit.data;
+  const data = await getQuotePooled(env, sym);
+  // Only cache a usable quote — never let a transient all-providers-failed null
+  // stick around and blank the price for the next few seconds.
+  if (data && data.c) _quoteMemo.set(sym, { data, exp: now + QUOTE_MEMO_MS });
+  return data;
 }
 
 // ───────────────────────── chart (Yahoo -> Nasdaq) ─────────────────────────
@@ -131,13 +206,17 @@ async function chartFromYahoo(symbol, rangeKey) {
   const result = data?.chart?.result?.[0];
   if (!result) throw new Error(data?.chart?.error?.description || 'Yahoo returned no data');
   const timestamps = result.timestamp || [];
-  const closes = result.indicators?.quote?.[0]?.close || [];
+  const q = result.indicators?.quote?.[0] || {};
+  const closes = q.close || [];
+  const opens = q.open || [], highs = q.high || [], lows = q.low || [];
   const meta = result.meta || {};
   const points = [];
   for (let i = 0; i < timestamps.length; i++) {
     const c = closes[i];
     if (c === null || c === undefined || Number.isNaN(c)) continue;
-    points.push({ t: timestamps[i] * 1000, c });
+    // Include OHLC so the frontend can render candlesticks (falls back to close).
+    const o = opens[i], h = highs[i], l = lows[i];
+    points.push({ t: timestamps[i] * 1000, c, o: o ?? c, h: h ?? c, l: l ?? c });
   }
   return {
     points,
@@ -155,6 +234,17 @@ const NASDAQ_HEADERS = {
   'Accept-Language': 'en-US,en;q=0.9',
 };
 
+// Nasdaq's intraday chart "x" field is actually the ET wall-clock time
+// mis-encoded as a UTC epoch (e.g. x=...04:00:00Z while z.dateTime says
+// "4:00 AM ET") — so any browser outside UTC sees the chart time-shifted.
+// Correct it back to a true UTC ms using the real US-Eastern offset for today.
+function etOffsetMinutes(date) {
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', timeZoneName: 'shortOffset' }).formatToParts(date);
+  const tz = (parts.find((p) => p.type === 'timeZoneName') || {}).value || 'GMT-5';
+  const m = tz.match(/GMT([+-]\d+)/);
+  return m ? -parseInt(m[1], 10) * 60 : 300; // minutes ET is BEHIND UTC (240 EDT / 300 EST)
+}
+
 async function chartFromNasdaq(symbol, rangeKey) {
   if (rangeKey === '1D') {
     const url = `https://api.nasdaq.com/api/quote/${encodeURIComponent(symbol)}/chart?assetclass=stocks`;
@@ -162,7 +252,8 @@ async function chartFromNasdaq(symbol, rangeKey) {
     if (!res.ok) throw new Error(`Nasdaq responded ${res.status}`);
     const data = await res.json();
     const rows = data?.data?.chart || [];
-    const points = rows.filter((r) => r && r.y != null).map((r) => ({ t: r.x, c: Number(r.y) }));
+    const offMs = etOffsetMinutes(new Date()) * 60000;
+    const points = rows.filter((r) => r && r.y != null).map((r) => ({ t: r.x + offMs, c: Number(r.y) }));
     if (!points.length) throw new Error('Nasdaq returned no intraday data');
     return {
       points,
@@ -184,7 +275,7 @@ async function chartFromNasdaq(symbol, rangeKey) {
   const toMs = (mdy) => { const [m, d, y] = mdy.split('/').map(Number); return Date.UTC(y, m - 1, d); };
   let points = rows
     .filter((r) => r && r.date && r.close)
-    .map((r) => ({ t: toMs(r.date), c: num(r.close) }))
+    .map((r) => { const c = num(r.close); return { t: toMs(r.date), c, o: r.open != null ? num(r.open) : c, h: r.high != null ? num(r.high) : c, l: r.low != null ? num(r.low) : c }; })
     .sort((a, b) => a.t - b.t);
   if (!points.length) throw new Error('Nasdaq returned no historical data');
   if (rangeKey === '5Y' && points.length > 400) {
@@ -252,18 +343,24 @@ async function fetchFeed(url, limit = 20) {
   } catch { return []; }
 }
 
-function mergeHeadlines(lists) {
+function mergeHeadlines(lists, maxAgeMins = 72 * 60) {
   const seen = new Set();
-  const merged = [];
+  const all = [];
+  const cutoff = Date.now() - maxAgeMins * 60_000;
   for (const list of lists) {
     for (const h of list) {
       const k = (h.title || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
       if (!k || seen.has(k)) continue;
       seen.add(k);
-      merged.push(h);
+      h._ms = h.published ? (new Date(h.published).getTime() || 0) : 0;
+      all.push(h);
     }
   }
-  return merged;
+  // Newest first.
+  all.sort((a, b) => b._ms - a._ms);
+  // Prefer items within the window; fall back to all if fewer than 10 pass (slow news day / weekend).
+  const fresh = all.filter((h) => h._ms === 0 || h._ms >= cutoff);
+  return fresh.length >= 10 ? fresh : all;
 }
 
 // General market news — a basket of publisher RSS feeds that, unlike Google
@@ -294,15 +391,73 @@ const WORLD_FEEDS = [
   'https://www.bing.com/news/search?q=oil+energy+markets&format=rss',
 ];
 
+// X / Twitter — high-signal financial & news accounts, pulled from the public
+// syndication/embed endpoint (the same one X itself serves to render embedded
+// timeline widgets anywhere on the web — no API key, no login). Public Nitter
+// mirrors stopped serving RSS once X locked them out; this is the unauthenticated
+// path that's left. Source tagged as "X/@handle" so the AI and display attribute it.
+const X_ACCOUNTS = [
+  'WSJmarkets',       // Wall Street Journal markets desk
+  'markets',          // Bloomberg Markets
+  'unusual_whales',   // options flow / market intel
+  'DeItaone',         // breaking financial headlines
+  'zerohedge',        // macro / contrarian finance
+  'Reuters',          // global news wire
+  'APNews',           // Associated Press
+  'FederalReserve',   // Fed statements
+  'SECGov',           // SEC filings / enforcement
+  'IMFNews',          // IMF global outlook
+  'RayDalio',         // macro investor commentary
+  'elonmusk',         // market-moving tweets
+  'GoldmanSachs',     // GS research
+  'elerianm',         // Mohamed El-Erian macro
+  'NickTimiraos',     // WSJ Fed reporter
+];
+
+// Tweet text always ends with a t.co link back to itself/its media — strip that
+// and flatten newlines so it reads like a headline.
+function cleanTweetText(text) {
+  return (text || '').replace(/https:\/\/t\.co\/\w+\s*$/, '').replace(/\s+/g, ' ').trim();
+}
+
+async function fetchXAccountFeed(account) {
+  try {
+    const res = await fetchWithTimeout(
+      `https://syndication.twitter.com/srv/timeline-profile/screen-name/${account}`,
+      { headers: { 'User-Agent': BROWSER_UA, Accept: 'text/html' } },
+      8000,
+    );
+    if (!res.ok) return [];
+    const html = await res.text();
+    const m = html.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/);
+    if (!m) return [];
+    const entries = JSON.parse(m[1])?.props?.pageProps?.timeline?.entries || [];
+    return entries
+      .map((e) => e && e.content && e.content.tweet)
+      .filter(Boolean)
+      .map((t) => ({ title: cleanTweetText(t.full_text || t.text), source: `X/@${account}`, published: t.created_at || '' }))
+      .filter((h) => h.title);
+  } catch { return []; }
+}
+
+async function fetchXHeadlines() {
+  // The syndication endpoint rate-limits per a small shared budget (~30
+  // requests per window) that a dead-simultaneous burst of 15 trips even when
+  // comfortably under budget — stagger the starts so they land as a trickle
+  // instead. Any account that still fails or comes back empty is just skipped.
+  const lists = await Promise.all(X_ACCOUNTS.map((account, i) => sleep(i * 400).then(() => fetchXAccountFeed(account))));
+  return mergeHeadlines(lists);
+}
+
 async function fetchMarketHeadlines() {
   const lists = await Promise.all(MARKET_FEEDS.map((u) => fetchFeed(u, 18)));
   return mergeHeadlines(lists).slice(0, 32);
 }
 
-// Wider net: market + world/geopolitical headlines, for GLOBAL INTEL & the report.
+// Wider net: market + world headlines for GLOBAL INTEL & the report.
 async function fetchWorldHeadlines() {
-  const lists = await Promise.all([...MARKET_FEEDS, ...WORLD_FEEDS].map((u) => fetchFeed(u, 14)));
-  return mergeHeadlines(lists).slice(0, 44);
+  const lists = await Promise.all([...MARKET_FEEDS, ...WORLD_FEEDS].map((u) => fetchFeed(u, 14)).concat([fetchXHeadlines()]));
+  return mergeHeadlines(lists).slice(0, 60);
 }
 
 // Per-company headlines — Bing News RSS search (allows datacenter IPs).
@@ -433,8 +588,8 @@ function providerPool(env) {
   return pool;
 }
 
-// How many providers to race simultaneously per task (override with AI_PARALLEL).
-const raceWidth = (env) => Math.max(2, parseInt(env.AI_PARALLEL || '3', 10) || 3);
+// How many AI providers to race simultaneously per task (override with AI_PARALLEL).
+const raceWidth = (env) => Math.max(2, parseInt(env.AI_PARALLEL || '5', 10) || 5);
 
 const isRateLimited = (err) => {
   const status = err && (err.status || err.statusCode);
@@ -531,9 +686,10 @@ function extractJson(text) {
 // ───────────────────────── prompts ─────────────────────────
 
 const NEWS_SYSTEM = `You are a financial markets news desk. You will be given a list of REAL,
-current US news headlines (with source and time) pulled live from Google News moments ago.
+current headlines (with source and publication time) pulled live moments ago, already sorted newest first.
 Use ONLY these headlines as your facts — do not invent events not represented in them.
-Select and rewrite the 12 most important and market-relevant items.
+Select up to 12 items. STRONGLY prefer the most RECENT headlines; only include older items if they are
+genuinely market-moving and still actively relevant. Return them sorted by timestamp, NEWEST FIRST.
 
 Return ONE JSON object of the form { "items": [ up to 12 items ] }. Each item:
 {
@@ -546,7 +702,7 @@ Return ONE JSON object of the form { "items": [ up to 12 items ] }. Each item:
   "marketImpact": one sentence on how this could move markets,
   "tickers": array of 0-4 US stock ticker symbols most relevant (e.g. ["AAPL","MSFT"]); [] if none,
   "watchUrl": "" (always leave empty — the app finds any live stream itself),
-  "timestamp": ISO 8601 datetime string (use the headline's time if given, else now)
+  "timestamp": ISO 8601 datetime string — copy EXACTLY from the headline's publication time; do NOT use "now" unless the source truly has no timestamp
 }
 Return ONLY the JSON object. No markdown, no commentary.`;
 
@@ -615,25 +771,25 @@ investRank values must be a permutation of 1..11; optionsRank likewise.
 Return ONLY the JSON object. No markdown, no commentary.`;
 
 const SUPPLYCHAIN_SYSTEM = `You are a supply-chain and equity research analyst. Given a company,
-identify its most important real-world PUBLICLY-LISTED suppliers (vendors it buys parts, components,
-services or inputs from) and PUBLICLY-LISTED customers (companies that buy or resell its products/services).
-Use well-established, factual relationships from your knowledge.
+identify ALL significant real-world suppliers (vendors it buys parts, components, services or inputs from)
+and customers (companies that buy or resell its products/services) — include both public AND private companies,
+domestic AND international. Use well-established, factual relationships from your knowledge.
 
 Return ONE JSON object:
 {
   "company": official company name,
-  "ticker": the company's primary US-listed stock ticker in caps (or "" if not US-listed),
+  "ticker": the company's primary US-listed stock ticker in caps (or "" if not US-listed / private),
   "summary": one sentence on the company's position in its supply chain,
-  "suppliers": array of up to 8, MOST IMPORTANT FIRST, each {
+  "suppliers": array of ALL significant suppliers, MOST IMPORTANT FIRST, each {
     "name": company name,
-    "ticker": its US stock ticker in caps, or "" if private / foreign-only,
+    "ticker": US stock ticker in caps if publicly listed, or "" if private or foreign-only,
     "relationship": short phrase naming what it supplies (e.g. "Chip fabrication", "Seats & interiors"),
     "tier": "key" | "major" | "minor"
   },
-  "customers": array of up to 8, MOST IMPORTANT FIRST, same shape (relationship = what they buy / use it for)
+  "customers": array of ALL significant customers, MOST IMPORTANT FIRST, same shape (relationship = what they buy / use it for)
 }
-Strongly prefer companies listed on US exchanges (NYSE/Nasdaq) and give their correct real tickers.
-Only include real, currently-traded companies. Omit a relationship rather than invent a fake ticker.
+Include private companies (e.g. Foxconn, Koch Industries, Cargill) and foreign-listed ones — just leave ticker "".
+Give real tickers only for US-listed companies; never invent a ticker. Omit a relationship rather than invent a fake one.
 Return ONLY the JSON object. No markdown, no commentary.`;
 
 const DEEPDIVE_SYSTEM = `You are a senior buy-side analyst and derivatives strategist. You will be given a
@@ -795,7 +951,70 @@ Return ONE JSON object:
 }
 Return ONLY the JSON object. No markdown, no commentary.`;
 
+const CANDLE_SYSTEM = `You are an expert technical analyst specializing in candlestick pattern recognition and price action.
+You will be given recent OHLC candlestick data for a stock (Open, High, Low, Close), listed chronologically newest last.
+Each row: INDEX | DATE | OPEN | HIGH | LOW | CLOSE (USD).
+
+Identify ALL significant candlestick patterns — especially in the LAST 1-5 candles. Look for:
+Doji, Hammer, Hanging Man, Shooting Star, Inverted Hammer, Bullish/Bearish Engulfing,
+Morning Star, Evening Star, Morning/Evening Doji Star, Three White Soldiers, Three Black Crows,
+Bullish/Bearish Harami, Dark Cloud Cover, Piercing Line, Marubozu, Spinning Top,
+Tweezer Top/Bottom, Three Inside Up/Down, and any other relevant patterns.
+
+Also identify visible support/resistance levels from the data.
+
+Return ONE JSON object:
+{
+  "patterns": array of ALL detected patterns, highest-confidence first, each {
+    "name": exact pattern name,
+    "type": "bullish" | "bearish" | "neutral",
+    "confidence": "high" | "medium" | "low",
+    "candlesInvolved": integer 1-3,
+    "candleIndex": candles from the end (0 = most recent),
+    "description": one sentence on what this pattern signals
+  },
+  "overallSignal": "Strong Buy" | "Buy" | "Neutral" | "Sell" | "Strong Sell",
+  "signalStrength": integer 1-100 (50 = neutral, 100 = max bullish, 1 = max bearish),
+  "keyLevels": {
+    "support": array of up to 3 key support prices (numbers, most relevant first),
+    "resistance": array of up to 3 key resistance prices (numbers, most relevant first)
+  },
+  "trend": "Uptrend" | "Downtrend" | "Sideways",
+  "momentum": "Accelerating" | "Decelerating" | "Neutral",
+  "summary": 2-3 sentence technical read combining patterns with broader price action,
+  "recommendation": one concrete actionable sentence (e.g. "Wait for close above $X before entering long")
+}
+Return ONLY the JSON object. No markdown, no commentary.`;
+
 // ───────────────────────── fetchers ─────────────────────────
+
+async function fetchCandleAnalysis(env, ctx, symbol, range) {
+  const chartData = await getChart(env, ctx, symbol, range);
+  const points = (chartData.points || []).filter((p) => p.o != null && p.h != null && p.l != null);
+  if (points.length < 3) throw new Error('Not enough OHLC data for candle analysis.');
+
+  // Send the last 40 candles — enough context without overloading the prompt.
+  const recent = points.slice(-40);
+  const header = 'IDX | DATE       | OPEN   | HIGH   | LOW    | CLOSE';
+  const rows = recent.map((p, i) => {
+    const dt = new Date(p.t).toISOString().slice(0, 10);
+    const fmt = (n) => (n != null ? n.toFixed(2).padStart(7) : '     N/A');
+    return `${String(i).padStart(3)} | ${dt} | ${fmt(p.o)} | ${fmt(p.h)} | ${fmt(p.l)} | ${fmt(p.c)}`;
+  });
+  const userPrompt =
+    `Symbol: ${symbol} | Range: ${range} | As of: ${new Date().toUTCString()}\n\n${header}\n${rows.join('\n')}\n\n` +
+    `Current price: ${recent[recent.length - 1].c.toFixed(2)}\n\nProduce the candlestick analysis JSON now.`;
+
+  const data = await runAIJson(env, CANDLE_SYSTEM, userPrompt,
+    (d) => d && Array.isArray(d.patterns) && d.overallSignal && d.keyLevels);
+
+  data.symbol = symbol;
+  data.range = range;
+  data.asOf = new Date().toISOString();
+  data.currentPrice = recent[recent.length - 1].c;
+  data.candleCount = points.length;
+  return data;
+}
 
 async function fetchIntelNews(env) {
   const headlines = await fetchWorldHeadlines();
@@ -892,8 +1111,8 @@ async function fetchSupplyChain(env, query) {
   if (!data || (!Array.isArray(data.suppliers) && !Array.isArray(data.customers))) {
     throw new Error('Expected suppliers/customers arrays.');
   }
-  data.suppliers = (Array.isArray(data.suppliers) ? data.suppliers : []).slice(0, 8);
-  data.customers = (Array.isArray(data.customers) ? data.customers : []).slice(0, 8);
+  data.suppliers = Array.isArray(data.suppliers) ? data.suppliers : [];
+  data.customers = Array.isArray(data.customers) ? data.customers : [];
   const focal = (focalTicker || data.ticker || '').toUpperCase();
 
   let peers = [];
@@ -1110,10 +1329,13 @@ async function fetchWindyWebcams(env) {
       const p = w.location || {};
       const lat = parseFloat(p.latitude), lon = parseFloat(p.longitude);
       if (Number.isNaN(lat) || Number.isNaN(lon)) continue;
+      const im = w.images || {};
+      const cur = im.current || {}, day = im.daylight || {};
       out.push({
         lat, lon, title: w.title || (p.city || 'Webcam'),
-        img: (w.images && w.images.current && w.images.current.preview) || '',
-        url: (w.player && (w.player.day || w.player.lifetime)) || '',
+        place: [p.city, p.country].filter(Boolean).join(', '),
+        img: cur.preview || day.preview || cur.thumbnail || day.thumbnail || '',
+        url: (w.player && (w.player.day || w.player.live || w.player.lifetime)) || '',
       });
     }
   }
@@ -1422,6 +1644,81 @@ async function handleApi(request, env, ctx, url) {
     return new Response(null, { status: 101, webSocket: client });
   }
 
+  // --- Live stock trade stream: proxy the browser <-> Finnhub's trade
+  // websocket, injecting the API key into the upstream URL so it never reaches
+  // the client. The browser sends {type:'subscribe'|'unsubscribe',symbol}; we
+  // forward verbatim and pipe Finnhub's real-time trade ticks straight back.
+  //
+  // Finnhub's websocket drops with code 1006 every ~5-10s as routine server
+  // behavior — a long-standing, widely-reported issue on their end (see
+  // finnhubio/Finnhub-API#520), not something a well-formed client can avoid.
+  // So we reconnect to Finnhub transparently here and keep the browser's
+  // socket open across the drop, instead of propagating the churn to it. ---
+  if (p === '/api/stocks/stream') {
+    if (request.headers.get('Upgrade') !== 'websocket') return new Response('Expected websocket', { status: 426 });
+    if (!env.FINNHUB_API_KEY) return new Response('Live stream not configured', { status: 503 });
+
+    const pair = new WebSocketPair();
+    const client = pair[0], server = pair[1];
+    server.accept();
+
+    let upstream = null, closed = false, lastSub = null, reconnectAttempts = 0, reconnectTimer = null;
+    const pending = [];
+    // Cloudflare tears down the request's execution context once nothing is
+    // pending on it — a bare setTimeout-driven reconnect loop isn't enough to
+    // keep it alive across the gap between Finnhub drops. Anchor it to
+    // ctx.waitUntil() with a promise that only resolves once the session ends.
+    let resolveSession;
+    ctx.waitUntil(new Promise((resolve) => { resolveSession = resolve; }));
+    const closeAll = () => {
+      closed = true;
+      clearTimeout(reconnectTimer);
+      try { upstream && upstream.close(); } catch {}
+      try { server.close(); } catch {}
+      resolveSession();
+    };
+    const scheduleReconnect = () => {
+      if (closed) return;
+      upstream = null;
+      reconnectAttempts = Math.min(reconnectAttempts + 1, 8);
+      // First retry is near-instant (this is Finnhub's routine flake, not an
+      // outage); back off only if reconnecting itself keeps failing.
+      const delay = reconnectAttempts <= 1 ? 250 : Math.min(15000, 500 * 2 ** (reconnectAttempts - 1));
+      clearTimeout(reconnectTimer);
+      reconnectTimer = setTimeout(connectUpstream, delay);
+    };
+    const connectUpstream = async () => {
+      if (closed) return;
+      try {
+        const resp = await fetch(`https://ws.finnhub.io?token=${env.FINNHUB_API_KEY}`, { headers: { Upgrade: 'websocket' } });
+        const sock = resp.webSocket;
+        if (!sock) return scheduleReconnect();
+        upstream = sock;
+        upstream.accept();
+        reconnectAttempts = 0;
+        upstream.addEventListener('message', (e) => { if (!closed) try { server.send(e.data); } catch {} });
+        upstream.addEventListener('close', () => scheduleReconnect());
+        upstream.addEventListener('error', () => scheduleReconnect());
+        // Replay whatever subscription the client currently wants, including any
+        // that queued up while we were reconnecting.
+        const toSend = pending.length ? pending.splice(0) : (lastSub ? [JSON.stringify(lastSub)] : []);
+        for (const m of toSend) try { upstream.send(m); } catch {}
+      } catch { scheduleReconnect(); }
+    };
+    connectUpstream();
+
+    server.addEventListener('message', (e) => {
+      let msg; try { msg = JSON.parse(e.data); } catch { msg = null; }
+      if (msg && msg.type === 'subscribe') lastSub = msg;
+      else if (msg && msg.type === 'unsubscribe' && lastSub && lastSub.symbol === msg.symbol) lastSub = null;
+      if (upstream) { try { upstream.send(e.data); } catch {} } else { pending.push(e.data); }
+    });
+    server.addEventListener('close', () => closeAll());
+    server.addEventListener('error', () => closeAll());
+
+    return new Response(null, { status: 101, webSocket: client });
+  }
+
   // --- GLOBAL MAP layers (free public feeds, normalized + cached) ---
   if (p === '/api/map/earthquakes') {
     try { const { data, fresh } = await getData(env, ctx, 'map:quakes', fetchQuakes); return json({ cached: !fresh, points: data }); }
@@ -1464,15 +1761,47 @@ async function handleApi(request, env, ctx, url) {
   if (p === '/api/quote') {
     if (!sym()) return json({ error: 'symbol is required' }, 400);
     if (!quotePool(env).length) return json({ error: 'No market-data provider configured.' }, 500);
-    return json(await getQuotePooled(env, sym()));
+    return json(await getQuoteCached(env, sym()));
   }
   if (p === '/api/data-status') {
-    const names = { quoteFinnhub: 'finnhub', quoteTwelve: 'twelvedata', quoteFMP: 'fmp', quoteAlpha: 'alphavantage' };
-    return json({ providers: quotePool(env).map((f) => names[f.name] || f.name), count: quotePool(env).length });
+    const pool = quotePool(env);
+    return json({ providers: pool.map((p) => p.name), count: pool.length });
   }
   if (p === '/api/profile') {
     if (!sym()) return json({ error: 'symbol is required' }, 400);
-    return json(await finnhub(env, '/stock/profile2', { symbol: sym() }));
+    const s = sym();
+    const fh = await finnhub(env, '/stock/profile2', { symbol: s }).catch(() => ({}));
+    // If Finnhub returned empty critical fields (common for ETFs / foreign tickers), enrich
+    // with TwelveData profile, then Alpha Vantage OVERVIEW as a second fallback.
+    const missing = !fh || (!fh.finnhubIndustry && !fh.country && !fh.weburl);
+    if (missing) {
+      if (env.TWELVEDATA_KEY) {
+        try {
+          const td = await fetchWithTimeout(`https://api.twelvedata.com/profile?symbol=${encodeURIComponent(s)}&apikey=${env.TWELVEDATA_KEY}`, {}, 8000).then((r) => r.ok ? r.json() : null);
+          if (td && td.name) {
+            fh.name = fh.name || td.name;
+            fh.finnhubIndustry = fh.finnhubIndustry || td.sector || td.industry || '';
+            fh.country = fh.country || td.country || '';
+            fh.weburl = fh.weburl || td.website || '';
+            fh.description = td.description || '';
+          }
+        } catch {}
+      }
+      if (!fh.finnhubIndustry && env.ALPHAVANTAGE_KEY) {
+        try {
+          const av = await fetchWithTimeout(`https://www.alphavantage.co/query?function=OVERVIEW&symbol=${encodeURIComponent(s)}&apikey=${env.ALPHAVANTAGE_KEY}`, {}, 8000).then((r) => r.ok ? r.json() : null);
+          if (av && av.Name) {
+            fh.name = fh.name || av.Name;
+            fh.finnhubIndustry = fh.finnhubIndustry || av.Industry || av.Sector || '';
+            fh.country = fh.country || av.Country || '';
+            fh.weburl = fh.weburl || av.OfficialSite || '';
+            fh.exchange = fh.exchange || av.Exchange || '';
+            fh.ipo = fh.ipo || av.IPODate || '';
+          }
+        } catch {}
+      }
+    }
+    return json(fh || {});
   }
   if (p === '/api/metrics') {
     if (!sym()) return json({ error: 'symbol is required' }, 400);
@@ -1497,11 +1826,13 @@ async function handleApi(request, env, ctx, url) {
   }
   if (p === '/api/ticker') {
     const basket = ['AAPL', 'MSFT', 'NVDA', 'AMZN', 'GOOGL', 'META', 'TSLA'];
-    const results = await Promise.all(basket.map(async (symbol) => {
+    // 15s stale-while-revalidate: the tape polls often, but the basket only needs
+    // to change every few seconds — keeps us comfortably under Finnhub's limit.
+    const { data } = await getData(env, ctx, 'ticker', async () => Promise.all(basket.map(async (symbol) => {
       try { const q = await finnhub(env, '/quote', { symbol }); return { symbol, price: q.c ?? 0, change: q.d ?? 0, percent: q.dp ?? 0 }; }
       catch { return { symbol, price: 0, change: 0, percent: 0 }; }
-    }));
-    return json(results);
+    })), 15 * 1000);
+    return json(data);
   }
   if (p === '/api/chart') {
     if (!sym()) return json({ error: 'symbol is required' }, 400);
@@ -1538,6 +1869,17 @@ async function handleApi(request, env, ctx, url) {
     if (!query) return json({ error: true, message: 'Missing company name or ticker.' }, 400);
     try { const { data, fresh } = await getData(env, ctx, 'deepdive:' + query.toLowerCase(), () => fetchDeepDive(env, query)); return json({ cached: !fresh, ...data }); }
     catch (err) { return json({ error: true, message: friendlyError(err) }, 500); }
+  }
+  if (p === '/api/intel/candles') {
+    const symbol = (qs.get('symbol') || qs.get('q') || '').trim().toUpperCase().slice(0, 10);
+    const range = (qs.get('range') || '1D').toUpperCase();
+    if (!symbol) return json({ error: true, message: 'Missing symbol.' }, 400);
+    if (!YAHOO_RANGE[range]) return json({ error: true, message: 'Invalid range.' }, 400);
+    try {
+      const cacheKey = `candles:${symbol.toLowerCase()}:${range.toLowerCase()}`;
+      const { data, fresh } = await getData(env, ctx, cacheKey, () => fetchCandleAnalysis(env, ctx, symbol, range), 5 * 60 * 1000);
+      return json({ cached: !fresh, ...data });
+    } catch (err) { return json({ error: true, message: friendlyError(err) }, 500); }
   }
   if (p === '/api/intel/situation') {
     try {
