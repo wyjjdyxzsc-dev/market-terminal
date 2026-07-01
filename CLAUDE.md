@@ -35,7 +35,7 @@ Deploys to `https://market-terminal.wyjjdyxzsc.workers.dev`
 
 ## Rules & Conventions
 
-- **No frameworks, no bundler.** Cache-busting via `?v=X` in index.html.
+- **No frameworks, no bundler.** Cache-busting via `?v=X` in index.html — **bump `?v=` on EVERY deploy** (format: `YYYYMMDDX` where X is a letter a/b/c…). Never skip this; browsers and Cloudflare edge will serve stale JS/CSS otherwise.
 - **Backend**: All errors → 502 JSON + console log. Rate limit: 30 req/min per IP.
 - **Quant**: Pure JS, no DOM dependencies. Exported as IIFE singleton `Quant`.
 - **Naming**: 
@@ -68,10 +68,16 @@ Deploys to `https://market-terminal.wyjjdyxzsc.workers.dev`
 
 **New KV cache key**: `cache:map:layers` (24h TTL) — augmented layer dataset
 
+**Module 4 complete** (`app.js` / `index.html` / `style.css`):
+- Lower-pane oscillator strip below chart: MACD (histogram + orange line + blue signal), CCI (with ±100 OB/OS zones), Williams %R (with −20/−80 zones). Toggle via `[MACD] [CCI] [W%R]` buttons.
+- Keltner Channel shaded band overlay on main chart (toggle `[KC]` button). Alpha-filled band between upper/lower, dashed midline.
+- Monte Carlo forward fan: 500 GBM paths projecting from last price into right margin, RAF-batched in 50-path chunks to avoid jank. Toggle `[MC]` button.
+- 1D flatline fix was already implemented (walks backward to `fillEndIdx` — no change needed).
+- Canvas layout: `padB` now includes 86px lower pane + 6px gap. `.chart-body` is flex-column; canvas flex-grows.
+
 **Immediate next**:
-- Module 4: `app.js` / `index.html` — canvas Monte Carlo path rendering (2,000 paths, RAF batch), 1D chart flatline fix, lower-pane oscillator rendering
-- `worker.js` parity — bring Cloudflare Worker up to same feature level as `server.js` (new routes, map layers, augmented data)
 - Test suite (no coverage yet)
+- Phase 5/6 if any remaining from roadmap
 
 **Branches**: All work on `main` (no feature branches yet).
 

@@ -19,7 +19,13 @@ const state = {
   chartType: 'line', // 'line' | 'candle'
   chart: null,      // last { points, meta } payload
   quote: null,      // last quote payload (for current price reference)
+  lowerOsc: 'MACD', // 'MACD' | 'CCI' | 'WR'
+  showKC: true,     // Keltner Channel overlay
+  showMC: false,    // Monte Carlo forward fan
 };
+
+// MC fan state — generated per symbol/range, drawn via RAF
+const _mc = { symbol: null, range: null, paths: null, rafId: null };
 
 // ───────────────────────── tiny helpers ─────────────────────────
 const $ = (id) => document.getElementById(id);
@@ -430,7 +436,10 @@ function drawChart() {
     t0 = points[0].t; t1 = points[points.length - 1].t;
   }
 
-  const padL = 52, padR = 66, padT = 14, padB = 24; // price labels left; prev-close label right
+  const lowerPaneH = 86;  // height of the lower oscillator pane
+  const oscGap = 6;       // gap between main chart and lower pane
+  const padL = 52, padR = 66, padT = 14;
+  const padB = 24 + lowerPaneH + oscGap; // total bottom padding includes lower pane
   const plotW = W - padL - padR;
   const plotH = H - padT - padB;
 
@@ -544,6 +553,53 @@ function drawChart() {
 
   const lastX = xOf(points[points.length - 1].t);
 
+  // ── Keltner Channel shaded band (drawn UNDER the price line) ──
+  if (state.showKC && window.Quant && points.length >= 22) {
+    try {
+      const highs = new Float64Array(points.map((p) => p.h ?? p.c));
+      const lows  = new Float64Array(points.map((p) => p.l ?? p.c));
+      const cls   = new Float64Array(closes);
+      const kc = Quant.keltnerChannels(cls, highs, lows, 20, 2);
+      const warmup = 22;
+      ctx.save();
+      ctx.globalAlpha = 0.18;
+      ctx.fillStyle = lineColor;
+      ctx.beginPath();
+      let first_valid = true;
+      for (let i = warmup; i < points.length; i++) {
+        if (kc.upper[i] == null || isNaN(kc.upper[i])) continue;
+        const x = xOf(points[i].t), y = yOf(kc.upper[i]);
+        if (first_valid) { ctx.moveTo(x, y); first_valid = false; } else ctx.lineTo(x, y);
+      }
+      for (let i = points.length - 1; i >= warmup; i--) {
+        if (kc.lower[i] == null || isNaN(kc.lower[i])) continue;
+        ctx.lineTo(xOf(points[i].t), yOf(kc.lower[i]));
+      }
+      ctx.closePath();
+      ctx.fill();
+      // Draw KC midline
+      ctx.globalAlpha = 0.35;
+      ctx.strokeStyle = lineColor;
+      ctx.lineWidth = 1;
+      ctx.setLineDash([3, 3]);
+      ctx.beginPath();
+      first_valid = true;
+      for (let i = warmup; i < points.length; i++) {
+        if (kc.middle[i] == null || isNaN(kc.middle[i])) continue;
+        const x = xOf(points[i].t), y = yOf(kc.middle[i]);
+        if (first_valid) { ctx.moveTo(x, y); first_valid = false; } else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
+    } catch { /* KC calc failed */ }
+  }
+
+  // ── Monte Carlo forward fan (500 paths, drawn AFTER price line via RAF) ──
+  if (state.showMC && window.Quant && points.length >= 30) {
+    scheduleMcFan(points, lastX, padL, padR, padT, plotH, W, min, max, xOf, yOf, t0, t1);
+  }
+
   if (candle) {
     // ── candlesticks (wick = high→low, body = open→close) ──
     const cw = points.length > 1
@@ -613,8 +669,219 @@ function drawChart() {
   // cache geometry for hover
   chartGeom = { points, padL, padR, padT, padB, plotW, plotH, W, H, t0, t1, min, max, xOf, yOf, lineColor };
 
+  // ── lower pane oscillator ──
+  drawLowerPane(ctx, points, W, H, padL, padR, padT, plotH, lowerPaneH, oscGap, xOf);
+
   // re-draw crosshair if hovering
   if (hoverX !== null) drawCrosshair();
+}
+
+// ─────────────────────────────────────────────────────────────────
+// LOWER PANE — MACD / CCI / Williams %R
+// ─────────────────────────────────────────────────────────────────
+function drawLowerPane(ctx, points, W, H, padL, padR, padT, plotH, lowerH, gap, xOf) {
+  if (!window.Quant || points.length < 30) return;
+  const oscType = state.lowerOsc;
+  const paneTop = padT + plotH + gap;
+  const paneBot = paneTop + lowerH;
+
+  // separator line
+  ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(padL, paneTop);
+  ctx.lineTo(W - padR, paneTop);
+  ctx.stroke();
+
+  // label
+  ctx.font = '9px "SF Mono", Menlo, monospace';
+  ctx.fillStyle = '#5a6472';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  ctx.fillText(oscType, padL + 3, paneTop + 3);
+
+  const closes = new Float64Array(points.map((p) => p.c));
+  const highs  = new Float64Array(points.map((p) => p.h ?? p.c));
+  const lows   = new Float64Array(points.map((p) => p.l ?? p.c));
+  const n = points.length;
+
+  try {
+    if (oscType === 'MACD') {
+      const { macdLine, signalLine, histogram } = Quant.macd(closes, 12, 26, 9);
+      // find valid range
+      let vmin = Infinity, vmax = -Infinity;
+      for (let i = 0; i < n; i++) {
+        if (histogram[i] == null || isNaN(histogram[i])) continue;
+        if (histogram[i] < vmin) vmin = histogram[i];
+        if (histogram[i] > vmax) vmax = histogram[i];
+        if (macdLine[i] != null && !isNaN(macdLine[i])) {
+          if (macdLine[i] < vmin) vmin = macdLine[i];
+          if (macdLine[i] > vmax) vmax = macdLine[i];
+        }
+      }
+      if (vmin === Infinity || vmin === vmax) return;
+      const pad = (vmax - vmin) * 0.1 || 0.01;
+      vmin -= pad; vmax += pad;
+      const yP = (v) => paneTop + (1 - (v - vmin) / (vmax - vmin)) * lowerH;
+      const zeroY = yP(0);
+
+      // zero line
+      ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(padL, zeroY); ctx.lineTo(W - padR, zeroY); ctx.stroke();
+
+      // histogram bars
+      const bw = Math.max(1, (W - padL - padR) / n - 1);
+      for (let i = 0; i < n; i++) {
+        if (histogram[i] == null || isNaN(histogram[i])) continue;
+        const x = xOf(points[i].t);
+        const barTop = Math.min(zeroY, yP(histogram[i]));
+        const barH = Math.abs(yP(histogram[i]) - zeroY);
+        ctx.fillStyle = histogram[i] >= 0 ? 'rgba(43,217,124,0.45)' : 'rgba(255,69,58,0.45)';
+        ctx.fillRect(x - bw / 2, barTop, bw, Math.max(1, barH));
+      }
+
+      // MACD line (orange)
+      ctx.beginPath();
+      let mv = false;
+      for (let i = 0; i < n; i++) {
+        if (macdLine[i] == null || isNaN(macdLine[i])) { mv = false; continue; }
+        const x = xOf(points[i].t), y = yP(macdLine[i]);
+        if (!mv) { ctx.moveTo(x, y); mv = true; } else ctx.lineTo(x, y);
+      }
+      ctx.strokeStyle = '#ffa028'; ctx.lineWidth = 1.2; ctx.lineJoin = 'round'; ctx.stroke();
+
+      // Signal line (sky blue)
+      ctx.beginPath();
+      mv = false;
+      for (let i = 0; i < n; i++) {
+        if (signalLine[i] == null || isNaN(signalLine[i])) { mv = false; continue; }
+        const x = xOf(points[i].t), y = yP(signalLine[i]);
+        if (!mv) { ctx.moveTo(x, y); mv = true; } else ctx.lineTo(x, y);
+      }
+      ctx.strokeStyle = '#5ac8fa'; ctx.lineWidth = 1; ctx.stroke();
+
+    } else if (oscType === 'CCI') {
+      const cci = Quant.cci(closes, highs, lows, 20);
+      const yP = (v) => paneTop + (1 - (v + 200) / 400) * lowerH;
+
+      // OB/OS zones
+      ctx.fillStyle = 'rgba(255,69,58,0.07)';
+      ctx.fillRect(padL, paneTop, W - padL - padR, yP(100) - paneTop);
+      ctx.fillStyle = 'rgba(43,217,124,0.07)';
+      ctx.fillRect(padL, yP(-100), W - padL - padR, paneBot - yP(-100));
+
+      // zone lines
+      ctx.strokeStyle = 'rgba(255,255,255,0.1)'; ctx.lineWidth = 1;
+      [100, 0, -100].forEach((v) => {
+        const y = yP(v);
+        ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(W - padR, y); ctx.stroke();
+      });
+
+      // CCI line
+      ctx.beginPath();
+      let mv = false;
+      for (let i = 0; i < n; i++) {
+        if (cci[i] == null || isNaN(cci[i])) { mv = false; continue; }
+        const x = xOf(points[i].t), y = yP(Math.max(-200, Math.min(200, cci[i])));
+        if (!mv) { ctx.moveTo(x, y); mv = true; } else ctx.lineTo(x, y);
+      }
+      ctx.strokeStyle = '#d96bff'; ctx.lineWidth = 1.2; ctx.lineJoin = 'round'; ctx.stroke();
+
+    } else if (oscType === 'WR') {
+      const wr = Quant.williamsR(closes, highs, lows, 14);
+      const yP = (v) => paneTop + (1 - (v + 100) / 100) * lowerH;
+
+      // OB/OS shading (-20 top zone, -80 bottom zone)
+      ctx.fillStyle = 'rgba(255,69,58,0.07)';
+      ctx.fillRect(padL, paneTop, W - padL - padR, yP(-20) - paneTop);
+      ctx.fillStyle = 'rgba(43,217,124,0.07)';
+      ctx.fillRect(padL, yP(-80), W - padL - padR, paneBot - yP(-80));
+
+      ctx.strokeStyle = 'rgba(255,255,255,0.1)'; ctx.lineWidth = 1;
+      [-20, -50, -80].forEach((v) => {
+        const y = yP(v);
+        ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(W - padR, y); ctx.stroke();
+      });
+
+      ctx.beginPath();
+      let mv = false;
+      for (let i = 0; i < n; i++) {
+        if (wr[i] == null || isNaN(wr[i])) { mv = false; continue; }
+        const x = xOf(points[i].t), y = yP(Math.max(-100, Math.min(0, wr[i])));
+        if (!mv) { ctx.moveTo(x, y); mv = true; } else ctx.lineTo(x, y);
+      }
+      ctx.strokeStyle = '#5ac8fa'; ctx.lineWidth = 1.2; ctx.lineJoin = 'round'; ctx.stroke();
+    }
+  } catch { /* osc calc failed — skip lower pane */ }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// MONTE CARLO FORWARD FAN — 500 paths, RAF-batched in chunks of 50
+// Projects from the last price into the right margin area (padR).
+// ─────────────────────────────────────────────────────────────────
+function scheduleMcFan(points, lastX, padL, padR, padT, plotH, W, min, max, xOf, yOf, t0, t1) {
+  if (!window.Quant) return;
+  const sym = state.symbol + '|' + state.range;
+  if (_mc.rafId) { cancelAnimationFrame(_mc.rafId); _mc.rafId = null; }
+
+  // Only recompute if symbol/range changed
+  if (_mc.symbol !== sym || !_mc.paths) {
+    try {
+      const closes = new Float64Array(points.map((p) => p.c));
+      const rets = Quant.dailyReturns(closes);
+      const mu    = Quant.mean(rets);
+      const sigma = Quant.stdev(rets);
+      const S0    = closes[closes.length - 1];
+      const rawPaths = Quant.monteCarloGBM({ S0, mu, sigma, days: 20, paths: 500 });
+      _mc.paths = rawPaths;
+      _mc.symbol = sym;
+    } catch { return; }
+  }
+
+  const paths = _mc.paths;
+  const nDays = paths.length;
+  const nPaths = paths[0].length;
+  const dt = (t1 - t0) / (points.length - 1); // avg ms per bar
+  const S0 = points[points.length - 1].c;
+  const tLast = points[points.length - 1].t;
+
+  // Build per-path pixel arrays up front
+  const pathCoords = [];
+  for (let pi = 0; pi < nPaths; pi++) {
+    const coords = [];
+    for (let di = 0; di < nDays; di++) {
+      const t = tLast + (di + 1) * dt;
+      const price = paths[di][pi];
+      const x = lastX + (di + 1) * (dt / (t1 - t0) * (W - padL - padR));
+      const y = yOf(price);
+      if (x > W - 4) break; // clip to canvas right edge
+      coords.push([x, y]);
+    }
+    pathCoords.push(coords);
+  }
+
+  let drawn = 0;
+  const CHUNK = 50;
+
+  function drawChunk() {
+    const end = Math.min(drawn + CHUNK, nPaths);
+    for (let pi = drawn; pi < end; pi++) {
+      const coords = pathCoords[pi];
+      if (!coords.length) continue;
+      ctx.beginPath();
+      ctx.moveTo(lastX, yOf(S0));
+      for (const [x, y] of coords) ctx.lineTo(x, y);
+      ctx.strokeStyle = 'rgba(255,160,40,0.04)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+    drawn = end;
+    if (drawn < nPaths) _mc.rafId = requestAnimationFrame(drawChunk);
+    else _mc.rafId = null;
+  }
+
+  _mc.rafId = requestAnimationFrame(drawChunk);
 }
 
 // US-market charts always render in Eastern time (like Google Finance), not the
@@ -845,6 +1112,48 @@ function setupRangeButtons() {
   });
 }
 
+// ───────────────────────── oscillator / overlay toggle buttons ─────────────────────────
+function setupOscButtons() {
+  const bar = $('chartOscBar');
+  if (!bar) return;
+
+  bar.addEventListener('click', (e) => {
+    const btn = e.target.closest('.osc-btn');
+    if (!btn) return;
+    const id = btn.id;
+
+    if (id === 'kcToggle') {
+      state.showKC = !state.showKC;
+      btn.dataset.active = state.showKC ? '1' : '0';
+      btn.classList.toggle('active', state.showKC);
+      if (state.chart) drawChart();
+      return;
+    }
+    if (id === 'mcToggle') {
+      state.showMC = !state.showMC;
+      btn.dataset.active = state.showMC ? '1' : '0';
+      btn.classList.toggle('active', state.showMC);
+      if (_mc.rafId) { cancelAnimationFrame(_mc.rafId); _mc.rafId = null; }
+      if (state.chart) drawChart();
+      return;
+    }
+
+    // Lower-pane oscillator selector (MACD / CCI / WR)
+    const osc = btn.dataset.osc;
+    if (!osc || osc === 'KC' || osc === 'MC') return;
+    state.lowerOsc = osc;
+    bar.querySelectorAll('.osc-btn[data-osc]').forEach((b) => {
+      if (b.id === 'kcToggle' || b.id === 'mcToggle') return;
+      b.classList.toggle('active', b.dataset.osc === osc);
+    });
+    if (state.chart) drawChart();
+  });
+
+  // Set initial active state visually
+  $('kcToggle').classList.toggle('active', state.showKC);
+  $('mcToggle').classList.toggle('active', state.showMC);
+}
+
 // ───────────────────────── view tabs ─────────────────────────
 // Top-level navigation between the TERMINAL and the Intelligence views.
 // Showing a view dispatches a `tabshown` event so intel.js can lazy-load its data.
@@ -1023,6 +1332,7 @@ function boot() {
   setInterval(tickClock, 1000);
 
   setupTabs();
+  setupOscButtons();
   setupCommandBar();
   setupRangeButtons();
   setupQuantPanel();

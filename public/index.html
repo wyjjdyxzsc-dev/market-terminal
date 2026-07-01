@@ -14,7 +14,7 @@
   <meta name="apple-mobile-web-app-title" content="MktTerminal" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
     integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-  <link rel="stylesheet" href="style.css?v=20260701e" />
+  <link rel="stylesheet" href="style.css?v=20260701f" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%230a0a0a'/><text x='8' y='12' font-size='11' text-anchor='middle' fill='%23ffa028' font-family='monospace'>M</text></svg>" />
 </head>
 <body>
@@ -121,6 +121,14 @@
             <div class="panel-body chart-body">
               <div class="chart-msg" id="chartMsg" hidden></div>
               <canvas id="chartCanvas"></canvas>
+              <div class="chart-osc-bar" id="chartOscBar">
+                <button class="osc-btn active" data-osc="MACD" type="button" title="MACD histogram + signal">MACD</button>
+                <button class="osc-btn" data-osc="CCI" type="button" title="Commodity Channel Index (20)">CCI</button>
+                <button class="osc-btn" data-osc="WR" type="button" title="Williams %R (14)">W%R</button>
+                <span class="osc-divider">|</span>
+                <button class="osc-btn" id="kcToggle" data-active="1" type="button" title="Keltner Channel overlay">KC</button>
+                <button class="osc-btn" id="mcToggle" data-active="0" type="button" title="Monte Carlo forward fan (500 paths)">MC</button>
+              </div>
             </div>
           </div>
         </section>
@@ -354,12 +362,12 @@
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
     integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-  <script src="quant.js?v=20260701e"></script>
-  <script src="app.js?v=20260701e"></script>
-  <script src="intel.js?v=20260701e"></script>
-  <script src="ships.js?v=20260701e"></script>
-  <script src="mapintel.js?v=20260701e"></script>
+  <script src="quant.js?v=20260701f"></script>
+  <script src="app.js?v=20260701f"></script>
+  <script src="intel.js?v=20260701f"></script>
+  <script src="ships.js?v=20260701f"></script>
+  <script src="mapintel.js?v=20260701f"></script>
   <script src="https://unpkg.com/globe.gl@2.34.0/dist/globe.gl.min.js"></script>
-  <script src="globe.js?v=20260701e"></script>
+  <script src="globe.js?v=20260701f"></script>
 </body>
 </html>
