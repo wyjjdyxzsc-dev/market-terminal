@@ -90,10 +90,35 @@ function tickClock() {
   updateMarketStatus(now);
 }
 
+// NYSE holidays and early-close days (1:00 PM ET). Covers 2025–2027.
+// Early closes: day before Independence Day, Thanksgiving, Christmas (when applicable).
+const NYSE_HOLIDAYS = new Set([
+  // 2025
+  '2025-01-01','2025-01-09','2025-01-20','2025-02-17','2025-04-18',
+  '2025-05-26','2025-06-19','2025-07-04','2025-09-01','2025-11-27',
+  '2025-12-25',
+  // 2026
+  '2026-01-01','2026-01-19','2026-02-16','2026-04-03',
+  '2026-05-25','2026-06-19','2026-07-03', // Jul 4 falls Sat → observed Fri Jul 3
+  '2026-09-07','2026-11-26','2026-12-25',
+  // 2027
+  '2027-01-01','2027-01-18','2027-02-15','2027-03-26',
+  '2027-05-31','2027-06-18', // Jun 19 falls Sat → observed Fri Jun 18
+  '2027-07-05', // Jul 4 falls Sun → observed Mon Jul 5
+  '2027-09-06','2027-11-25','2027-12-24', // Dec 25 falls Sat → observed Fri Dec 24
+]);
+// Early close at 1:00 PM ET on these dates.
+const NYSE_EARLY_CLOSE = new Set([
+  '2025-07-03','2025-11-28','2025-12-24',
+  '2026-11-27',
+  '2027-11-26',
+]);
+
 function updateMarketStatus(now) {
   // Work in America/New_York wall-clock time.
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone: 'America/New_York',
+    year: 'numeric', month: '2-digit', day: '2-digit',
     weekday: 'short',
     hour: 'numeric',
     minute: 'numeric',
@@ -102,22 +127,25 @@ function updateMarketStatus(now) {
 
   const get = (t) => parts.find((p) => p.type === t)?.value;
   const weekday = get('weekday');
+  const etDate = `${get('year')}-${get('month')}-${get('day')}`;
   let hour = parseInt(get('hour'), 10);
   if (hour === 24) hour = 0;
   const minute = parseInt(get('minute'), 10);
   const mins = hour * 60 + minute;
 
   const isWeekday = !['Sat', 'Sun'].includes(weekday);
-  const open = 9 * 60 + 30; // 09:30
-  const close = 16 * 60;    // 16:00
-  const preStart = 4 * 60;  // 04:00
-  const afterEnd = 20 * 60; // 20:00
+  const isHoliday = NYSE_HOLIDAYS.has(etDate);
+  const isEarlyClose = NYSE_EARLY_CLOSE.has(etDate);
+  const open = 9 * 60 + 30;  // 09:30
+  const close = isEarlyClose ? 13 * 60 : 16 * 60; // 13:00 early / 16:00 normal
+  const preStart = 4 * 60;    // 04:00
+  const afterEnd = 20 * 60;   // 20:00
 
   const el = $('marketStatus');
   let cls = 'closed', text = 'CLOSED';
 
-  if (isWeekday) {
-    if (mins >= open && mins < close) { cls = 'open'; text = 'OPEN'; }
+  if (isWeekday && !isHoliday) {
+    if (mins >= open && mins < close) { cls = 'open'; text = isEarlyClose ? 'OPEN (EARLY CLOSE 1PM)' : 'OPEN'; }
     else if (mins >= preStart && mins < open) { cls = 'ext'; text = 'PRE-MKT'; }
     else if (mins >= close && mins < afterEnd) { cls = 'ext'; text = 'AFTER-HRS'; }
   }

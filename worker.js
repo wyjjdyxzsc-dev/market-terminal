@@ -823,12 +823,33 @@ Return ONE JSON object:
     "timeframe": "Weekly" | "Monthly" | "LEAPS",
     "rationale": 1-2 sentence reason grounded in IV/catalysts/news
   },
+  "technicalBias": "Bullish" | "Bearish" | "Neutral" (based on price vs key MAs, momentum, trend),
+  "entryZone": specific price or range to enter (e.g. "$148-152") or "N/A",
+  "stopLoss": specific stop-loss price (e.g. "$141") or "N/A",
+  "priceTarget": 3-6 month price target (e.g. "$175") or "N/A",
   "bullCase": array of EXACTLY 3 short strings,
   "bearCase": array of EXACTLY 3 short strings,
   "catalysts": array of 2-4 short strings (upcoming events/triggers to watch),
   "risks": array of 2-4 short strings
 }
 Return ONLY the JSON object. No markdown, no commentary.`;
+
+// Context-aware chat system prompt
+const CHAT_SYSTEM_FN = (ctx) => `You are a senior buy-side analyst, derivatives strategist, and macro economist embedded in a professional trading terminal. You give direct, decisive, actionable answers with specific numbers — never vague.
+
+Rules:
+- Be concise and direct. Give your actual view, not a list of caveats.
+- Cite specific tickers, price levels, option strikes, and timeframes when relevant.
+- For options: always specify DTE range, strike (OTM/ATM), and exact strategy type.
+- For stocks: give entry zone, stop loss, and target when asked.
+- If you lack current data for precision, say so in one sentence, then give your best view.
+- Never refuse to give a view. Every question deserves an actual answer.
+${ctx.symbol ? `\nCurrently loaded in terminal: ${ctx.symbol}${ctx.price ? ` at $${Number(ctx.price).toFixed(2)}` : ''}${ctx.change != null ? ` (${ctx.change >= 0 ? '+' : ''}${Number(ctx.change).toFixed(2)}% today)` : ''}.` : ''}
+${ctx.marketSentiment ? `\nMarket sentiment: ${ctx.marketSentiment} (score ${ctx.sentimentScore}/10). ${ctx.marketSummary || ''}` : ''}
+${ctx.newsSnippet ? `\nLatest headlines:\n${ctx.newsSnippet}` : ''}
+Today: ${new Date().toUTCString()}.
+
+Return ONLY JSON: { "reply": "your full response here" }`;
 
 const REPORT_SYSTEM = `You are the chief investment strategist on a global macro desk. You will be given REAL,
 current world + market headlines (geopolitics, conflict, trade, energy, central banks, technology,
@@ -2790,6 +2811,22 @@ async function handleApi(request, env, ctx, url) {
     try { const { data, fresh } = await getData(env, ctx, 'instability', () => fetchInstability(env)); return json({ cached: !fresh, ...data }); }
     catch (err) { return json({ error: true, message: friendlyError(err) }, 500); }
   }
+  if (p === '/api/intel/chat' && request.method === 'POST') {
+    try {
+      const body = await request.json().catch(() => ({}));
+      const messages = Array.isArray(body.messages) ? body.messages.slice(-12) : [];
+      const ctx = body.context || {};
+      if (!messages.length) return json({ error: true, message: 'No messages provided.' }, 400);
+      const history = messages.slice(0, -1).map((m) => `${m.role === 'user' ? 'USER' : 'ANALYST'}: ${m.content}`).join('\n\n');
+      const latest = messages[messages.length - 1].content;
+      const userPrompt = history ? `${history}\n\nUSER: ${latest}` : latest;
+      const system = CHAT_SYSTEM_FN(ctx);
+      const validate = (d) => d && typeof d.reply === 'string' && d.reply.length > 5;
+      const data = await runAIJson(env, system, userPrompt, validate);
+      return json({ reply: data.reply });
+    } catch (err) { return json({ error: true, message: friendlyError(err) }, 500); }
+  }
+
   if (p === '/api/intel/report') {
     try { const { data, fresh } = await getData(env, ctx, 'report', () => fetchInvestmentReport(env)); return json({ cached: !fresh, ...data }); }
     catch (err) { return json({ error: true, message: friendlyError(err) }, 500); }

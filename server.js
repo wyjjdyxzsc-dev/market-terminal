@@ -1138,12 +1138,32 @@ Return ONE JSON object:
     "timeframe": "Weekly"|"Monthly"|"LEAPS",
     "rationale": 1-2 sentence reason grounded in IV/catalysts/news
   },
+  "technicalBias": "Bullish" | "Bearish" | "Neutral",
+  "entryZone": specific price or range to enter (e.g. "$148-152") or "N/A",
+  "stopLoss": specific stop-loss price (e.g. "$141") or "N/A",
+  "priceTarget": 3-6 month price target (e.g. "$175") or "N/A",
   "bullCase": array of EXACTLY 3 short strings,
   "bearCase": array of EXACTLY 3 short strings,
   "catalysts": array of 2-4 short strings,
   "risks": array of 2-4 short strings
 }
 Return ONLY the JSON object. No markdown, no commentary.`;
+
+const CHAT_SYSTEM_FN = (ctx) => `You are a senior buy-side analyst, derivatives strategist, and macro economist embedded in a professional trading terminal. You give direct, decisive, actionable answers with specific numbers — never vague.
+
+Rules:
+- Be concise and direct. Give your actual view, not a list of caveats.
+- Cite specific tickers, price levels, option strikes, and timeframes when relevant.
+- For options: always specify DTE range, strike type (OTM/ATM/ITM), and exact strategy.
+- For stocks: give entry zone, stop loss, and target when asked.
+- If you lack current data for precision, say so in one sentence, then give your best view anyway.
+- Never refuse to give a view. Every question deserves an actual answer.
+${ctx.symbol ? `\nCurrently loaded in terminal: ${ctx.symbol}${ctx.price ? ` at $${Number(ctx.price).toFixed(2)}` : ''}${ctx.change != null ? ` (${ctx.change >= 0 ? '+' : ''}${Number(ctx.change).toFixed(2)}% today)` : ''}.` : ''}
+${ctx.marketSentiment ? `\nMarket sentiment: ${ctx.marketSentiment} (${ctx.sentimentScore}/10). ${ctx.marketSummary || ''}` : ''}
+${ctx.newsSnippet ? `\nLatest headlines:\n${ctx.newsSnippet}` : ''}
+Today: ${new Date().toUTCString()}.
+
+Return ONLY JSON: { "reply": "your full response here" }`;
 
 const REPORT_SYSTEM = `You are the chief investment strategist on a global macro desk. You will be given REAL,
 current world + market headlines pulled live moments ago. Read the whole picture like an intelligence analyst
@@ -2862,6 +2882,25 @@ app.get('/api/intel/deepdive', rateLimit, async (req, res) => {
     res.json({ cached: !fresh, ...data });
   } catch (err) {
     console.error('intel deepdive error:', err.message);
+    res.status(500).json({ error: true, message: friendlyError(err) });
+  }
+});
+
+app.post('/api/intel/chat', rateLimit, async (req, res) => {
+  try {
+    const messages = Array.isArray(req.body.messages) ? req.body.messages.slice(-12) : [];
+    const ctx = req.body.context || {};
+    if (!messages.length) return res.status(400).json({ error: true, message: 'No messages provided.' });
+    const history = messages.slice(0, -1).map((m) => `${m.role === 'user' ? 'USER' : 'ANALYST'}: ${m.content}`).join('\n\n');
+    const latest = messages[messages.length - 1].content;
+    const userPrompt = history ? `${history}\n\nUSER: ${latest}` : latest;
+    const system = CHAT_SYSTEM_FN(ctx);
+    const text = await runGroq(system, userPrompt);
+    const data = extractJson(text);
+    if (!data || typeof data.reply !== 'string') throw new Error('Invalid AI response');
+    res.json({ reply: data.reply });
+  } catch (err) {
+    console.error('chat error:', err.message);
     res.status(500).json({ error: true, message: friendlyError(err) });
   }
 });

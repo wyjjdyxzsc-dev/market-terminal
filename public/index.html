@@ -14,7 +14,7 @@
   <meta name="apple-mobile-web-app-title" content="MktTerminal" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
     integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-  <link rel="stylesheet" href="style.css?v=20260701n" />
+  <link rel="stylesheet" href="style.css?v=20260703a" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%230a0a0a'/><text x='8' y='12' font-size='11' text-anchor='middle' fill='%23ffa028' font-family='monospace'>M</text></svg>" />
 </head>
 <body>
@@ -25,6 +25,7 @@
     </div>
     <div class="topbar-right">
       <button id="intelRefresh" class="intel-refresh" type="button" title="Refresh this view" hidden>⟳</button>
+      <button id="aiChatToggle" class="ai-chat-toggle" type="button" title="Ask the AI analyst">💬 ASK AI</button>
       <div class="market-status" id="marketStatus">
         <span class="dot" id="statusDot"></span>
         <span id="statusText">—</span>
@@ -404,6 +405,33 @@
     </section>
   </main>
 
+  <!-- ───────────── AI Chat Panel ───────────── -->
+  <div id="aiChatPanel" class="ai-chat-panel" hidden>
+    <div class="ai-chat-header">
+      <span class="ai-chat-title">💬 AI ANALYST</span>
+      <span class="ai-chat-ctx" id="aiChatCtx"></span>
+      <button class="ai-chat-clear" id="aiChatClear" type="button" title="Clear chat">Clear</button>
+      <button class="ai-chat-close" id="aiChatClose" type="button" title="Close">✕</button>
+    </div>
+    <div class="ai-chat-messages" id="aiChatMessages">
+      <div class="ai-chat-welcome">
+        <div class="ai-chat-welcome-title">What do you want to know?</div>
+        <div class="ai-chat-suggestions" id="aiChatSuggestions">
+          <button class="ai-sug" data-q="What's moving the market right now?">What's moving the market?</button>
+          <button class="ai-sug" data-q="What's the best options trade right now?">Best options trade now?</button>
+          <button class="ai-sug" data-q="Should I buy or sell the currently loaded stock?">Buy or sell this stock?</button>
+          <button class="ai-sug" data-q="What sectors should I be in right now?">Which sectors to be in?</button>
+          <button class="ai-sug" data-q="What are the biggest macro risks to the market?">Biggest macro risks?</button>
+          <button class="ai-sug" data-q="Give me a trade idea for today.">Give me a trade idea</button>
+        </div>
+      </div>
+    </div>
+    <div class="ai-chat-input-row">
+      <input type="text" id="aiChatInput" class="ai-chat-input" placeholder="Ask anything about markets, stocks, options…" autocomplete="off" />
+      <button id="aiChatSend" class="ai-chat-send" type="button">↑</button>
+    </div>
+  </div>
+
   <!-- ───────────── Status bar ───────────── -->
   <footer class="statusbar">
     <span id="statusMsg">Ready.</span>
@@ -414,12 +442,12 @@
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
     integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-  <script src="quant.js?v=20260701n"></script>
-  <script src="app.js?v=20260701n"></script>
-  <script src="intel.js?v=20260701n"></script>
-  <script src="mapintel.js?v=20260701n"></script>
-  <script src="ships.js?v=20260701n"></script>
+  <script src="quant.js?v=20260703a"></script>
+  <script src="app.js?v=20260703a"></script>
+  <script src="intel.js?v=20260703a"></script>
+  <script src="mapintel.js?v=20260703a"></script>
+  <script src="ships.js?v=20260703a"></script>
   <script src="https://unpkg.com/globe.gl@2.34.0/dist/globe.gl.min.js"></script>
-  <script src="globe.js?v=20260701n"></script>
+  <script src="globe.js?v=20260703a"></script>
 </body>
 </html>

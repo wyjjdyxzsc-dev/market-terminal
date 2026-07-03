@@ -134,6 +134,7 @@
       const data = await fetchJSON('/api/intel/news');
       if (data.error) throw new Error(data.message);
       newsItems = data.items || [];
+      window._intelNewsItems = newsItems;
       $('#newsStatus').textContent = '';
       buildChips();
       renderNews();
@@ -255,6 +256,7 @@
       const data = await fetchJSON('/api/intel/analysis');
       if (data.error) throw new Error(data.message);
       analysisData = data;
+      window._intelAnalysisData = analysisData;
       $('#analysisStatus').textContent = '';
       $('#sentimentBanner').classList.remove('hidden');
       renderSentiment();
@@ -802,6 +804,14 @@
         </div>
 
         ${d.keyDrivers ? `<div class="dd-drivers"><span class="dd-drivers-label">WHAT'S MOVING IT</span> ${esc(d.keyDrivers)}</div>` : ''}
+
+        ${(d.technicalBias || d.entryZone || d.stopLoss || d.priceTarget) ? `
+        <div class="dd-levels">
+          ${d.technicalBias ? `<div class="dd-level-bias dd-level-bias--${esc((d.technicalBias||'').toLowerCase())}"><span>TECH BIAS</span><b>${esc(d.technicalBias)}</b></div>` : ''}
+          ${d.entryZone ? `<div class="dd-level-item"><span>ENTRY</span><b>${esc(d.entryZone)}</b></div>` : ''}
+          ${d.stopLoss ? `<div class="dd-level-item dd-level-stop"><span>STOP</span><b>${esc(d.stopLoss)}</b></div>` : ''}
+          ${d.priceTarget ? `<div class="dd-level-item dd-level-target"><span>TARGET</span><b>${esc(d.priceTarget)}</b></div>` : ''}
+        </div>` : ''}
 
         <div class="dd-cases">
           <div class="dd-case dd-bull"><h4>▲ BULL CASE</h4><ul>${liList(d.bullCase)}</ul></div>
@@ -2120,4 +2130,189 @@
 
   // Expose for external callers
   window.WorldMap = { init: tryInitMap, refresh: () => { infraData = null; if (mapInitialized) fetch('/api/map/infrastructure').then(r=>r.json()).then(d=>{infraData=d;requestRender();}).catch(()=>{}); } };
+})();
+
+// ═══════════════════════════════════════════════════════════════════════════
+// AI CHAT PANEL
+// ═══════════════════════════════════════════════════════════════════════════
+(function AIChatEngine() {
+  'use strict';
+
+  const panel = document.getElementById('aiChatPanel');
+  const toggleBtn = document.getElementById('aiChatToggle');
+  const closeBtn = document.getElementById('aiChatClose');
+  const clearBtn = document.getElementById('aiChatClear');
+  const messagesEl = document.getElementById('aiChatMessages');
+  const inputEl = document.getElementById('aiChatInput');
+  const sendBtn = document.getElementById('aiChatSend');
+  const ctxEl = document.getElementById('aiChatCtx');
+  const suggestionsEl = document.getElementById('aiChatSuggestions');
+
+  if (!panel || !toggleBtn) return;
+
+  let chatHistory = [];
+  let isSending = false;
+
+  // ── Open / close ──────────────────────────────────────────────────────
+  function openPanel() {
+    panel.hidden = false;
+    toggleBtn.classList.add('active');
+    updateCtxLabel();
+    inputEl.focus();
+  }
+
+  function closePanel() {
+    panel.hidden = true;
+    toggleBtn.classList.remove('active');
+  }
+
+  toggleBtn.addEventListener('click', () => panel.hidden ? openPanel() : closePanel());
+  closeBtn.addEventListener('click', closePanel);
+
+  // ── Context label ─────────────────────────────────────────────────────
+  function updateCtxLabel() {
+    const sym = window.state && window.state.symbol;
+    const price = window.state && window.state.lastPrice;
+    if (sym) {
+      ctxEl.textContent = price ? `${sym} · $${Number(price).toFixed(2)}` : sym;
+    } else {
+      ctxEl.textContent = 'No symbol loaded';
+    }
+  }
+
+  // ── Build context object for the backend ─────────────────────────────
+  function buildContext() {
+    const sym = window.state && window.state.symbol;
+    const price = window.state && window.state.lastPrice;
+    const cached = window._intelAnalysisData; // set below when analysis loads
+    const headlines = (window._intelNewsItems || []).slice(0, 5).map((n) => n.headline || n.title || '').filter(Boolean);
+    return {
+      symbol: sym || null,
+      price: price ? Number(price).toFixed(2) : null,
+      marketSentiment: cached ? cached.marketSentiment : null,
+      sentimentScore: cached ? cached.sentimentScore : null,
+      keyThemes: cached ? (cached.keyThemes || []).join(', ') : null,
+      recentHeadlines: headlines,
+    };
+  }
+
+  // ── Render helpers ───────────────────────────────────────────────────
+  function escHtml(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function formatReply(text) {
+    // Bold **text** and *text*, convert newlines to <br>
+    return escHtml(text)
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(.+?)\*/g, '<em>$1</em>')
+      .replace(/\n/g, '<br>');
+  }
+
+  function appendMsg(role, content) {
+    // Hide welcome screen once a message is added
+    const welcome = messagesEl.querySelector('.ai-chat-welcome');
+    if (welcome) welcome.remove();
+
+    const div = document.createElement('div');
+    div.className = `chat-msg chat-msg-${role}`;
+    const bubble = document.createElement('div');
+    bubble.className = 'chat-bubble';
+    if (role === 'ai') {
+      bubble.innerHTML = formatReply(content);
+    } else {
+      bubble.textContent = content;
+    }
+    div.appendChild(bubble);
+    messagesEl.appendChild(div);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+    return bubble;
+  }
+
+  function showTyping() {
+    const div = document.createElement('div');
+    div.className = 'chat-msg chat-msg-ai';
+    div.id = 'chatTyping';
+    div.innerHTML = '<div class="chat-typing"><span></span><span></span><span></span></div>';
+    messagesEl.appendChild(div);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
+
+  function removeTyping() {
+    const el = document.getElementById('chatTyping');
+    if (el) el.remove();
+  }
+
+  // ── Send message ─────────────────────────────────────────────────────
+  async function sendMessage(text) {
+    text = text.trim();
+    if (!text || isSending) return;
+
+    isSending = true;
+    sendBtn.disabled = true;
+    inputEl.value = '';
+
+    appendMsg('user', text);
+    chatHistory.push({ role: 'user', content: text });
+    showTyping();
+    updateCtxLabel();
+
+    try {
+      const resp = await fetch('/api/intel/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: chatHistory, context: buildContext() }),
+      });
+      const data = await resp.json();
+      removeTyping();
+      if (data && data.reply) {
+        appendMsg('ai', data.reply);
+        chatHistory.push({ role: 'assistant', content: data.reply });
+      } else {
+        appendMsg('ai', 'Sorry, I couldn\'t get a response. Try again in a moment.');
+      }
+    } catch (err) {
+      removeTyping();
+      appendMsg('ai', 'Network error — please try again.');
+      chatHistory.pop(); // remove the failed user msg so retry works
+    }
+
+    isSending = false;
+    sendBtn.disabled = false;
+    inputEl.focus();
+  }
+
+  // ── Clear ─────────────────────────────────────────────────────────────
+  clearBtn.addEventListener('click', () => {
+    chatHistory = [];
+    messagesEl.innerHTML = `
+      <div class="ai-chat-welcome">
+        <div class="ai-chat-welcome-title">What do you want to know?</div>
+        <div class="ai-chat-suggestions" id="aiChatSuggestions">
+          <button class="ai-sug" data-q="What's moving the market right now?">What's moving the market?</button>
+          <button class="ai-sug" data-q="What's the best options trade right now?">Best options trade now?</button>
+          <button class="ai-sug" data-q="Should I buy or sell the currently loaded stock?">Buy or sell this stock?</button>
+          <button class="ai-sug" data-q="What sectors should I be in right now?">Which sectors to be in?</button>
+          <button class="ai-sug" data-q="What are the biggest macro risks to the market?">Biggest macro risks?</button>
+          <button class="ai-sug" data-q="Give me a trade idea for today.">Give me a trade idea</button>
+        </div>
+      </div>`;
+    bindSuggestions();
+  });
+
+  // ── Event bindings ────────────────────────────────────────────────────
+  sendBtn.addEventListener('click', () => sendMessage(inputEl.value));
+  inputEl.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(inputEl.value); }
+  });
+
+  function bindSuggestions() {
+    messagesEl.querySelectorAll('.ai-sug').forEach((btn) => {
+      btn.addEventListener('click', () => sendMessage(btn.dataset.q));
+    });
+  }
+  bindSuggestions();
+
+  // ── Expose globals so app.js can update context ───────────────────────
+  window._chatUpdateCtx = updateCtxLabel;
 })();
