@@ -2895,9 +2895,8 @@ app.post('/api/intel/chat', rateLimit, async (req, res) => {
     const latest = messages[messages.length - 1].content;
     const userPrompt = history ? `${history}\n\nUSER: ${latest}` : latest;
     const system = CHAT_SYSTEM_FN(ctx);
-    const text = await runGroq(system, userPrompt);
-    const data = extractJson(text);
-    if (!data || typeof data.reply !== 'string') throw new Error('Invalid AI response');
+    const validate = (d) => d && typeof d.reply === 'string' && d.reply.length > 5;
+    const data = await raceProviders('heavy', system, userPrompt, validate);
     res.json({ reply: data.reply });
   } catch (err) {
     console.error('chat error:', err.message);
