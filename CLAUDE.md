@@ -150,6 +150,4 @@ git push origin main
 
 **Why:** GitHub is connected to Cloudflare Workers via the dashboard integration (Workers & Pages → market-terminal → Settings → Builds). Every push to `main` auto-triggers a Cloudflare build and deploys `worker.js` to `https://market-terminal.wyjjdyxzsc.workers.dev`. Manual `wrangler deploy` bypasses this and can create version drift.
 
-**Render.com** (separate — runs `server.js` as a Node.js service): also auto-deploys from `main` via `render.yaml`. This is the Express/local-dev server, not the Cloudflare Worker.
-
 Check `wrangler.toml` for KV binding (`MT_KV`), AI binding, asset serving.
