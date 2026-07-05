@@ -135,12 +135,23 @@
       if (data.error) throw new Error(data.message);
       newsItems = data.items || [];
       window._intelNewsItems = newsItems;
-      $('#newsStatus').textContent = '';
+      if (newsItems.some((n) => n.degraded)) {
+        $('#newsStatus').className = 'status';
+        $('#newsStatus').innerHTML =
+          'AI analysis is temporarily unavailable — showing raw headlines. ' +
+          '<button class="chip" id="newsRetryBtn" type="button">Retry</button>';
+        $('#newsRetryBtn').addEventListener('click', loadNews);
+      } else {
+        $('#newsStatus').textContent = '';
+      }
       buildChips();
       renderNews();
     } catch (err) {
       $('#newsStatus').className = 'status error';
-      $('#newsStatus').textContent = 'Could not load news: ' + err.message;
+      $('#newsStatus').innerHTML =
+        'Could not load news: ' + esc(err.message) + ' ' +
+        '<button class="chip" id="newsRetryBtn" type="button">Retry</button>';
+      $('#newsRetryBtn').addEventListener('click', loadNews);
     }
   }
 

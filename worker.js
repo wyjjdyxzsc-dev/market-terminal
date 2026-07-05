@@ -1045,10 +1045,37 @@ async function fetchIntelNews(env) {
     `Real, current world & market headlines pulled live moments ago:\n\n${headlineBlock(headlines)}\n\n` +
     `Produce the JSON object now.`;
   const validate = (d) => { const it = Array.isArray(d) ? d : d && d.items; return Array.isArray(it) && it.length > 0; };
-  const data = await runAIJson(env, NEWS_SYSTEM, userPrompt, validate);
+  let data;
+  try {
+    data = await runAIJson(env, NEWS_SYSTEM, userPrompt, validate);
+  } catch (err) {
+    // AI pool exhausted (rate limits / missing keys): degrade to the raw RSS
+    // headlines we already fetched rather than failing the whole briefing.
+    if (headlines.length) {
+      console.log('[news] AI pool failed (' + err.message + ') — serving raw headlines');
+      return rawHeadlineItems(headlines);
+    }
+    throw err;
+  }
   const items = Array.isArray(data) ? data : data && data.items;
   if (!Array.isArray(items)) throw new Error('Expected a JSON array of news items.');
   return items.slice(0, 14);
+}
+
+// Map raw RSS headlines into the news-item shape the frontend renders; the
+// per-item `degraded` flag survives JSON serialization through the KV cache.
+function rawHeadlineItems(headlines) {
+  return headlines.slice(0, 14).map((h) => ({
+    title: h.title,
+    summary: '',
+    detail: '',
+    category: 'financial',
+    priority: 'normal',
+    source: h.source || '',
+    timestamp: h.published || '',
+    tickers: [],
+    degraded: true,
+  }));
 }
 
 async function fetchInvestmentReport(env) {

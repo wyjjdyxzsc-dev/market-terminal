@@ -6,7 +6,9 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node --watch server.js"
+    "dev": "node --watch server.js",
+    "test": "node tests/smoke.js",
+    "test:prod": "node tests/smoke.js --base https://market-terminal.wyjjdyxzsc.workers.dev"
   },
   "engines": {
     "node": ">=18"

@@ -81,10 +81,12 @@ Deploys to `https://market-terminal.wyjjdyxzsc.workers.dev`
 - **RJD Monte Carlo** (Module 4 upgrade): `[MC]` fan on chart now defaults to Rough Jump-Diffusion (H=0.45, λ=2) with GBM/RJD switcher pill.
 - **Mobile layout** (Module 5): osc bar wraps on narrow screens, buttons resize at ≤860px/≤480px, canvas min-height fixed, shock table hides columns on small screens.
 
-**Test suite**: `tests/smoke.js` — run `node tests/smoke.js` (requires server running). Covers 20 endpoints: quote, chart, search, news, intel, map layers, sentiment, macro shock, supply chain, vapid, deepdive, situation room.
+**Test suite**: `tests/smoke.js` — run `npm test` (requires local server running) or `npm run test:prod` (hits the deployed worker — run after deploys to catch server.js/worker.js drift). Covers 21 endpoints incl. POST /api/intel/chat.
 
-**Immediate next**:
-- Add `"test": "node tests/smoke.js"` to `package.json`
+**Resilience/UX (2026-07-05)**:
+- Terminal auto-loads last viewed symbol (localStorage `mt:lastSymbol`, default AAPL)
+- Intel briefing degrades to raw RSS headlines when the AI pool is exhausted (per-item `degraded: true` flag, in both server.js and worker.js); briefing error/degraded states have a Retry button
+- X/Twitter sentiment panel hides itself after 2 consecutive empty fetches and stops auto-polling (syndication.twitter.com no longer reliably serves tweets — source needs replacing, e.g. StockTwits)
 
 **Branches**: All work on `main` (no feature branches yet).
 

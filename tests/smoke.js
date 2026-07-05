@@ -25,11 +25,12 @@ async function check(label, url, opts = {}) {
     allowStatuses = [200],
     validate = () => true,
     skipError = false,   // set true for routes that need keys (may return 502/503)
+    fetchOpts = undefined, // e.g. { method: 'POST', headers, body } for non-GET routes
   } = opts;
 
   let res, text;
   try {
-    res  = await fetch(url);
+    res  = await fetch(url, fetchOpts);
     text = await res.text();
   } catch (e) {
     console.error(`  ✗ ${label} — fetch failed: ${e.message}`);
@@ -94,14 +95,14 @@ async function checkHtml(label, url) {
     { skipError: true, validate: d => Array.isArray(d.points) || d.error });
 
   await check('GET /api/search?q=Apple', `${BASE}/api/search?q=Apple`,
-    { skipError: true, validate: d => Array.isArray(d.results) || d.error });
+    { skipError: true, validate: d => Array.isArray(d.result) || Array.isArray(d.results) || d.error });
 
   // News / intel (skipError — need AI key + network)
   await check('GET /api/news?symbol=AAPL', `${BASE}/api/news?symbol=AAPL`,
     { skipError: true, validate: d => Array.isArray(d.headlines) || Array.isArray(d) || d.error });
 
   await check('GET /api/intel/news', `${BASE}/api/intel/news`,
-    { skipError: true, validate: d => Array.isArray(d.news) || d.marketSentiment || d.error });
+    { skipError: true, validate: d => Array.isArray(d.items) || Array.isArray(d.news) || d.marketSentiment || d.error });
 
   await check('GET /api/intel/analysis', `${BASE}/api/intel/analysis`,
     { skipError: true, validate: d => Array.isArray(d.industries) || d.error });
@@ -111,7 +112,7 @@ async function checkHtml(label, url) {
     { validate: d => d.points || d.lines || d.regions });
 
   await check('GET /api/map/earthquakes', `${BASE}/api/map/earthquakes`,
-    { skipError: true, validate: d => Array.isArray(d.points) || d.error });
+    { skipError: true, validate: d => d.type === 'FeatureCollection' || Array.isArray(d.points) || d.error });
 
   await check('GET /api/map/fires', `${BASE}/api/map/fires`,
     { skipError: true, validate: () => true });
@@ -145,6 +146,17 @@ async function checkHtml(label, url) {
   // Deep-dive — uses ?q= param
   await check('GET /api/intel/deepdive?q=AAPL', `${BASE}/api/intel/deepdive?q=AAPL`,
     { skipError: true, validate: d => (d.investment && d.options) || d.error });
+
+  // AI chat (skipError — needs a heavy-tier AI key)
+  await check('POST /api/intel/chat', `${BASE}/api/intel/chat`, {
+    skipError: true,
+    fetchOpts: {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages: [{ role: 'user', content: 'In one sentence, what does a P/E ratio measure?' }] }),
+    },
+    validate: d => typeof d.reply === 'string' || d.error,
+  });
 
   // Situation room
   await check('GET /api/intel/situation', `${BASE}/api/intel/situation`,

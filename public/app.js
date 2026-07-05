@@ -160,8 +160,9 @@ async function loadTape() {
     const items = await getJSON('/api/ticker');
     const track = $('tapeTrack');
     const html = items.map(renderTapeItem).join('');
-    // Duplicate the content so the -50% keyframe loops seamlessly.
-    track.innerHTML = html + html;
+    // Duplicate the content so the -50% keyframe loops seamlessly; the clone is
+    // presentational only, so keep it out of the accessibility tree.
+    track.innerHTML = html + `<span aria-hidden="true">${html}</span>`;
   } catch (err) {
     $('tapeTrack').innerHTML = `<span class="tape-loading">Ticker unavailable — ${err.message}</span>`;
   }
@@ -188,6 +189,7 @@ async function loadSymbol(rawSymbol) {
   const symbol = String(rawSymbol || '').trim().toUpperCase();
   if (!symbol) return;
   state.symbol = symbol;
+  try { localStorage.setItem('mt:lastSymbol', symbol); } catch { /* private mode */ }
   $('symbolInput').value = symbol;
   setStatus(`Loading ${symbol}…`);
 
@@ -1491,6 +1493,11 @@ function boot() {
   const startTab = new URLSearchParams(location.search).get('tab');
   if (startTab) showView(startTab === 'analysis' ? 'sectors' : startTab);
 
+  // Auto-load the last viewed symbol (or AAPL) so the terminal never opens empty.
+  let lastSym = null;
+  try { lastSym = localStorage.getItem('mt:lastSymbol'); } catch { /* private mode */ }
+  loadSymbol(lastSym || 'AAPL');
+
   // Redraw chart on resize (debounced).
   let resizeTimer = null;
   window.addEventListener('resize', () => {
@@ -1511,12 +1518,15 @@ const SENT_COLORS = {
   'Strongly Bearish': '#ff453a',
 };
 
+let sentEmptyStreak = 0; // consecutive fetches with zero tweets — used to hide + back off
+
 async function loadSentiment(handles) {
   const sentSummary = $('sentSummary');
   const sentLabel   = $('sentLabel');
   const sentScore   = $('sentScore');
   const sentFill    = $('sentFill');
   const sentNeedle  = $('sentNeedle');
+  const panel       = $('sentimentPanel');
   if (!sentSummary) return;
 
   sentSummary.textContent = 'Loading X/Twitter sentiment…';
@@ -1526,7 +1536,23 @@ async function loadSentiment(handles) {
   const qs = handles ? `?handle=${encodeURIComponent(handles)}` : '';
   let d;
   try { d = await getJSON(`/api/sentiment/twitter${qs}`); }
-  catch { sentSummary.textContent = 'Sentiment unavailable.'; return; }
+  catch {
+    sentEmptyStreak++;
+    if (panel && sentEmptyStreak >= 2) panel.hidden = true;
+    sentSummary.textContent = 'Sentiment unavailable.';
+    return;
+  }
+
+  // The upstream source returns no tweets at times (or is fully blocked); a
+  // permanently-neutral gauge is noise, so hide the panel rather than show it.
+  if (!d.tweetCount) {
+    sentEmptyStreak++;
+    if (panel && sentEmptyStreak >= 2) panel.hidden = true;
+    sentSummary.textContent = d.summary || 'No tweets retrieved.';
+    return;
+  }
+  sentEmptyStreak = 0;
+  if (panel) panel.hidden = false;
 
   const score = Math.max(-1, Math.min(1, d.score || 0));
   const pct   = ((score + 1) / 2) * 100; // 0% = -1, 50% = 0, 100% = +1
@@ -1548,11 +1574,19 @@ async function loadSentiment(handles) {
 
 function setupSentimentPanel() {
   const btn = $('sentRefreshBtn');
-  if (btn) btn.addEventListener('click', () => loadSentiment());
-  // Load once on boot
-  loadSentiment();
-  // Refresh every 15 min
-  setInterval(() => loadSentiment(), 15 * 60 * 1000);
+  if (btn) btn.addEventListener('click', () => {
+    const panel = $('sentimentPanel');
+    if (panel) panel.hidden = false; // manual refresh always gets a visible attempt
+    sentEmptyStreak = 0;
+    loadSentiment();
+  });
+  // Load once on boot; if the source comes back empty, retry once shortly after
+  // (transient failures recover, a dead source hides the panel).
+  loadSentiment().then(() => {
+    if (sentEmptyStreak > 0) setTimeout(() => loadSentiment(), 30 * 1000);
+  });
+  // Refresh every 15 min — but stop polling a source that is repeatedly empty.
+  setInterval(() => { if (sentEmptyStreak < 2) loadSentiment(); }, 15 * 60 * 1000);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
