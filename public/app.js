@@ -257,6 +257,12 @@ function extendLiveChart(price, tms) {
   if (state.range !== '1D' || !state.chart || !Array.isArray(state.chart.points) || !state.chart.points.length) return;
   const pts = state.chart.points;
   const last = pts[pts.length - 1];
+  // Only extend within the session being plotted. A quote that arrives while
+  // the market is closed (evening/weekend/holiday) carries a timestamp days or
+  // hours past the last bar; appending it would drag the 1D x-domain across
+  // multiple days and render as a long flat line with no hour labels.
+  const b = etSessionBounds(last.t);
+  if (tms < b.openUTC - 60000 || tms > b.closeUTC + 60000) return;
   if (Math.floor(tms / 60000) > Math.floor(last.t / 60000)) pts.push({ t: tms, c: price });
   else last.c = price;
   if (state.chart.meta) state.chart.meta.price = price;
@@ -610,7 +616,8 @@ function drawChart() {
       if (x - lastLabelX < minGapPx) continue;
       lastLabelX = x;
       ctx.fillStyle = '#7a8290';
-      ctx.textAlign = 'center';
+      // Right-align the label when a centered one would clip off the canvas.
+      ctx.textAlign = x + labelMaxWidth / 2 > W ? 'right' : 'center';
       ctx.fillText(formatTick(tx, range), x, padT + plotH + 6);
     }
   } else {
