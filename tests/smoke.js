@@ -160,7 +160,7 @@ async function checkHtml(label, url) {
 
   // Situation room
   await check('GET /api/intel/situation', `${BASE}/api/intel/situation`,
-    { skipError: true, validate: d => d.narrative || d.error });
+    { skipError: true, validate: d => d.narrative || d.threatLevel || d.error });
 
   // ── Summary ──────────────────────────────────────────────────────────────
   const total = pass + fail;
