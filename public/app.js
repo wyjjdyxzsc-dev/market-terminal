@@ -189,7 +189,6 @@ async function loadSymbol(rawSymbol) {
   const symbol = String(rawSymbol || '').trim().toUpperCase();
   if (!symbol) return;
   state.symbol = symbol;
-  try { localStorage.setItem('mt:lastSymbol', symbol); } catch { /* private mode */ }
   $('symbolInput').value = symbol;
   setStatus(`Loading ${symbol}…`);
 
@@ -299,6 +298,9 @@ async function loadQuote(symbol) {
       return;
     }
     state.quote = q;
+    // Persist only symbols that actually quoted, so a typo (or company name
+    // typed as a ticker) is never restored on the next page load.
+    try { localStorage.setItem('mt:lastSymbol', symbol); } catch { /* private mode */ }
 
     const cls = colorClass(q.d);
     $('qPrice').textContent = fmtPrice(q.c);
@@ -533,7 +535,11 @@ function drawChart() {
 
   const lowerPaneH = 86;  // height of the lower oscillator pane
   const oscGap = 6;       // gap between main chart and lower pane
-  const padL = 52, padR = 66, padT = 14;
+  // On narrow canvases the fixed margins would eat most of the plot, so shrink
+  // them; the wide right margin only exists for the prev-close label and the
+  // MC forward fan, neither of which fits at that size anyway.
+  const narrow = W < 420 && !state.showMC;
+  const padL = narrow ? 44 : 52, padR = narrow ? 12 : 66, padT = 14;
   const padB = 24 + lowerPaneH + oscGap; // total bottom padding includes lower pane
   const plotW = W - padL - padR;
   const plotH = H - padT - padB;
@@ -636,14 +642,16 @@ function drawChart() {
     ctx.lineTo(W - padR, y);
     ctx.stroke();
     ctx.restore();
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'middle';
-    ctx.font = '9px "SF Mono", Menlo, monospace';
-    ctx.fillStyle = '#7a8290';
-    ctx.fillText('Prev close', W - padR + 5, y - 7);
-    ctx.fillStyle = '#aeb6c2';
-    ctx.fillText(prev.toFixed(2), W - padR + 5, y + 6);
-    ctx.font = '10px "SF Mono", Menlo, monospace';
+    if (!narrow) { // no right margin to write into on narrow canvases
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.font = '9px "SF Mono", Menlo, monospace';
+      ctx.fillStyle = '#7a8290';
+      ctx.fillText('Prev close', W - padR + 5, y - 7);
+      ctx.fillStyle = '#aeb6c2';
+      ctx.fillText(prev.toFixed(2), W - padR + 5, y + 6);
+      ctx.font = '10px "SF Mono", Menlo, monospace';
+    }
   }
 
   const lastX = xOf(points[points.length - 1].t);
