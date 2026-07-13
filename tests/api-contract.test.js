@@ -11,6 +11,12 @@ test('canonicalizes deprecated candle alias to the canonical route', () => {
   assert.deepEqual(contract.getAllowedMethods('/api/intel/candle'), ['GET']);
 });
 
+test('canonicalizes deprecated social sentiment route', () => {
+  assert.equal(contract.canonicalPath('/api/sentiment/twitter'), '/api/sentiment/market');
+  assert.equal(contract.isDeprecatedAlias('/api/sentiment/twitter'), true);
+  assert.deepEqual(contract.getAllowedMethods('/api/sentiment/twitter'), ['GET']);
+});
+
 test('marks admin routes as protected', () => {
   assert.equal(contract.isProtectedRoute('/api/test-push'), true);
   assert.equal(contract.isProtectedRoute('/api/ai-status'), true);

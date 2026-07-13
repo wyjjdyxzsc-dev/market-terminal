@@ -52,7 +52,12 @@ Research date: 2026-07-13
 - Evaluation criteria: transparent categories, severity rules, evidence links
 - Provenance links: `https://war-monitor.com/`
 - Licensing or trademark notes: independent category system allowed
-- Final evidence: RSS/X ingestion now preserves source URLs and reliability labels locally, but broader OSINT-source expansion remains open
+- Final evidence: RSS ingestion preserves source URLs and reliability labels locally; unauthenticated X syndication was removed from the live ingestion path. Broader OSINT-source expansion remains open.
+
+### 2026-07-13 checkpoint 2 update
+
+- Source-reliability control: market sentiment now uses attributable benchmark and RSS inputs rather than a social-feed scrape.
+- Evidence: deterministic unit tests and local smoke verification pass; production verification is pending this checkpoint’s deployment.
 
 ### WAR-003 Conflict threads and timelines
 

@@ -332,10 +332,24 @@ This work was performed by OpenAI Codex without Claude’s involvement. This doc
 - Any claim of clean parity or “10/10 complete” rejected.
   - Current code and evidence do not support that claim.
 
+# 2026-07-13 checkpoint 2: deterministic market sentiment
+
+- Replaced X syndication ingestion with `shared/market-sentiment-core.js`.
+- Added canonical `GET /api/sentiment/market` in Express and Worker.
+- Preserved `GET /api/sentiment/twitter` only as a deprecated alias with `Deprecation: true` and a successor link.
+- The composite uses quote-pool changes for SPY, QQQ, DIA, IWM, and available VIX data, plus source-attributed RSS headlines.
+- Response fields disclose `benchmarkCount`, `headlineCount`, `sourceCount`, `benchmarks`, `evidence`, `methodology`, `dataMode: "deterministic"`, and `status: "live"|"degraded"`.
+- Removed X from the broader world-headline aggregation path.
+- Local verification completed:
+  - `npm run test:unit` -> `13/13` passed
+  - syntax checks passed for `server.js`, Worker module mode, `public/app.js`, and the shared module
+  - local `/api/sentiment/market` returned `200` with 4 benchmarks, 18 headlines, 7 sources, evidence, and `status: "live"`
+  - local deprecated alias returned `Deprecation: true` and a successor link
+- Production verification is pending deployment of this checkpoint. Do not mark this checkpoint production-verified until `npm run test:prod` and targeted production probes pass.
+
 # Unresolved risks and technical debt
 
 - The repository still has very large `server.js` and `worker.js` monoliths.
-- The X/Twitter sentiment source remains unreliable and needs replacement or re-scoping.
 - AI task grounding/abstention is improved for chat context and news evidence, but a full task-policy registry for high-risk workflows is still not implemented.
 - Quant coverage now exists only for the new candlestick fallback engine, not the broader 40-indicator surface.
 
@@ -353,5 +367,4 @@ This work was performed by OpenAI Codex without Claude’s involvement. This doc
 
 - Next recommended step:
   - extend unit coverage beyond the new candle fallback into the broader quant surface and route-policy layer
-  - replace or re-scope X/Twitter sentiment
   - continue modular decomposition of `server.js` and `worker.js`

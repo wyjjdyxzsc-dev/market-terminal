@@ -1564,7 +1564,7 @@ function boot() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// X/TWITTER SENTIMENT GAUGE
+// MARKET SENTIMENT GAUGE
 // ═══════════════════════════════════════════════════════════════════════════
 
 const SENT_COLORS = {
@@ -1575,9 +1575,7 @@ const SENT_COLORS = {
   'Strongly Bearish': '#ff453a',
 };
 
-let sentEmptyStreak = 0; // consecutive fetches with zero tweets — used to hide + back off
-
-async function loadSentiment(handles) {
+async function loadSentiment() {
   const sentSummary = $('sentSummary');
   const sentLabel   = $('sentLabel');
   const sentScore   = $('sentScore');
@@ -1586,29 +1584,19 @@ async function loadSentiment(handles) {
   const panel       = $('sentimentPanel');
   if (!sentSummary) return;
 
-  sentSummary.textContent = 'Loading X/Twitter sentiment…';
+  sentSummary.textContent = 'Loading market sentiment…';
   sentLabel.textContent = '—';
   sentScore.textContent = '';
 
-  const qs = handles ? `?handle=${encodeURIComponent(handles)}` : '';
   let d;
-  try { d = await getJSON(`/api/sentiment/twitter${qs}`); }
+  try { d = await getJSON('/api/sentiment/market'); }
   catch {
-    sentEmptyStreak++;
-    if (panel && sentEmptyStreak >= 2) panel.hidden = true;
     sentSummary.textContent = 'Sentiment unavailable.';
+    const coverage = $('sentTweets');
+    if (coverage) coverage.textContent = 'No composite data returned.';
     return;
   }
 
-  // The upstream source returns no tweets at times (or is fully blocked); a
-  // permanently-neutral gauge is noise, so hide the panel rather than show it.
-  if (!d.tweetCount) {
-    sentEmptyStreak++;
-    if (panel && sentEmptyStreak >= 2) panel.hidden = true;
-    sentSummary.textContent = d.summary || 'No tweets retrieved.';
-    return;
-  }
-  sentEmptyStreak = 0;
   if (panel) panel.hidden = false;
 
   const score = Math.max(-1, Math.min(1, d.score || 0));
@@ -1625,25 +1613,22 @@ async function loadSentiment(handles) {
   sentScore.textContent = score >= 0 ? `+${score.toFixed(2)}` : score.toFixed(2);
   sentSummary.textContent = d.summary || '';
 
-  const tweetCount = $('sentTweets');
-  if (tweetCount) tweetCount.textContent = d.tweetCount ? `${d.tweetCount} tweets analysed` : '';
+  const coverage = $('sentTweets');
+  if (coverage) {
+    const status = d.status === 'degraded' ? 'partial coverage' : 'live coverage';
+    coverage.textContent = `${d.benchmarkCount || 0} benchmarks · ${d.headlineCount || 0} headlines · ${d.sourceCount || 0} sources · ${status}`;
+  }
 }
 
 function setupSentimentPanel() {
   const btn = $('sentRefreshBtn');
   if (btn) btn.addEventListener('click', () => {
     const panel = $('sentimentPanel');
-    if (panel) panel.hidden = false; // manual refresh always gets a visible attempt
-    sentEmptyStreak = 0;
+    if (panel) panel.hidden = false;
     loadSentiment();
   });
-  // Load once on boot; if the source comes back empty, retry once shortly after
-  // (transient failures recover, a dead source hides the panel).
-  loadSentiment().then(() => {
-    if (sentEmptyStreak > 0) setTimeout(() => loadSentiment(), 30 * 1000);
-  });
-  // Refresh every 15 min — but stop polling a source that is repeatedly empty.
-  setInterval(() => { if (sentEmptyStreak < 2) loadSentiment(); }, 15 * 60 * 1000);
+  loadSentiment();
+  setInterval(loadSentiment, 15 * 60 * 1000);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

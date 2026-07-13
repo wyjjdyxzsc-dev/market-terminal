@@ -56,6 +56,13 @@ Research date: 2026-07-13
 - Licensing or trademark notes: many identifiers require licensed datasets
 - Final evidence: evidence-preserving news/intelligence pipeline verified in production payloads with source URLs, freshness, and degraded-mode metadata
 
+### 2026-07-13 checkpoint 2 update
+
+- Current-project sentiment capability: deterministic market breadth plus RSS-news tone through `/api/sentiment/market`.
+- Data and methodology: SPY, QQQ, DIA, IWM, available VIX data, and a disclosed financial-headline lexicon; the response returns weights, counts, benchmark signals, evidence, and a degraded status when coverage is insufficient.
+- Status: partial. This is transparent public-data sentiment, not a licensed professional sentiment or news-analytics entitlement.
+- Evidence: unit tests and local endpoint verification pass; production verification is pending this checkpoint’s deployment.
+
 ### FT-003 Real-time market monitors
 
 - Source product/domain: Bloomberg

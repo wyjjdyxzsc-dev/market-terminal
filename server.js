@@ -30,6 +30,7 @@ const webpush   = require('web-push');
 const apiContract = require('./shared/api-contract.js');
 const evidenceCore = require('./shared/evidence-core.js');
 const candleAnalysisCore = require('./shared/candle-analysis-core.js');
+const marketSentimentCore = require('./shared/market-sentiment-core.js');
 
 // Optional WebSocket for Finnhub live feed.  npm i ws  to enable.
 let WS;
@@ -63,6 +64,7 @@ const {
 } = evidenceCore;
 
 const { buildDeterministicCandleAnalysis } = candleAnalysisCore;
+const { analyzeMarketSentiment } = marketSentimentCore;
 
 const PORT         = process.env.PORT || 3000;
 const FINNHUB_BASE = 'https://finnhub.io/api/v1';
@@ -928,7 +930,7 @@ async function getChart(symbol, rangeKey, options = {}) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-//  SECTION 6 — HEADLINE AGGREGATION (RSS + X/Twitter)
+//  SECTION 6 — HEADLINE AGGREGATION (RSS)
 // ═══════════════════════════════════════════════════════════════════════════
 
 const rss = new RssParser({
@@ -1033,55 +1035,6 @@ const WORLD_FEEDS = [
   'https://www.bing.com/news/search?q=oil+energy+markets&format=rss',
 ];
 
-// ── 6c: X/Twitter syndication ingestion (Module 4.1) ──────────────────────
-// Fetches public timeline embeds via the syndication endpoint — no API key
-// required. The __NEXT_DATA__ JSON payload contains the full tweet list.
-
-const X_ACCOUNTS = [
-  'WSJmarkets', 'markets', 'unusual_whales', 'DeItaone', 'zerohedge',
-  'Reuters', 'APNews', 'FederalReserve', 'SECGov', 'IMFNews',
-  'RayDalio', 'elonmusk', 'GoldmanSachs', 'elerianm', 'NickTimiraos',
-];
-
-function cleanTweetText(text) {
-  return (text || '').replace(/https:\/\/t\.co\/\w+\s*$/, '').replace(/\s+/g, ' ').trim();
-}
-
-async function fetchXAccountFeed(account) {
-  try {
-    const res = await fetchWithTimeout(
-      `https://syndication.twitter.com/srv/timeline-profile/screen-name/${account}`,
-      { headers: { 'User-Agent': BROWSER_UA, Accept: 'text/html' } },
-      8000
-    );
-    if (!res.ok) return [];
-    const html = await res.text();
-    const m    = html.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/);
-    if (!m) return [];
-    const entries = JSON.parse(m[1])?.props?.pageProps?.timeline?.entries || [];
-    return entries
-      .map(e => e?.content?.tweet)
-      .filter(Boolean)
-      .map(t => ({
-        title:     cleanTweetText(t.full_text || t.text),
-        source:    `X/@${account}`,
-        published: t.created_at || '',
-        link:      safeExternalUrl(`https://x.com/${account}/status/${t.id_str || t.id || ''}`),
-      }))
-      .filter(h => h.title);
-  } catch { return []; }
-}
-
-async function fetchXHeadlines() {
-  // Stagger requests ~400 ms apart to avoid hitting the syndication burst limit.
-  const lists = await Promise.all(
-    X_ACCOUNTS.map((account, i) =>
-      sleep(i * 400).then(() => fetchXAccountFeed(account))
-    )
-  );
-  return mergeHeadlines(lists);
-}
-
 async function fetchMarketHeadlines() {
   const lists = await Promise.all(MARKET_FEEDS.map(u => fetchFeed(u, 18)));
   return mergeHeadlines(lists).slice(0, 32);
@@ -1090,7 +1043,6 @@ async function fetchMarketHeadlines() {
 async function fetchWorldHeadlines() {
   const lists = await Promise.all(
     [...MARKET_FEEDS, ...WORLD_FEEDS].map(u => fetchFeed(u, 14))
-      .concat([fetchXHeadlines()])
   );
   return mergeHeadlines(lists).slice(0, 60);
 }
@@ -3665,41 +3617,56 @@ app.get('/api/map/infrastructure', route(async (req, res) => {
   });
 }));
 
-// ── X/Twitter sentiment ──────────────────────────────────────────────────────
-// Fetches recent tweets from market-relevant handles, scores sentiment via AI.
-// ?handle=HANDLE fetches a single account; no param → full X_ACCOUNTS list.
-// Returns { score: -1.0..1.0, label, summary, tweetCount, cached }.
+// ── Market sentiment ────────────────────────────────────────────────────────
+// A deterministic composite of benchmark breadth and attributable market-news
+// tone. It deliberately avoids presenting unauthenticated social scraping as a
+// live market signal.
 
-const SENTIMENT_PROMPT_SYS = `You are a financial sentiment analyst. Given a list of recent market-related tweets,
-return a single JSON object:
-{
-  "score": float from -1.0 (extreme bearish) to 1.0 (extreme bullish),
-  "label": "Strongly Bullish"|"Bullish"|"Neutral"|"Bearish"|"Strongly Bearish",
-  "summary": one concise sentence describing the dominant market narrative in these tweets
+const MARKET_SENTIMENT_BENCHMARKS = Object.freeze([
+  { symbol: 'SPY' },
+  { symbol: 'QQQ' },
+  { symbol: 'DIA' },
+  { symbol: 'IWM' },
+  { symbol: '^VIX', inverse: true },
+]);
+
+async function fetchMarketSentiment() {
+  const [quoteResults, headlines] = await Promise.all([
+    Promise.allSettled(MARKET_SENTIMENT_BENCHMARKS.map(async (benchmark) => {
+      const quote = await getQuote(benchmark.symbol);
+      return {
+        ...benchmark,
+        changePercent: quote.dp,
+        source: quote.src || 'unknown',
+      };
+    })),
+    fetchMarketHeadlines(),
+  ]);
+  const benchmarks = quoteResults
+    .filter((result) => result.status === 'fulfilled')
+    .map((result) => result.value)
+    .filter((benchmark) => Number.isFinite(Number(benchmark.changePercent)));
+
+  return analyzeMarketSentiment({
+    benchmarks,
+    headlines: headlines.slice(0, 18),
+    generatedAt: new Date().toISOString(),
+  });
 }
-Return ONLY the JSON object. No markdown, no commentary.`;
 
-async function computeXSentiment(handles) {
-  const lists = await Promise.all(handles.slice(0, 8).map((h, i) =>
-    sleep(i * 300).then(() => fetchXAccountFeed(h))
-  ));
-  const tweets = lists.flat().slice(0, 30);
-  if (!tweets.length) return { score: 0, label: 'Neutral', summary: 'No tweets retrieved.', tweetCount: 0 };
-  const block = tweets.map((t, i) => `${i + 1}. [${t.source}] ${t.title}`).join('\n');
-  const result = await raceProviders('speed', SENTIMENT_PROMPT_SYS,
-    `Score the market sentiment from these tweets:\n\n${block}`,
-    d => typeof d.score === 'number' && d.label && d.summary
+async function handleMarketSentiment(req, res, deprecatedAlias = false) {
+  const { data, fresh } = await fetch_cached_data(
+    'sentiment:market', fetchMarketSentiment, TTL.NEWS
   );
-  return { ...result, tweetCount: tweets.length };
+  if (deprecatedAlias) {
+    res.set('Deprecation', 'true');
+    res.set('Link', '</api/sentiment/market>; rel="successor-version"');
+  }
+  res.json({ cached: !fresh, ...data });
 }
 
-app.get('/api/sentiment/twitter', rateLimit, route(async (req, res) => {
-  const raw = (req.query.handle || '').replace(/[^a-zA-Z0-9_,]/g, '').slice(0, 200);
-  const handles = raw ? raw.split(',').filter(Boolean) : X_ACCOUNTS;
-  const cacheKey = `sentiment:twitter:${handles.slice(0, 5).join(',')}`;
-  const { data } = await fetch_cached_data(cacheKey, () => computeXSentiment(handles), TTL.NEWS);
-  res.json({ cached: true, ...data });
-}));
+app.get('/api/sentiment/market', rateLimit, route((req, res) => handleMarketSentiment(req, res)));
+app.get('/api/sentiment/twitter', rateLimit, route((req, res) => handleMarketSentiment(req, res, true)));
 
 // ── Macroeconomic shock simulator ────────────────────────────────────────────
 // For each major pipeline, compute:

@@ -62,7 +62,8 @@ The following production-oriented vertical slices were implemented and deployed:
 - Trusted server-built chat context; clients no longer submit arbitrary analysis context.
 - Frontend URL allowlisting and safer DOM rendering in terminal, intelligence, and map views.
 - SRI for the `globe.gl` CDN asset.
-- Cache-buster updated to `20260713a`.
+- Cache-buster updated to `20260713b`.
+- Replaced the unreliable X syndication sentiment path with a deterministic, source-attributed market-sentiment composite. Production verification for this checkpoint is pending deployment.
 - Unit tests for API contracts, evidence helpers, and candle analysis.
 - Expanded smoke tests covering local and production endpoint contracts.
 
@@ -100,7 +101,6 @@ All three commits were pushed to `origin/main`. The working tree is clean except
 These items are intentionally not marked complete:
 
 - Expand quant-engine unit coverage beyond the candlestick fallback engine.
-- Replace or re-scope the unreliable X/Twitter sentiment source, likely with a source that provides stable market-social evidence.
 - Continue modular decomposition of the large `server.js` and `worker.js` files.
 - Re-run the full production smoke suite after any subsequent deployment.
 - Update this log and the Claude handoff after every future checkpoint commit.

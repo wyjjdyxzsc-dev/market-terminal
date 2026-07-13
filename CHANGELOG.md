@@ -13,6 +13,9 @@
 - Expanded `npm test` to run unit tests plus a 21-route local smoke suite, and added browser verification evidence for the local app.
 - Bumped the frontend cache-buster to `20260713a` and added SRI for the `globe.gl` CDN script.
 - Added `public/_headers` and verified security headers on the deployed HTML shell and API responses.
+- Replaced unreliable X syndication sentiment with `/api/sentiment/market`, a deterministic benchmark-breadth and attributable-RSS composite with evidence counts, methodology, and degraded coverage disclosure. `/api/sentiment/twitter` is now a deprecated compatibility alias.
+- Added shared market-sentiment unit coverage and expanded smoke coverage for the canonical endpoint and alias.
+- Bumped the frontend cache-buster to `20260713b`.
 - Checkpoint commits:
   - `aa4f85b` `Harden API parity and evidence fallbacks`
   - `ff58850` `Add static asset security headers`

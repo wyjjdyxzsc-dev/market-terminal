@@ -55,6 +55,12 @@ Research date: 2026-07-13
 - Licensing or trademark notes: independent datasets only
 - Final evidence: intelligence/news pipeline now preserves evidence IDs, source URLs, timestamps, and freshness in production payloads; focused full-briefing UX review still remains open
 
+### 2026-07-13 checkpoint 2 update
+
+- Current-project sentiment surface: `/api/sentiment/market` and the terminal gauge.
+- Data sources and authority tier: benchmark quotes from the project quote pool plus source-attributed public RSS evidence; no unauthenticated social scraping.
+- Evidence: deterministic unit tests pass and local endpoint verification returned benchmark, headline, source, methodology, and degraded-status fields. Production verification is pending this checkpoint’s deployment.
+
 ### WM-003 Country dossiers and instability scoring
 
 - Source product/domain: World Monitor

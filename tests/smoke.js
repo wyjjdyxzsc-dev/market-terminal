@@ -27,6 +27,7 @@ async function check(label, url, opts = {}) {
     skipError = false,   // set true for routes that need keys (may return 502/503)
     allowErrorPayload = false,
     fetchOpts = undefined, // e.g. { method: 'POST', headers, body } for non-GET routes
+    validateHeaders = () => true,
   } = opts;
 
   let res, text;
@@ -63,6 +64,11 @@ async function check(label, url, opts = {}) {
 
   if (!validate(json)) {
     console.error(`  ✗ ${label} — validation failed: ${JSON.stringify(json).slice(0, 120)}`);
+    fail++; return;
+  }
+
+  if (!validateHeaders(res.headers)) {
+    console.error(`  ✗ ${label} — response headers failed validation`);
     fail++; return;
   }
 
@@ -146,9 +152,15 @@ async function checkHtml(label, url) {
   await check('GET /api/map/webcams-live', `${BASE}/api/map/webcams-live`,
     { skipError: true, validate: d => Array.isArray(d.points) || d.error });
 
-  // Sentiment
-  await check('GET /api/sentiment/twitter', `${BASE}/api/sentiment/twitter`,
-    { skipError: true, validate: d => typeof d.score === 'number' || d.error });
+  // Market sentiment
+  await check('GET /api/sentiment/market', `${BASE}/api/sentiment/market`,
+    { skipError: true, validate: d => (typeof d.score === 'number' && d.dataMode === 'deterministic') || d.error });
+
+  await check('GET /api/sentiment/twitter (deprecated)', `${BASE}/api/sentiment/twitter`, {
+    skipError: true,
+    validate: d => (typeof d.score === 'number' && d.dataMode === 'deterministic') || d.error,
+    validateHeaders: headers => headers.get('deprecation') === 'true',
+  });
 
   // Macro shock
   await check('GET /api/macro/shock', `${BASE}/api/macro/shock`,

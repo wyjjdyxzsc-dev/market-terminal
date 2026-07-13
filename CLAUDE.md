@@ -78,7 +78,7 @@ Deploys to `https://market-terminal.wyjjdyxzsc.workers.dev`
 - Canvas layout: `padB` now includes 86px lower pane + 6px gap. `.chart-body` is flex-column; canvas flex-grows.
 
 **Phases 3-5 complete** (`server.js`, `worker.js`, `app.js`, `index.html`, `style.css`):
-- **X/Twitter Sentiment** (Module 4.1): `/api/sentiment/twitter` — scrapes syndication.twitter.com for 15 market handles, speeds-tier AI races to score -1.0 to 1.0; animated gauge in terminal panel. 15-min TTL. Ported to worker.js.
+- **Market Sentiment** (Module 4.1): `/api/sentiment/market` — deterministic composite of SPY, QQQ, DIA, IWM, available VIX data, and source-attributed RSS headlines. The payload includes coverage counts, source evidence, methodology, and an explicit degraded state. `/api/sentiment/twitter` remains a deprecated compatibility alias. 15-min TTL. Ported to `worker.js`.
 - **Macro Shock Simulator** (Module 3.2): `/api/macro/shock` — 17 major oil/gas pipelines, live CL=F/NG=F spot prices from quote pool, direct_loss = throughput × price, price_shock = -(1/0.1)×dQ/Q. Risk table in Supply Chain view. 5-min TTL. Ported to worker.js.
 - **RJD Monte Carlo** (Module 4 upgrade): `[MC]` fan on chart now defaults to Rough Jump-Diffusion (H=0.45, λ=2) with GBM/RJD switcher pill.
 - **Mobile layout** (Module 5): osc bar wraps on narrow screens, buttons resize at ≤860px/≤480px, canvas min-height fixed, shock table hides columns on small screens.
@@ -88,7 +88,7 @@ Deploys to `https://market-terminal.wyjjdyxzsc.workers.dev`
 **Resilience/UX (2026-07-05)**:
 - Terminal auto-loads last viewed symbol (localStorage `mt:lastSymbol`, default AAPL)
 - Intel briefing degrades to raw RSS headlines when the AI pool is exhausted (per-item `degraded: true` flag, in both server.js and worker.js); briefing error/degraded states have a Retry button
-- X/Twitter sentiment panel hides itself after 2 consecutive empty fetches and stops auto-polling (syndication.twitter.com no longer reliably serves tweets — source needs replacing, e.g. StockTwits)
+- Market sentiment stays visible with explicit partial-coverage labeling when benchmark or RSS evidence is incomplete; it refreshes every 15 minutes.
 
 **Platform hardening (2026-07-13 checkpoint)**:
 - Shared API contract registry in `shared/api-contract.js` now enforces canonical route parity, structured JSON `404`/`405`, websocket `426`, and admin-only diagnostics/push test routes in both `server.js` and `worker.js`

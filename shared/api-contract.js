@@ -34,7 +34,7 @@
     { path: '/api/map/flights', methods: ['GET'], category: 'map', frontend: true },
     { path: '/api/map/overpass', methods: ['GET'], category: 'map' },
     { path: '/api/map/infrastructure', methods: ['GET'], category: 'map', frontend: true },
-    { path: '/api/sentiment/twitter', methods: ['GET'], category: 'intel', frontend: true },
+    { path: '/api/sentiment/market', methods: ['GET'], category: 'intel', frontend: true },
     { path: '/api/macro/shock', methods: ['GET'], category: 'intel', frontend: true },
     { path: '/api/vapid-public-key', methods: ['GET'], category: 'push', frontend: true },
     { path: '/api/subscribe', methods: ['POST'], category: 'push', frontend: true },
@@ -47,6 +47,7 @@
 
   const DEPRECATED_ALIASES = {
     '/api/intel/candle': '/api/intel/candles',
+    '/api/sentiment/twitter': '/api/sentiment/market',
   };
 
   const routeMap = new Map(ROUTES.map((route) => [route.path, route]));

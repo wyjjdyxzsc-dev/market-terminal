@@ -152,6 +152,7 @@ market-terminal/
 | `GET /api/chart?symbol=&range=`      | Chart history (Yahoo → Nasdaq fallback)                     |
 | `GET /api/intel/news`                | AI-structured market news feed (Groq)                       |
 | `GET /api/intel/analysis`            | 11-sector ranking + sentiment + top picks (Groq)            |
+| `GET /api/sentiment/market`          | Deterministic benchmark-breadth and RSS-news sentiment, with evidence coverage |
 | `GET /api/intel/company?q=`          | Per-company news with positive/negative impact (Groq)       |
 | `GET /api/intel/alerts`              | Recent breaking alerts                                      |
 | push: `vapid-public-key` · `subscribe` · `unsubscribe` · `test-push` | Web Push plumbing                 |

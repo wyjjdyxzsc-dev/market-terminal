@@ -19,6 +19,7 @@
 import './shared/api-contract.js';
 import './shared/evidence-core.js';
 import './shared/candle-analysis-core.js';
+import './shared/market-sentiment-core.js';
 
 const FINNHUB_BASE = 'https://finnhub.io/api/v1';
 const CACHE_MS = 15 * 60 * 1000; // news refreshes every 15 min
@@ -47,6 +48,7 @@ const {
 } = globalThis.MarketTerminalEvidence;
 
 const { buildDeterministicCandleAnalysis } = globalThis.MarketTerminalCandleAnalysis;
+const { analyzeMarketSentiment } = globalThis.MarketTerminalMarketSentiment;
 
 const CONTENT_SECURITY_POLICY = [
   "default-src 'self'",
@@ -540,69 +542,6 @@ const WORLD_FEEDS = [
   'https://www.bing.com/news/search?q=oil+energy+markets&format=rss',
 ];
 
-// X / Twitter — high-signal financial & news accounts, pulled from the public
-// syndication/embed endpoint (the same one X itself serves to render embedded
-// timeline widgets anywhere on the web — no API key, no login). Public Nitter
-// mirrors stopped serving RSS once X locked them out; this is the unauthenticated
-// path that's left. Source tagged as "X/@handle" so the AI and display attribute it.
-const X_ACCOUNTS = [
-  'WSJmarkets',       // Wall Street Journal markets desk
-  'markets',          // Bloomberg Markets
-  'unusual_whales',   // options flow / market intel
-  'DeItaone',         // breaking financial headlines
-  'zerohedge',        // macro / contrarian finance
-  'Reuters',          // global news wire
-  'APNews',           // Associated Press
-  'FederalReserve',   // Fed statements
-  'SECGov',           // SEC filings / enforcement
-  'IMFNews',          // IMF global outlook
-  'RayDalio',         // macro investor commentary
-  'elonmusk',         // market-moving tweets
-  'GoldmanSachs',     // GS research
-  'elerianm',         // Mohamed El-Erian macro
-  'NickTimiraos',     // WSJ Fed reporter
-];
-
-// Tweet text always ends with a t.co link back to itself/its media — strip that
-// and flatten newlines so it reads like a headline.
-function cleanTweetText(text) {
-  return (text || '').replace(/https:\/\/t\.co\/\w+\s*$/, '').replace(/\s+/g, ' ').trim();
-}
-
-async function fetchXAccountFeed(account) {
-  try {
-    const res = await fetchWithTimeout(
-      `https://syndication.twitter.com/srv/timeline-profile/screen-name/${account}`,
-      { headers: { 'User-Agent': BROWSER_UA, Accept: 'text/html' } },
-      8000,
-    );
-    if (!res.ok) return [];
-    const html = await res.text();
-    const m = html.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/);
-    if (!m) return [];
-    const entries = JSON.parse(m[1])?.props?.pageProps?.timeline?.entries || [];
-    return entries
-      .map((e) => e && e.content && e.content.tweet)
-      .filter(Boolean)
-      .map((t) => ({
-        title: cleanTweetText(t.full_text || t.text),
-        source: `X/@${account}`,
-        published: t.created_at || '',
-        link: safeExternalUrl(`https://x.com/${account}/status/${t.id_str || t.id || ''}`),
-      }))
-      .filter((h) => h.title);
-  } catch { return []; }
-}
-
-async function fetchXHeadlines() {
-  // The syndication endpoint rate-limits per a small shared budget (~30
-  // requests per window) that a dead-simultaneous burst of 15 trips even when
-  // comfortably under budget — stagger the starts so they land as a trickle
-  // instead. Any account that still fails or comes back empty is just skipped.
-  const lists = await Promise.all(X_ACCOUNTS.map((account, i) => sleep(i * 400).then(() => fetchXAccountFeed(account))));
-  return mergeHeadlines(lists);
-}
-
 async function fetchMarketHeadlines() {
   const lists = await Promise.all(MARKET_FEEDS.map((u) => fetchFeed(u, 18)));
   return mergeHeadlines(lists).slice(0, 32);
@@ -610,8 +549,41 @@ async function fetchMarketHeadlines() {
 
 // Wider net: market + world headlines for GLOBAL INTEL & the report.
 async function fetchWorldHeadlines() {
-  const lists = await Promise.all([...MARKET_FEEDS, ...WORLD_FEEDS].map((u) => fetchFeed(u, 14)).concat([fetchXHeadlines()]));
+  const lists = await Promise.all([...MARKET_FEEDS, ...WORLD_FEEDS].map((u) => fetchFeed(u, 14)));
   return mergeHeadlines(lists).slice(0, 60);
+}
+
+const MARKET_SENTIMENT_BENCHMARKS = Object.freeze([
+  { symbol: 'SPY' },
+  { symbol: 'QQQ' },
+  { symbol: 'DIA' },
+  { symbol: 'IWM' },
+  { symbol: '^VIX', inverse: true },
+]);
+
+async function fetchMarketSentiment(env) {
+  const [quoteResults, headlines] = await Promise.all([
+    Promise.allSettled(MARKET_SENTIMENT_BENCHMARKS.map(async (benchmark) => {
+      const quote = await getQuoteCached(env, benchmark.symbol);
+      if (!quote || Number(quote.c) <= 0 || !Number.isFinite(Number(quote.dp))) return null;
+      return {
+        ...benchmark,
+        changePercent: quote.dp,
+        source: quote.src || 'unknown',
+      };
+    })),
+    fetchMarketHeadlines(),
+  ]);
+  const benchmarks = quoteResults
+    .filter((result) => result.status === 'fulfilled')
+    .map((result) => result.value)
+    .filter((benchmark) => benchmark && Number.isFinite(Number(benchmark.changePercent)));
+
+  return analyzeMarketSentiment({
+    benchmarks,
+    headlines: headlines.slice(0, 18),
+    generatedAt: new Date().toISOString(),
+  });
 }
 
 // Per-company headlines — Bing News RSS search (allows datacenter IPs).
@@ -2890,27 +2862,14 @@ async function handleApi(request, env, ctx, url) {
     catch (err) { return json({ error: true, message: friendlyError(err) }, 502); }
   }
 
-  // ── X/Twitter sentiment ──────────────────────────────────────────────────
-  if (p === '/api/sentiment/twitter') {
-    const raw = (qs.get('handle') || '').replace(/[^a-zA-Z0-9_,]/g, '').slice(0, 200);
-    const handles = raw ? raw.split(',').filter(Boolean) : X_ACCOUNTS;
-    const cacheKey = `sentiment:twitter:${handles.slice(0, 5).join(',')}`;
+  // ── Market sentiment ─────────────────────────────────────────────────────
+  if (p === '/api/sentiment/market' || p === '/api/sentiment/twitter') {
     try {
-      const { data, fresh } = await getData(env, ctx, cacheKey, async () => {
-        const lists = await Promise.all(handles.slice(0, 8).map((h, i) =>
-          sleep(i * 300).then(() => fetchXAccountFeed(h))
-        ));
-        const tweets = lists.flat().slice(0, 30);
-        if (!tweets.length) return { score: 0, label: 'Neutral', summary: 'No tweets retrieved.', tweetCount: 0 };
-        const block = tweets.map((t, i) => `${i + 1}. [${t.source}] ${t.title}`).join('\n');
-        const SENT_SYS = `You are a financial sentiment analyst. Given recent market tweets, return JSON: {"score": float -1.0 to 1.0, "label": "Strongly Bullish"|"Bullish"|"Neutral"|"Bearish"|"Strongly Bearish", "summary": one sentence}. Return ONLY the JSON object.`;
-        const result = await runAIJson(env, SENT_SYS,
-          `Score market sentiment:\n\n${block}`,
-          d => typeof d.score === 'number' && d.label && d.summary
-        );
-        return { ...result, tweetCount: tweets.length };
-      }, 900 * 1000);
-      return json({ cached: !fresh, ...data });
+      const { data, fresh } = await getData(env, ctx, 'sentiment:market', () => fetchMarketSentiment(env), 900 * 1000);
+      const headers = p === '/api/sentiment/twitter'
+        ? { Deprecation: 'true', Link: '</api/sentiment/market>; rel="successor-version"' }
+        : undefined;
+      return json({ cached: !fresh, ...data }, 200, headers);
     } catch (err) { return json({ error: true, message: friendlyError(err) }, 502); }
   }
 
