@@ -13,7 +13,7 @@ Research date: 2026-07-13
 - Checkpoint evidence:
   - local smoke suite `21/21` passed on 2026-07-13
   - in-app browser verification passed on `http://localhost:3000`
-  - production re-verification pending deploy
+  - production smoke suite `28/28` passed on 2026-07-13
 
 ## Capability rows
 
@@ -34,7 +34,7 @@ Research date: 2026-07-13
 - Evaluation criteria: linked 2D/3D state, shared filters, deep links, performance budgets
 - Provenance links: `https://www.worldmonitor.app/`
 - Licensing or trademark notes: clean-room behavior only; no AGPL code reuse
-- Final evidence: local checkpoint verified `/api/map/events`, `/api/map/flights`, `/api/map/layers`, `/api/map/conflict`, `/api/map/disease`, `/api/map/gpsjam`; weather/webcams degrade honestly when upstream/keyless constraints fail; production pending deploy
+- Final evidence: local and production checkpoint verified `/api/map/events`, `/api/map/flights`, `/api/map/layers`, `/api/map/conflict`, `/api/map/disease`, `/api/map/gpsjam`; weather degrades honestly when upstream rejects; webcams verified live in production
 
 ### WM-002 Layer-rich global intelligence map
 
@@ -53,7 +53,7 @@ Research date: 2026-07-13
 - Evaluation criteria: provenance on every feature, live/reference separation, performance
 - Provenance links: `https://www.worldmonitor.app/`, `https://www.worldmonitor.app/docs/data-sources`
 - Licensing or trademark notes: independent datasets only
-- Final evidence: intelligence/news pipeline now preserves evidence IDs, source URLs, timestamps, and freshness locally; browser/manual verification of full briefing surfaces still pending a focused post-deploy pass
+- Final evidence: intelligence/news pipeline now preserves evidence IDs, source URLs, timestamps, and freshness in production payloads; focused full-briefing UX review still remains open
 
 ### WM-003 Country dossiers and instability scoring
 

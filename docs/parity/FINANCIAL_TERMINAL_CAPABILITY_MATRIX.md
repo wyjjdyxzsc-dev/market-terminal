@@ -14,7 +14,7 @@ Research date: 2026-07-13
   - local unit suite `9/9` passed on 2026-07-13
   - local smoke suite `21/21` passed on 2026-07-13
   - in-app browser verification passed on `http://localhost:3000`
-  - production re-verification pending deploy
+  - production smoke suite `28/28` passed on 2026-07-13
 
 ## Capability rows
 
@@ -35,7 +35,7 @@ Research date: 2026-07-13
 - Evaluation criteria: command palette, recent commands, linked contexts, workspaces
 - Provenance links: `https://professional.bloomberg.com/products/bloomberg-terminal/`
 - Licensing or trademark notes: original command vocabulary required
-- Final evidence: browser verification showed live ticker ribbon and AAPL quote panel rendering locally; smoke suite covers `/api/quote`, `/api/chart`, and `/api/intel/priceaction`; production pending deploy
+- Final evidence: browser verification showed live ticker ribbon and AAPL quote panel rendering locally; smoke suite covers `/api/quote`, `/api/chart`, and `/api/intel/priceaction`; production verification passed
 
 ### FT-002 Security master and reference data
 
@@ -54,7 +54,7 @@ Research date: 2026-07-13
 - Evaluation criteria: identifiers, corporate actions, point-in-time history, provenance
 - Provenance links: `https://professional.bloomberg.com/products/data/enterprise-catalog/`
 - Licensing or trademark notes: many identifiers require licensed datasets
-- Final evidence: evidence-preserving news/intelligence pipeline implemented locally with source URLs, freshness, and degraded-mode metadata; production pending deploy
+- Final evidence: evidence-preserving news/intelligence pipeline verified in production payloads with source URLs, freshness, and degraded-mode metadata
 
 ### FT-003 Real-time market monitors
 
@@ -73,7 +73,7 @@ Research date: 2026-07-13
 - Evaluation criteria: breadth, latency, stale tick labels, cross-asset monitors
 - Provenance links: `https://professional.bloomberg.com/products/bloomberg-terminal/`
 - Licensing or trademark notes: live comprehensive coverage is entitlement-heavy
-- Final evidence: browser verification confirmed chart canvas presence with non-zero dimensions and smoke coverage for `/api/chart`; broader indicator/export coverage still open
+- Final evidence: browser verification confirmed chart canvas presence with non-zero dimensions and smoke coverage for `/api/chart`; production smoke passed; broader indicator/export coverage still open
 
 ### FT-004 Equities and company intelligence
 

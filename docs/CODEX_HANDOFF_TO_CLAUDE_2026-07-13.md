@@ -2,7 +2,7 @@ This work was performed by OpenAI Codex without Claude’s involvement. This doc
 
 # Status
 
-- Handoff status: local checkpoint complete, production deploy pending
+- Handoff status: production-verified checkpoint complete
 - Research date: 2026-07-13
 - Deployment URL: `https://market-terminal.wyjjdyxzsc.workers.dev`
 
@@ -169,6 +169,8 @@ This work was performed by OpenAI Codex without Claude’s involvement. This doc
 - [public/index.html](/Users/krishivjain/Desktop/claude projects/market-terminal/public/index.html)
   - cache-buster bumped to `20260713a`
   - `globe.gl` script now carries SRI
+- [public/_headers](/Users/krishivjain/Desktop/claude projects/market-terminal/public/_headers)
+  - Cloudflare static-asset security headers for production HTML/assets
 
 # Environment variables, secrets, bindings, migrations, and configuration
 
@@ -215,6 +217,7 @@ This work was performed by OpenAI Codex without Claude’s involvement. This doc
   - `public/mapintel.js`
   - `public/index.html`
   - `package.json`
+  - `public/_headers`
   - `tests/smoke.js`
   - `tests/api-contract.test.js`
   - `tests/evidence-core.test.js`
@@ -295,6 +298,20 @@ This work was performed by OpenAI Codex without Claude’s involvement. This doc
   - AAPL quote panel rendered
   - chart canvas present with non-zero dimensions
   - browser console warnings/errors observed: none
+- production smoke after deploy:
+  - `npm run test:prod` -> `28/28` passed on deployed commit `aa4f85b`
+- production targeted verification:
+  - `/api/intel/candles?symbol=AAPL&range=1D` -> `200 application/json`
+  - `/api/intel/candle?symbol=AAPL&range=1D` -> `200 application/json` with deprecation header
+  - `POST /api/quote` -> `405 application/json`
+  - `GET /api/stocks/stream` -> `426 application/json`
+  - `GET /api/ai-status` -> `503 application/json`
+  - `GET /api/data-status` -> `503 application/json`
+  - `GET /api/test-push` -> `503 application/json`
+  - malformed `POST /api/subscribe` -> `400 application/json`
+  - malformed `POST /api/unsubscribe` -> `400 application/json`
+  - `/api/intel/news` -> production payload includes `sourceUrl`, `status`, `freshness`, `sourceCount`, and `evidence`
+  - `/` and `/api/quote?symbol=AAPL` -> production security headers verified after follow-up commit `ff58850`
 
 # Production deployment and smoke-test evidence
 
@@ -303,8 +320,8 @@ This work was performed by OpenAI Codex without Claude’s involvement. This doc
   - `cf-cache-status: HIT`
   - asset versions `style.css?v=20260705c` and `app.js?v=20260705c`
 - Production smoke suite passed against `https://market-terminal.wyjjdyxzsc.workers.dev`
-- Post-change production verification has not run yet because the checkpoint has not been pushed to `main`.
-- Production still appeared to be on cache-buster `20260705c` at the end of this local checkpoint.
+- Post-change production verification completed.
+- Production cache-buster observed live: `20260713a`
 
 # Decisions rejected and why
 
@@ -318,7 +335,6 @@ This work was performed by OpenAI Codex without Claude’s involvement. This doc
 # Unresolved risks and technical debt
 
 - The repository still has very large `server.js` and `worker.js` monoliths.
-- Production still needs the checkpoint deployed and re-verified before parity/security claims can be upgraded from local-only evidence.
 - The X/Twitter sentiment source remains unreliable and needs replacement or re-scoping.
 - AI task grounding/abstention is improved for chat context and news evidence, but a full task-policy registry for high-risk workflows is still not implemented.
 - Quant coverage now exists only for the new candlestick fallback engine, not the broader 40-indicator surface.
@@ -326,15 +342,16 @@ This work was performed by OpenAI Codex without Claude’s involvement. This doc
 # Final branch, commits, tags, and working-tree state
 
 - Current branch: `main`
-- Checkpoint commit: pending creation
-- Push/deploy: pending
+- Checkpoint commits:
+  - `aa4f85b` — `Harden API parity and evidence fallbacks`
+  - `ff58850` — `Add static asset security headers`
+- Push/deploy:
+  - `git push origin main` completed for both checkpoint commits
+  - production deployment verified on `https://market-terminal.wyjjdyxzsc.workers.dev`
 
 # Recommended next step for Claude
 
-- After the checkpoint commit is created and pushed, run `npm run test:prod` and targeted production probes for:
-  - `POST /api/quote`
-  - `GET /api/stocks/stream`
-  - `GET /api/ai-status`
-  - `GET /api/data-status`
-  - `/api/intel/candles?symbol=AAPL&range=1D`
-- Then update this handoff and `docs/FULL_AUDIT_2026-07-13.md` with deployed evidence and resolved commit hashes.
+- Next recommended step:
+  - extend unit coverage beyond the new candle fallback into the broader quant surface and route-policy layer
+  - replace or re-scope X/Twitter sentiment
+  - continue modular decomposition of `server.js` and `worker.js`

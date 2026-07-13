@@ -12,7 +12,7 @@ Research date: 2026-07-13
 - Blocked-by-law: 0
 - Checkpoint evidence:
   - local smoke suite `21/21` passed on 2026-07-13
-  - production re-verification pending deploy
+  - production smoke suite `28/28` passed on 2026-07-13
 
 ## Capability rows
 
@@ -33,7 +33,7 @@ Research date: 2026-07-13
 - Evaluation criteria: global coverage, conflict-centric filtering, provenance
 - Provenance links: `https://war-monitor.com/`, `https://war-monitor.com/dashboard`
 - Licensing or trademark notes: original UI and taxonomy only
-- Final evidence: local checkpoint verified conflict/map event endpoints and structured JSON contract behavior; production pending deploy
+- Final evidence: local and production checkpoint verified conflict/map event endpoints and structured JSON contract behavior
 
 ### WAR-002 AI event classification and severity scoring
 
