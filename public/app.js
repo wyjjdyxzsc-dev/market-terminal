@@ -29,6 +29,21 @@ const _mc = { symbol: null, range: null, paths: null, rafId: null, model: 'RJD' 
 
 // ───────────────────────── tiny helpers ─────────────────────────
 const $ = (id) => document.getElementById(id);
+const escHtml = (value) => String(value == null ? '' : value).replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+
+function safeHttpUrl(value) {
+  try {
+    const url = new URL(String(value || ''), location.href);
+    return /^https?:$/i.test(url.protocol) ? url.toString() : '';
+  } catch {
+    return '';
+  }
+}
+
+function clearChildren(node) {
+  if (!node) return;
+  while (node.firstChild) node.removeChild(node.firstChild);
+}
 
 async function getJSON(url) {
   const res = await fetch(url);
@@ -350,8 +365,8 @@ async function loadPriceAction(symbol) {
   textEl.textContent = '';
   sentEl.textContent = '';
   sentEl.className = 'why-sentiment';
-  catsEl.innerHTML = '';
-  headsEl.innerHTML = '';
+  clearChildren(catsEl);
+  clearChildren(headsEl);
 
   try {
     const d = await getJSON('/api/intel/priceaction?symbol=' + encodeURIComponent(symbol));
@@ -365,12 +380,37 @@ async function loadPriceAction(symbol) {
     textEl.textContent = d.explanation || '';
 
     if (d.catalysts && d.catalysts.length) {
-      catsEl.innerHTML = d.catalysts.map(c => `<li>${c}</li>`).join('');
+      const frag = document.createDocumentFragment();
+      d.catalysts.forEach((catalyst) => {
+        const li = document.createElement('li');
+        li.textContent = catalyst;
+        frag.appendChild(li);
+      });
+      catsEl.appendChild(frag);
     }
 
     if (d.headlines && d.headlines.length) {
-      headsEl.innerHTML = '<strong style="color:var(--muted);font-size:10px">RELATED HEADLINES</strong><br>' +
-        d.headlines.map(h => `<div style="margin-top:4px">• ${h.title || h.headline || ''}</div>`).join('');
+      const label = document.createElement('strong');
+      label.style.color = 'var(--muted)';
+      label.style.fontSize = '10px';
+      label.textContent = 'RELATED HEADLINES';
+      headsEl.appendChild(label);
+      d.headlines.forEach((headline) => {
+        const row = document.createElement('div');
+        row.style.marginTop = '4px';
+        const url = safeHttpUrl(headline.sourceUrl || headline.url || '');
+        if (url) {
+          const link = document.createElement('a');
+          link.href = url;
+          link.target = '_blank';
+          link.rel = 'noopener noreferrer';
+          link.textContent = `• ${headline.title || headline.headline || ''}`;
+          row.appendChild(link);
+        } else {
+          row.textContent = `• ${headline.title || headline.headline || ''}`;
+        }
+        headsEl.appendChild(row);
+      });
     }
   } catch (err) {
     loadingEl.hidden = true;
@@ -409,9 +449,10 @@ async function loadProfile(symbol) {
     $('sCap').textContent = fmtMarketCap(p.marketCapitalization);
 
     const web = $('cWeb');
-    if (p.weburl) {
-      web.textContent = p.weburl.replace(/^https?:\/\//, '').replace(/\/$/, '');
-      web.href = p.weburl;
+    const website = safeHttpUrl(p.weburl);
+    if (website) {
+      web.textContent = website.replace(/^https?:\/\//, '').replace(/\/$/, '');
+      web.href = website;
     } else {
       web.textContent = '—';
       web.removeAttribute('href');
@@ -452,9 +493,10 @@ async function loadNews(symbol) {
       return;
     }
     body.innerHTML = items.map((n) => {
-      const safe = (s) => String(s || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const safe = (s) => escHtml(s || '');
+      const url = safeHttpUrl(n.url) || '#';
       return (
-        `<a class="news-item" href="${encodeURI(n.url || '#')}" target="_blank" rel="noopener noreferrer">` +
+        `<a class="news-item" href="${url}" target="_blank" rel="noopener noreferrer">` +
         `<div class="news-headline">${safe(n.headline)}</div>` +
         `<div class="news-meta"><span class="news-src">${safe(n.source)}</span>` +
         `<span>${relativeTime(n.datetime)}</span></div>` +

@@ -16,19 +16,137 @@
  * Static frontend is served by the [assets] binding; the Worker only owns /api/*.
  */
 
+import './shared/api-contract.js';
+import './shared/evidence-core.js';
+import './shared/candle-analysis-core.js';
+
 const FINNHUB_BASE = 'https://finnhub.io/api/v1';
 const CACHE_MS = 15 * 60 * 1000; // news refreshes every 15 min
 const BROWSER_UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 ' +
   '(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
 
+const {
+  getAllowedMethods,
+  getRoute,
+  canonicalPath,
+  buildError,
+} = globalThis.MarketTerminalContract;
+
+const {
+  safeExternalUrl,
+  normalizeEvidenceRecord,
+  dedupeEvidence,
+  clusterEvidence,
+  freshnessLabel,
+  newsroomStatus,
+  summarizeEvidence,
+  matchEvidence,
+  buildHeadlineBlock,
+  domainOf: evidenceDomainOf,
+} = globalThis.MarketTerminalEvidence;
+
+const { buildDeterministicCandleAnalysis } = globalThis.MarketTerminalCandleAnalysis;
+
+const CONTENT_SECURITY_POLICY = [
+  "default-src 'self'",
+  "script-src 'self' https://unpkg.com",
+  "style-src 'self' 'unsafe-inline' https://unpkg.com",
+  "img-src 'self' data: blob: https:",
+  "connect-src 'self' https: wss:",
+  "font-src 'self' data: https:",
+  "media-src 'self' https:",
+  "worker-src 'self' blob:",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "frame-ancestors 'none'",
+  "form-action 'self'"
+].join('; ');
+
+const COMMON_SECURITY_HEADERS = Object.freeze({
+  'content-security-policy': CONTENT_SECURITY_POLICY,
+  'permissions-policy': 'camera=(), geolocation=(), microphone=(), payment=(), usb=()',
+  'referrer-policy': 'strict-origin-when-cross-origin',
+  'x-content-type-options': 'nosniff',
+  'x-frame-options': 'DENY',
+  'cross-origin-resource-policy': 'same-origin',
+});
+
+const RATE_LIMITS = Object.freeze({
+  publicRead:    { windowMs: 60_000, max: 90 },
+  expensiveRead: { windowMs: 60_000, max: 30 },
+  aiChat:        { windowMs: 60_000, max: 12 },
+  subscriptions: { windowMs: 60_000, max: 10 },
+  admin:         { windowMs: 60_000, max: 5 },
+});
+const _rateLimitHits = new Map();
+
 // ───────────────────────── small helpers ─────────────────────────
 
-const json = (obj, status = 200) =>
+const json = (obj, status = 200, extraHeaders = null) =>
   new Response(JSON.stringify(obj), {
     status,
-    headers: { 'content-type': 'application/json; charset=utf-8' },
+    headers: {
+      'content-type': 'application/json; charset=utf-8',
+      ...COMMON_SECURITY_HEADERS,
+      ...(extraHeaders || {}),
+    },
   });
+
+function withSecurityHeaders(response) {
+  const headers = new Headers(response.headers);
+  for (const [key, value] of Object.entries(COMMON_SECURITY_HEADERS)) headers.set(key, value);
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
+function clientRateKey(request) {
+  const forwarded = request.headers.get('cf-connecting-ip') || request.headers.get('x-forwarded-for') || 'unknown';
+  return String(forwarded).split(',')[0].trim() || 'unknown';
+}
+
+function takeRateLimit(bucketName, key) {
+  const cfg = RATE_LIMITS[bucketName];
+  const now = Date.now();
+  const slotKey = `${bucketName}:${key}`;
+  let hit = _rateLimitHits.get(slotKey);
+  if (!hit || hit.resetAt <= now) {
+    hit = { count: 0, resetAt: now + cfg.windowMs };
+    _rateLimitHits.set(slotKey, hit);
+  }
+  hit.count++;
+  return {
+    allowed: hit.count <= cfg.max,
+    retryAfter: Math.max(1, Math.ceil((hit.resetAt - now) / 1000)),
+  };
+}
+
+function requireRateLimit(request, bucketName) {
+  const decision = takeRateLimit(bucketName, clientRateKey(request));
+  if (decision.allowed) return null;
+  return json(
+    buildError(429, 'rate_limited', 'Too many requests — slow down a moment.', {
+      bucket: bucketName,
+      retryAfterSeconds: decision.retryAfter,
+    }),
+    429,
+    { 'retry-after': String(decision.retryAfter), 'cache-control': 'no-store' }
+  );
+}
+
+function authToken(request) {
+  const auth = request.headers.get('authorization') || '';
+  return auth.toLowerCase().startsWith('bearer ') ? auth.slice(7).trim() : '';
+}
+
+function requireAdmin(request, env) {
+  if (!env.ADMIN_API_TOKEN) return json(buildError(503, 'admin_unavailable', 'Administrative route is disabled.'), 503, { 'cache-control': 'no-store' });
+  if (authToken(request) !== env.ADMIN_API_TOKEN) return json(buildError(401, 'admin_unauthorized', 'Administrative authentication required.'), 401, { 'cache-control': 'no-store' });
+  return null;
+}
 
 const isoDaysAgo = (days) =>
   new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
@@ -286,19 +404,34 @@ async function chartFromNasdaq(symbol, rangeKey) {
 
 // Worker isolates are short-lived, so the self-tuning source preference lives in
 // KV (best-effort) instead of a module variable.
-async function getChart(env, ctx, symbol, rangeKey) {
+function countOhlcPoints(points) {
+  return (points || []).filter((point) =>
+    Number.isFinite(point?.o) &&
+    Number.isFinite(point?.h) &&
+    Number.isFinite(point?.l)
+  ).length;
+}
+
+async function getChart(env, ctx, symbol, rangeKey, options = {}) {
+  const requireOhlc = options.requireOhlc === true;
   let preferred = 'yahoo';
   try { preferred = (await env.MT_KV.get('chartsrc')) || 'yahoo'; } catch {}
-  const order = preferred === 'nasdaq' ? ['nasdaq', 'yahoo'] : ['yahoo', 'nasdaq'];
+  const order = rangeKey === '1D'
+    ? ['yahoo', 'nasdaq']
+    : (preferred === 'nasdaq' ? ['nasdaq', 'yahoo'] : ['yahoo', 'nasdaq']);
   let lastErr;
   for (const src of order) {
     try {
       const data = src === 'yahoo' ? await chartFromYahoo(symbol, rangeKey) : await chartFromNasdaq(symbol, rangeKey);
-      if (data.points && data.points.length >= 2) {
+      const hasEnoughPoints = data.points && data.points.length >= 2;
+      const hasEnoughOhlc = !requireOhlc || countOhlcPoints(data.points) >= 3;
+      if (hasEnoughPoints && hasEnoughOhlc) {
         if (src !== preferred) ctx.waitUntil(env.MT_KV.put('chartsrc', src).catch(() => {}));
         return { ...data, source: src };
       }
-      lastErr = new Error(`${src} returned too few points`);
+      lastErr = !hasEnoughPoints
+        ? new Error(`${src} returned too few points`)
+        : new Error(`${src} returned insufficient OHLC data`);
     } catch (err) { lastErr = err; }
   }
   throw lastErr || new Error('No chart data available');
@@ -317,8 +450,6 @@ function decodeEntities(s) {
     .trim();
 }
 
-const domainOf = (link) => { try { return new URL(link).hostname.replace(/^www\./, ''); } catch { return ''; } };
-
 function parseRss(xml) {
   const items = [];
   const blocks = xml.match(/<item\b[\s\S]*?<\/item>/g) || [];
@@ -329,8 +460,9 @@ function parseRss(xml) {
     };
     const link = pick('link');
     // <source> (publisher feeds) or <News:Source> (Bing) or the link's domain.
-    const source = pick('source') || pick('News:Source') || domainOf(link);
-    items.push({ title: pick('title'), source, published: pick('pubDate') });
+    const source = pick('source') || pick('News:Source') || evidenceDomainOf(link);
+    const summary = pick('description') || pick('content:encoded');
+    items.push({ title: pick('title'), source, published: pick('pubDate'), link, summary });
   }
   return items;
 }
@@ -339,7 +471,24 @@ async function fetchFeed(url, limit = 20) {
   try {
     const res = await fetchWithTimeout(url, { headers: { 'User-Agent': BROWSER_UA, Accept: 'application/rss+xml, application/xml, text/xml, */*' } }, 11000);
     if (!res.ok) return [];
-    return parseRss(await res.text()).slice(0, limit).filter((h) => h.title);
+    const fetchedAt = new Date().toISOString();
+    const records = dedupeEvidence(
+      parseRss(await res.text())
+        .slice(0, limit)
+        .filter((item) => item.title)
+        .map((item) => normalizeEvidenceRecord(item, { feedUrl: url, fetchedAt }))
+    );
+    return records.map((record) => ({
+      title: record.title,
+      source: record.publisher,
+      published: record.publishedAt || '',
+      link: record.sourceUrl,
+      summary: record.excerpt,
+      evidenceId: record.id,
+      evidence: record,
+      sourceTier: record.sourceTier,
+      reliabilityLabel: record.reliabilityLabel,
+    }));
   } catch { return []; }
 }
 
@@ -349,7 +498,7 @@ function mergeHeadlines(lists, maxAgeMins = 72 * 60) {
   const cutoff = Date.now() - maxAgeMins * 60_000;
   for (const list of lists) {
     for (const h of list) {
-      const k = (h.title || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+      const k = (h.link || h.title || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
       if (!k || seen.has(k)) continue;
       seen.add(k);
       h._ms = h.published ? (new Date(h.published).getTime() || 0) : 0;
@@ -435,7 +584,12 @@ async function fetchXAccountFeed(account) {
     return entries
       .map((e) => e && e.content && e.content.tweet)
       .filter(Boolean)
-      .map((t) => ({ title: cleanTweetText(t.full_text || t.text), source: `X/@${account}`, published: t.created_at || '' }))
+      .map((t) => ({
+        title: cleanTweetText(t.full_text || t.text),
+        source: `X/@${account}`,
+        published: t.created_at || '',
+        link: safeExternalUrl(`https://x.com/${account}/status/${t.id_str || t.id || ''}`),
+      }))
       .filter((h) => h.title);
   } catch { return []; }
 }
@@ -470,10 +624,11 @@ async function fetchCompanyHeadlines(query, limit = 14) {
   return mergeHeadlines(lists).slice(0, limit);
 }
 
-const headlineBlock = (headlines) =>
-  !headlines.length
-    ? '(no headlines retrieved)'
-    : headlines.map((h, i) => `${i + 1}. ${h.title}${h.source ? ` — ${h.source}` : ''}${h.published ? ` (${h.published})` : ''}`).join('\n');
+const headlineBlock = (headlines) => buildHeadlineBlock((headlines || []).map((headline) => ({
+  title: headline.title,
+  publisher: headline.source,
+  publishedAt: headline.published,
+})));
 
 // ════════════════════════════════════════════════════════════════════════
 //  MULTI-PROVIDER AI POOL
@@ -1010,8 +1165,22 @@ Return ONLY the JSON object. No markdown, no commentary.`;
 // ───────────────────────── fetchers ─────────────────────────
 
 async function fetchCandleAnalysis(env, ctx, symbol, range) {
-  const chartData = await getChart(env, ctx, symbol, range);
-  const points = (chartData.points || []).filter((p) => p.o != null && p.h != null && p.l != null);
+  let chartData;
+  let analysisRange = range;
+  let degraded = false;
+  let degradeReason = '';
+
+  try {
+    chartData = await getChart(env, ctx, symbol, range, { requireOhlc: true });
+  } catch (err) {
+    if (range !== '1D') throw err;
+    chartData = await getChart(env, ctx, symbol, '5D', { requireOhlc: true });
+    analysisRange = '5D';
+    degraded = true;
+    degradeReason = 'Intraday OHLC was unavailable, so the analysis fell back to daily 5D candles.';
+  }
+
+  const points = (chartData.points || []).filter((p) => Number.isFinite(p.o) && Number.isFinite(p.h) && Number.isFinite(p.l));
   if (points.length < 3) throw new Error('Not enough OHLC data for candle analysis.');
 
   // Send the last 40 candles — enough context without overloading the prompt.
@@ -1023,18 +1192,82 @@ async function fetchCandleAnalysis(env, ctx, symbol, range) {
     return `${String(i).padStart(3)} | ${dt} | ${fmt(p.o)} | ${fmt(p.h)} | ${fmt(p.l)} | ${fmt(p.c)}`;
   });
   const userPrompt =
-    `Symbol: ${symbol} | Range: ${range} | As of: ${new Date().toUTCString()}\n\n${header}\n${rows.join('\n')}\n\n` +
+    `Symbol: ${symbol} | Range: ${analysisRange} | As of: ${new Date().toUTCString()}\n\n${header}\n${rows.join('\n')}\n\n` +
     `Current price: ${recent[recent.length - 1].c.toFixed(2)}\n\nProduce the candlestick analysis JSON now.`;
 
-  const data = await runAIJson(env, CANDLE_SYSTEM, userPrompt,
-    (d) => d && Array.isArray(d.patterns) && d.overallSignal && d.keyLevels);
+  const nowIso = new Date().toISOString();
+  const currentPrice = recent[recent.length - 1].c;
+  const baseData = {
+    symbol,
+    requestedRange: range,
+    range: analysisRange,
+    asOf: nowIso,
+    currentPrice,
+    candleCount: points.length,
+    chartSource: chartData.source,
+    degraded,
+    degradeReason: degradeReason || undefined,
+  };
 
-  data.symbol = symbol;
-  data.range = range;
-  data.asOf = new Date().toISOString();
-  data.currentPrice = recent[recent.length - 1].c;
-  data.candleCount = points.length;
-  return data;
+  try {
+    const data = await runAIJson(env, CANDLE_SYSTEM, userPrompt,
+      (d) => d && Array.isArray(d.patterns) && d.overallSignal && d.keyLevels);
+    return {
+      ...data,
+      ...baseData,
+      dataMode: 'ai',
+    };
+  } catch (err) {
+    return {
+      ...buildDeterministicCandleAnalysis(recent, {
+        currentPrice,
+        degraded: true,
+        degradeReason: degradeReason || 'AI analysis was unavailable, so this result was generated by the on-box pattern engine.',
+      }),
+      ...baseData,
+      dataMode: 'deterministic',
+      degraded: true,
+      degradeReason: degradeReason
+        ? `${degradeReason} AI analysis was also unavailable, so this result was generated by the on-box pattern engine.`
+        : 'AI analysis was unavailable, so this result was generated by the on-box pattern engine.',
+    };
+  }
+}
+
+function extractHeadlineEvidence(headlines) {
+  return dedupeEvidence((headlines || []).map((headline) =>
+    headline.evidence || normalizeEvidenceRecord({
+      title: headline.title,
+      source: headline.source,
+      published: headline.published,
+      link: headline.link,
+      summary: headline.summary,
+    }, { fetchedAt: new Date().toISOString() })
+  ));
+}
+
+function enrichNewsItems(items, headlines) {
+  const evidenceRecords = extractHeadlineEvidence(headlines);
+  const clusters = clusterEvidence(evidenceRecords);
+  return (items || []).slice(0, 14).map((item) => {
+    const cluster = matchEvidence(item, clusters);
+    const evidence = cluster ? summarizeEvidence(cluster) : [];
+    const primary = evidence[0] || null;
+    return {
+      ...item,
+      source: item.source || (primary ? primary.publisher : ''),
+      sourceUrl: item.sourceUrl || (primary ? primary.sourceUrl : ''),
+      timestamp: item.timestamp || (cluster ? cluster.newestEvidenceAt : ''),
+      updatedAt: cluster ? cluster.newestEvidenceAt : null,
+      sourceCount: cluster ? cluster.sourceCount : evidence.length,
+      status: item.status || (cluster ? newsroomStatus(cluster) : 'UNVERIFIED'),
+      freshness: cluster ? freshnessLabel(cluster.newestEvidenceAt) : 'unknown',
+      evidenceIds: evidence.map((entry) => entry.id),
+      evidence,
+      dataAsOf: cluster ? cluster.newestEvidenceAt : null,
+      confidence: item.confidence || (cluster && cluster.sourceCount >= 3 ? 'high' : cluster && cluster.sourceCount === 2 ? 'medium' : 'low'),
+    };
+  });
 }
 
 async function fetchIntelNews(env) {
@@ -1059,7 +1292,7 @@ async function fetchIntelNews(env) {
   }
   const items = Array.isArray(data) ? data : data && data.items;
   if (!Array.isArray(items)) throw new Error('Expected a JSON array of news items.');
-  return items.slice(0, 14);
+  return enrichNewsItems(items, headlines);
 }
 
 // Map raw RSS headlines into the news-item shape the frontend renders; the
@@ -1072,8 +1305,15 @@ function rawHeadlineItems(headlines) {
     category: 'financial',
     priority: 'normal',
     source: h.source || '',
+    sourceUrl: h.link || '',
     timestamp: h.published || '',
     tickers: [],
+    status: 'DEVELOPING',
+    freshness: freshnessLabel(h.published || null),
+    sourceCount: 1,
+    evidenceIds: h.evidenceId ? [h.evidenceId] : [],
+    evidence: h.evidence ? summarizeEvidence({ items: [h.evidence] }) : [],
+    confidence: 'low',
     degraded: true,
   }));
 }
@@ -2384,6 +2624,13 @@ async function pushOne(env, sub, payloadStr) {
 }
 
 const pushEnabled = (env) => Boolean(env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY);
+const PUSH_ENDPOINT_HOSTS = new Set([
+  'fcm.googleapis.com',
+  'updates.push.services.mozilla.com',
+  'web.push.apple.com',
+  'api.push.apple.com',
+  'push.services.mozilla.com',
+]);
 
 async function listSubs(env) {
   const subs = [];
@@ -2403,9 +2650,39 @@ const subKey = async (endpoint) => {
   return 'sub:' + bytesToB64url(h).slice(0, 32);
 };
 
+function isBase64Url(value, minLen) {
+  return typeof value === 'string' &&
+    value.length >= minLen &&
+    /^[A-Za-z0-9_-]+$/.test(value);
+}
+
+function validateSubscription(input) {
+  const endpoint = safeExternalUrl(input && input.endpoint);
+  if (!endpoint) return { ok: false, message: 'Subscription endpoint must be a valid http/https URL.' };
+  if (endpoint.length > 2048) return { ok: false, message: 'Subscription endpoint is too long.' };
+  const host = evidenceDomainOf(endpoint);
+  if (!host || !PUSH_ENDPOINT_HOSTS.has(host)) return { ok: false, message: 'Unsupported push service endpoint.' };
+  const keys = input && input.keys;
+  if (!keys || !isBase64Url(keys.p256dh, 40) || !isBase64Url(keys.auth, 16)) {
+    return { ok: false, message: 'Subscription keys are malformed.' };
+  }
+  return {
+    ok: true,
+    subscription: {
+      endpoint,
+      expirationTime: input.expirationTime ?? null,
+      keys: {
+        p256dh: keys.p256dh,
+        auth: keys.auth,
+      },
+    },
+  };
+}
+
 async function sendPush(env, payload, opts = {}) {
   if (!pushEnabled(env)) return opts.diag ? { sent: 0, results: [{ error: 'push disabled (no VAPID keys)' }] } : 0;
-  const subs = await listSubs(env);
+  const selected = opts.selectedEndpoints ? new Set(opts.selectedEndpoints) : null;
+  const subs = (await listSubs(env)).filter((sub) => !selected || selected.has(sub.endpoint));
   if (!subs.length) return opts.diag ? { sent: 0, results: [] } : 0;
   const body = JSON.stringify(payload);
   let sent = 0;
@@ -2484,12 +2761,40 @@ function friendlyError(err) {
   return 'Could not fetch live data right now — please try again shortly.';
 }
 
+function routeBucket(pathname) {
+  if (pathname === '/api/intel/chat') return 'aiChat';
+  if (pathname === '/api/subscribe' || pathname === '/api/unsubscribe') return 'subscriptions';
+  if (pathname === '/api/test-push' || pathname === '/api/ai-status' || pathname === '/api/data-status' || pathname === '/api/debug/providers') return 'admin';
+  if (pathname.startsWith('/api/intel/') || pathname.startsWith('/api/sentiment/') || pathname === '/api/macro/shock') return 'expensiveRead';
+  return 'publicRead';
+}
+
 // ───────────────────────── router ─────────────────────────
 
 async function handleApi(request, env, ctx, url) {
   const p = url.pathname;
   const qs = url.searchParams;
   const sym = () => (qs.get('symbol') || '').toUpperCase();
+  const route = getRoute(p);
+
+  if (route) {
+    if (route.protected) {
+      const adminError = requireAdmin(request, env);
+      if (adminError) return adminError;
+    }
+    if (!route.methods.includes(request.method)) {
+      return json(
+        buildError(405, 'method_not_allowed', `Method ${request.method} is not allowed for ${canonicalPath(p)}.`),
+        405,
+        { Allow: getAllowedMethods(p).join(', '), 'cache-control': 'no-store' }
+      );
+    }
+    if (route.upgradeRequired && String(request.headers.get('upgrade') || '').toLowerCase() !== 'websocket') {
+      return json(buildError(426, 'upgrade_required', 'A websocket upgrade is required for this route.'), 426, { 'cache-control': 'no-store' });
+    }
+    const limitError = requireRateLimit(request, routeBucket(p));
+    if (limitError) return limitError;
+  }
 
   // --- Live stock trade stream: proxy the browser <-> Finnhub's trade
   // websocket, injecting the API key into the upstream URL so it never reaches
@@ -2817,6 +3122,20 @@ async function handleApi(request, env, ctx, url) {
     try { const { data, fresh } = await getData(env, ctx, 'deepdive:' + query.toLowerCase(), () => fetchDeepDive(env, query)); return json({ cached: !fresh, ...data }); }
     catch (err) { return json({ error: true, message: friendlyError(err) }, 500); }
   }
+  if (p === '/api/intel/candle') {
+    const symbol = (qs.get('symbol') || qs.get('q') || '').trim().toUpperCase().slice(0, 10);
+    const range = (qs.get('range') || '1D').toUpperCase();
+    if (!symbol) return json({ error: true, message: 'Missing symbol.' }, 400);
+    if (!YAHOO_RANGE[range]) return json({ error: true, message: 'Invalid range.' }, 400);
+    try {
+      const cacheKey = `candles:${symbol.toLowerCase()}:${range.toLowerCase()}`;
+      const { data, fresh } = await getData(env, ctx, cacheKey, () => fetchCandleAnalysis(env, ctx, symbol, range), 5 * 60 * 1000);
+      return json({ cached: !fresh, ...data }, 200, {
+        Deprecation: 'true',
+        Link: '</api/intel/candles>; rel="successor-version"',
+      });
+    } catch (err) { return json({ error: true, message: friendlyError(err) }, 500); }
+  }
   if (p === '/api/intel/candles') {
     const symbol = (qs.get('symbol') || qs.get('q') || '').trim().toUpperCase().slice(0, 10);
     const range = (qs.get('range') || '1D').toUpperCase();
@@ -2882,18 +3201,23 @@ async function handleApi(request, env, ctx, url) {
   if (p === '/api/subscribe' && request.method === 'POST') {
     const b = await request.json().catch(() => ({}));
     const sub = b && b.endpoint ? b : b && b.subscription;
-    if (!sub || !sub.endpoint || !sub.keys) return json({ error: true, message: 'Invalid subscription.' }, 400);
-    await env.MT_KV.put(await subKey(sub.endpoint), JSON.stringify(sub));
+    const validated = validateSubscription(sub);
+    if (!validated.ok) return json(buildError(400, 'invalid_subscription', validated.message), 400, { 'cache-control': 'no-store' });
+    await env.MT_KV.put(await subKey(validated.subscription.endpoint), JSON.stringify(validated.subscription));
     return json({ ok: true });
   }
   if (p === '/api/unsubscribe' && request.method === 'POST') {
     const b = await request.json().catch(() => ({}));
-    const endpoint = b && (b.endpoint || (b.subscription && b.subscription.endpoint));
-    if (endpoint) await env.MT_KV.delete(await subKey(endpoint));
+    const endpoint = safeExternalUrl(b && (b.endpoint || (b.subscription && b.subscription.endpoint)) || '');
+    if (!endpoint) return json(buildError(400, 'invalid_subscription', 'A valid subscription endpoint is required.'), 400, { 'cache-control': 'no-store' });
+    await env.MT_KV.delete(await subKey(endpoint));
     return json({ ok: true });
   }
   if (p === '/api/test-push' && request.method === 'POST') {
-    const diag = await sendPush(env, { title: '✅ Alerts are on', body: 'You’ll get a notification here when major market news breaks.', url: '/?tab=alerts' }, { diag: true });
+    const body = await request.json().catch(() => ({}));
+    const endpoint = safeExternalUrl(body && body.endpoint || '');
+    if (!endpoint) return json(buildError(400, 'missing_target', 'An explicit subscription endpoint is required for test push.'), 400, { 'cache-control': 'no-store' });
+    const diag = await sendPush(env, { title: '✅ Alerts are on', body: 'You’ll get a notification here when major market news breaks.', url: '/?tab=alerts' }, { diag: true, selectedEndpoints: [endpoint] });
     return json({ ok: true, devices: diag.sent, results: diag.results });
   }
 
@@ -2919,7 +3243,7 @@ async function handleApi(request, env, ctx, url) {
     return json(result);
   }
 
-  return json({ error: 'Not found' }, 404);
+  return json(buildError(404, 'not_found', `Unknown API route: ${p}`), 404, { 'cache-control': 'no-store' });
 }
 
 // ─── Infrastructure Data ───────────────────────────────────────────────────
@@ -3732,7 +4056,7 @@ export default {
       }
     }
     // Everything else -> static assets (SPA fallback handled by [assets] config).
-    return env.ASSETS.fetch(request);
+    return withSecurityHeaders(await env.ASSETS.fetch(request));
   },
 
   // Hourly cron: refresh the news cache and push any new breaking alerts.

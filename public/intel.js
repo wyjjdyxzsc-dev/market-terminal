@@ -19,6 +19,14 @@
   const $ = (sel) => document.querySelector(sel);
   const esc = (s) =>
     String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const safeHttpUrl = (value) => {
+    try {
+      const url = new URL(String(value || ''), location.href);
+      return /^https?:$/i.test(url.protocol) ? url.toString() : '';
+    } catch {
+      return '';
+    }
+  };
 
   // ---------- "Watch it" helpers ----------
   const WATCHABLE = new Set(['political', 'geopolitical', 'federal-reserve']);
@@ -30,7 +38,7 @@
   function watchBtn(item) {
     if (!hasLiveUrl(item) && !WATCHABLE.has(item.category)) return '';
     const live = hasLiveUrl(item);
-    return `<a class="watch-btn ${live ? 'live' : ''}" href="${esc(watchHref(item))}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${live ? '🔴 Watch live' : '▶ Find live video'}</a>`;
+    return `<a class="watch-btn ${live ? 'live' : ''}" href="${esc(safeHttpUrl(watchHref(item)))}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">${live ? '🔴 Watch live' : '▶ Find live video'}</a>`;
   }
 
   // ---------- robust JSON fetch ----------
@@ -69,6 +77,10 @@
     const cat = esc(item.category || 'macro');
     const time = item.timestamp
       ? new Date(item.timestamp).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
+    const status = esc(item.status || (item.degraded ? 'DEVELOPING' : 'UNVERIFIED'));
+    const freshness = item.freshness ? esc(item.freshness) : '';
+    const sourceUrl = safeHttpUrl(item.sourceUrl || '');
+    const evidence = Array.isArray(item.evidence) ? item.evidence : [];
     return `
       <article class="card" data-i="${i}">
         <div class="card-head">
@@ -78,9 +90,12 @@
           </div>
         </div>
         <div class="card-meta">
+          <span class="tag">${status}</span>
           <span class="tag cat-${cat}">${cat.replace('-', ' ')}</span>
-          <span>${esc(item.source || '')}</span>
+          ${sourceUrl ? `<a href="${esc(sourceUrl)}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">${esc(item.source || '')}</a>` : `<span>${esc(item.source || '')}</span>`}
           ${time ? `<span>· ${time}</span>` : ''}
+          ${item.sourceCount ? `<span>· ${esc(item.sourceCount)} src</span>` : ''}
+          ${freshness ? `<span>· ${freshness}</span>` : ''}
         </div>
         ${watchBtn(item)}
         ${Array.isArray(item.tickers) && item.tickers.length
@@ -90,6 +105,16 @@
           <div class="detail-inner">
             ${esc(item.detail)}
             ${item.marketImpact ? `<div class="impact"><b>Market impact:</b> ${esc(item.marketImpact)}</div>` : ''}
+            ${item.degraded ? `<div class="impact"><b>Mode:</b> raw headlines fallback while AI enrichment is unavailable.</div>` : ''}
+            ${evidence.length
+              ? `<div class="impact"><b>Evidence:</b><div class="evidence-list">${evidence.map((entry) => {
+                  const url = safeHttpUrl(entry.sourceUrl || '');
+                  const label = `${entry.publisher || entry.publisherDomain || 'source'}${entry.publishedAt ? ` · ${new Date(entry.publishedAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}` : ''}`;
+                  return url
+                    ? `<div><a href="${esc(url)}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">${esc(label)}</a></div>`
+                    : `<div>${esc(label)}</div>`;
+                }).join('')}</div></div>`
+              : ''}
           </div>
         </div>
       </article>`;
@@ -2191,22 +2216,6 @@
     }
   }
 
-  // ── Build context object for the backend ─────────────────────────────
-  function buildContext() {
-    const sym = window.state && window.state.symbol;
-    const price = window.state && window.state.lastPrice;
-    const cached = window._intelAnalysisData; // set below when analysis loads
-    const headlines = (window._intelNewsItems || []).slice(0, 5).map((n) => n.headline || n.title || '').filter(Boolean);
-    return {
-      symbol: sym || null,
-      price: price ? Number(price).toFixed(2) : null,
-      marketSentiment: cached ? cached.marketSentiment : null,
-      sentimentScore: cached ? cached.sentimentScore : null,
-      keyThemes: cached ? (cached.keyThemes || []).join(', ') : null,
-      recentHeadlines: headlines,
-    };
-  }
-
   // ── Render helpers ───────────────────────────────────────────────────
   function escHtml(s) {
     return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -2272,7 +2281,7 @@
       const resp = await fetch('/api/intel/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: chatHistory, context: buildContext() }),
+        body: JSON.stringify({ messages: chatHistory, symbol: window.state && window.state.symbol ? window.state.symbol : null }),
       });
       const data = await resp.json();
       removeTyping();
@@ -2301,11 +2310,11 @@
         <div class="ai-chat-welcome-title">What do you want to know?</div>
         <div class="ai-chat-suggestions" id="aiChatSuggestions">
           <button class="ai-sug" data-q="What's moving the market right now?">What's moving the market?</button>
-          <button class="ai-sug" data-q="What's the best options trade right now?">Best options trade now?</button>
-          <button class="ai-sug" data-q="Should I buy or sell the currently loaded stock?">Buy or sell this stock?</button>
+          <button class="ai-sug" data-q="What evidence explains the currently loaded stock's move today?">Explain this stock's move</button>
+          <button class="ai-sug" data-q="What are the highest-confidence risks around the currently loaded stock right now?">Risks around this stock</button>
           <button class="ai-sug" data-q="What sectors should I be in right now?">Which sectors to be in?</button>
           <button class="ai-sug" data-q="What are the biggest macro risks to the market?">Biggest macro risks?</button>
-          <button class="ai-sug" data-q="Give me a trade idea for today.">Give me a trade idea</button>
+          <button class="ai-sug" data-q="Summarize the strongest market narratives with evidence and caveats.">Summarize market narratives</button>
         </div>
       </div>`;
     bindSuggestions();

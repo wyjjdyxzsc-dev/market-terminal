@@ -16,6 +16,14 @@
   const active = {};        // layerId -> bool
 
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const safeHttpUrl = (value) => {
+    try {
+      const url = new URL(String(value || ''), location.href);
+      return /^https?:$/i.test(url.protocol) ? url.toString() : '';
+    } catch {
+      return '';
+    }
+  };
   async function getJSON(url) {
     const r = await fetch(url, { headers: { Accept: 'application/json' } });
     return r.json();
@@ -447,16 +455,18 @@
         } catch { /* keep static baseline */ }
       } },
     { id: 'webcams', label: 'Curated Webcams', icon: '📷', group: 'Overlays',
-      load: async (lg) => { const d = await ensureLayerData(); (d.webcams || DATA.webcams).forEach(([n, la, lo, desc, url]) => L.circleMarker([la, lo], { renderer: r(), radius: 5, weight: 1.5, color: '#45c8dc', fillColor: '#0a0a0a', fillOpacity: 0.9 }).bindPopup(`<b>📷 ${esc(n)}</b><br>${esc(desc)}<br><a href="${esc(url)}" target="_blank" rel="noopener" style="color:#45c8dc">▶ Watch live</a>`).addTo(lg)); } },
+      load: async (lg) => { const d = await ensureLayerData(); (d.webcams || DATA.webcams).forEach(([n, la, lo, desc, url]) => L.circleMarker([la, lo], { renderer: r(), radius: 5, weight: 1.5, color: '#45c8dc', fillColor: '#0a0a0a', fillOpacity: 0.9 }).bindPopup(`<b>📷 ${esc(n)}</b><br>${esc(desc)}<br><a href="${esc(safeHttpUrl(url))}" target="_blank" rel="noopener noreferrer" style="color:#45c8dc">▶ Watch live</a>`).addTo(lg)); } },
     { id: 'webcams-live', label: 'Live Webcams (Windy)', icon: '📹', group: 'Overlays', live: true, refresh: 600000,
       load: async (lg) => {
         const d = await getJSON('/api/map/webcams-live');
         if (d.error) return;
         (d.points || []).forEach((w) => {
+          const safeImg = safeHttpUrl(w.img);
+          const safeUrl = safeHttpUrl(w.url);
           const pop = `<b>📹 ${esc(w.title || 'Webcam')}</b>` +
             (w.place ? `<br><small style="color:#7a8290">${esc(w.place)}</small>` : '') +
-            (w.img ? `<br><img src="${esc(w.img)}" style="width:240px;border-radius:6px;margin-top:5px" loading="lazy" onerror="this.style.display='none'">` : '') +
-            (w.url ? `<br><a href="${esc(w.url)}" target="_blank" rel="noopener" style="color:#73daca">▶ Watch live on Windy</a>` : '');
+            (safeImg ? `<br><img src="${esc(safeImg)}" style="width:240px;border-radius:6px;margin-top:5px" loading="lazy" onerror="this.style.display='none'">` : '') +
+            (safeUrl ? `<br><a href="${esc(safeUrl)}" target="_blank" rel="noopener noreferrer" style="color:#73daca">▶ Watch live on Windy</a>` : '');
           L.circleMarker([w.lat, w.lon], { renderer: r(), radius: 3, weight: 1, color: '#0a0a0a', fillColor: '#73daca', fillOpacity: 0.85 }).bindPopup(pop, { minWidth: 250 }).addTo(lg);
         });
         const sc = document.querySelector('.mlp-row[data-id="webcams-live"] .mlp-lbl');

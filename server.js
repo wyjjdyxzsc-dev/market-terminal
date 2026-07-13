@@ -27,6 +27,9 @@ require('dotenv').config({ path: path.join(__dirname, '.env') });
 const express   = require('express');
 const RssParser = require('rss-parser');
 const webpush   = require('web-push');
+const apiContract = require('./shared/api-contract.js');
+const evidenceCore = require('./shared/evidence-core.js');
+const candleAnalysisCore = require('./shared/candle-analysis-core.js');
 
 // Optional WebSocket for Finnhub live feed.  npm i ws  to enable.
 let WS;
@@ -36,11 +39,79 @@ const app = express();
 app.set('trust proxy', 1);
 app.use(express.json({ limit: '16kb' }));
 
+const {
+  ROUTES,
+  getAllowedMethods,
+  getRoute,
+  isKnownApiPath,
+  isProtectedRoute,
+  canonicalPath,
+  buildError,
+} = apiContract;
+
+const {
+  safeExternalUrl,
+  normalizeEvidenceRecord,
+  dedupeEvidence,
+  clusterEvidence,
+  freshnessLabel,
+  newsroomStatus,
+  summarizeEvidence,
+  matchEvidence,
+  buildHeadlineBlock,
+  domainOf: evidenceDomainOf,
+} = evidenceCore;
+
+const { buildDeterministicCandleAnalysis } = candleAnalysisCore;
+
 const PORT         = process.env.PORT || 3000;
 const FINNHUB_BASE = 'https://finnhub.io/api/v1';
+const ADMIN_API_TOKEN = process.env.ADMIN_API_TOKEN || '';
 const BROWSER_UA   =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 ' +
   '(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+
+const CONTENT_SECURITY_POLICY = [
+  "default-src 'self'",
+  "script-src 'self' https://unpkg.com",
+  "style-src 'self' 'unsafe-inline' https://unpkg.com",
+  "img-src 'self' data: blob: https:",
+  "connect-src 'self' https: wss:",
+  "font-src 'self' data: https:",
+  "media-src 'self' https:",
+  "worker-src 'self' blob:",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "frame-ancestors 'none'",
+  "form-action 'self'"
+].join('; ');
+
+const COMMON_SECURITY_HEADERS = Object.freeze({
+  'Content-Security-Policy': CONTENT_SECURITY_POLICY,
+  'Permissions-Policy': 'camera=(), geolocation=(), microphone=(), payment=(), usb=()',
+  'Referrer-Policy': 'strict-origin-when-cross-origin',
+  'X-Content-Type-Options': 'nosniff',
+  'X-Frame-Options': 'DENY',
+  'Cross-Origin-Resource-Policy': 'same-origin',
+});
+
+app.use((req, res, next) => {
+  for (const [key, value] of Object.entries(COMMON_SECURITY_HEADERS)) res.setHeader(key, value);
+  next();
+});
+
+app.use((err, req, res, next) => {
+  if (!err) return next();
+  if (err.type === 'entity.parse.failed') {
+    res.set('Cache-Control', 'no-store');
+    return res.status(400).json(buildError(400, 'invalid_json', 'Malformed JSON body.'));
+  }
+  if (err.status === 413) {
+    res.set('Cache-Control', 'no-store');
+    return res.status(413).json(buildError(413, 'body_too_large', 'Request body exceeds the allowed size.'));
+  }
+  return next(err);
+});
 
 const FINNHUB_KEYS = [
   process.env.FINNHUB_API_KEY,
@@ -55,6 +126,32 @@ const FINNHUB_KEYS = [
 // ═══════════════════════════════════════════════════════════════════════════
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+function sendApiError(res, status, code, message, extras, headers) {
+  res.set('Cache-Control', 'no-store');
+  if (headers) {
+    for (const [key, value] of Object.entries(headers)) res.set(key, value);
+  }
+  return res.status(status).json(buildError(status, code, message, extras));
+}
+
+function readAuthToken(req) {
+  const auth = String(req.headers.authorization || '');
+  if (auth.toLowerCase().startsWith('bearer ')) return auth.slice(7).trim();
+  return '';
+}
+
+function requireAdmin(req, res) {
+  if (!ADMIN_API_TOKEN) {
+    sendApiError(res, 503, 'admin_unavailable', 'Administrative route is disabled.');
+    return false;
+  }
+  if (readAuthToken(req) !== ADMIN_API_TOKEN) {
+    sendApiError(res, 401, 'admin_unauthorized', 'Administrative authentication required.');
+    return false;
+  }
+  return true;
+}
 
 /** YYYY-MM-DD, `days` calendar days ago (UTC). */
 const isoDaysAgo = (days) =>
@@ -797,16 +894,34 @@ async function chartFromNasdaq(symbol, rangeKey) {
 
 let preferredChartSource = 'yahoo';
 
-async function getChart(symbol, rangeKey) {
-  const order = preferredChartSource === 'nasdaq' ? ['nasdaq', 'yahoo'] : ['yahoo', 'nasdaq'];
+function countOhlcPoints(points) {
+  return (points || []).filter((point) =>
+    Number.isFinite(point?.o) &&
+    Number.isFinite(point?.h) &&
+    Number.isFinite(point?.l)
+  ).length;
+}
+
+async function getChart(symbol, rangeKey, options = {}) {
+  const requireOhlc = options.requireOhlc === true;
+  const order = rangeKey === '1D'
+    ? ['yahoo', 'nasdaq']
+    : (preferredChartSource === 'nasdaq' ? ['nasdaq', 'yahoo'] : ['yahoo', 'nasdaq']);
   let lastErr;
   for (const src of order) {
     try {
       const data = src === 'yahoo'
         ? await chartFromYahoo(symbol, rangeKey)
         : await chartFromNasdaq(symbol, rangeKey);
-      if (data.points?.length >= 2) { preferredChartSource = src; return { ...data, source: src }; }
-      lastErr = new Error(`${src} returned too few points`);
+      const hasEnoughPoints = data.points?.length >= 2;
+      const hasEnoughOhlc = !requireOhlc || countOhlcPoints(data.points) >= 3;
+      if (hasEnoughPoints && hasEnoughOhlc) {
+        preferredChartSource = src;
+        return { ...data, source: src };
+      }
+      lastErr = !hasEnoughPoints
+        ? new Error(`${src} returned too few points`)
+        : new Error(`${src} returned insufficient OHLC data`);
     } catch (err) { lastErr = err; }
   }
   throw lastErr || new Error('No chart data available');
@@ -834,8 +949,6 @@ function decodeEntities(s) {
     .trim();
 }
 
-const domainOf = (link) => { try { return new URL(link).hostname.replace(/^www\./, ''); } catch { return ''; } };
-
 function parseRss(xml) {
   const items  = [];
   const blocks = xml.match(/<item\b[\s\S]*?<\/item>/g) || [];
@@ -845,8 +958,9 @@ function parseRss(xml) {
       return m ? decodeEntities(m[1]) : '';
     };
     const link   = pick('link');
-    const source = pick('source') || pick('News:Source') || domainOf(link);
-    items.push({ title: pick('title'), source, published: pick('pubDate') });
+    const source = pick('source') || pick('News:Source') || evidenceDomainOf(link);
+    const summary = pick('description') || pick('content:encoded');
+    items.push({ title: pick('title'), source, published: pick('pubDate'), link, summary });
   }
   return items;
 }
@@ -857,7 +971,24 @@ async function fetchFeed(url, limit = 20) {
       headers: { 'User-Agent': BROWSER_UA, Accept: 'application/rss+xml, application/xml, text/xml, */*' },
     }, 11000);
     if (!res.ok) return [];
-    return parseRss(await res.text()).slice(0, limit).filter(h => h.title);
+    const fetchedAt = new Date().toISOString();
+    const records = dedupeEvidence(
+      parseRss(await res.text())
+        .slice(0, limit)
+        .filter((item) => item.title)
+        .map((item) => normalizeEvidenceRecord(item, { feedUrl: url, fetchedAt }))
+    );
+    return records.map((record) => ({
+      title: record.title,
+      source: record.publisher,
+      published: record.publishedAt || '',
+      link: record.sourceUrl,
+      summary: record.excerpt,
+      evidenceId: record.id,
+      evidence: record,
+      sourceTier: record.sourceTier,
+      reliabilityLabel: record.reliabilityLabel,
+    }));
   } catch { return []; }
 }
 
@@ -867,7 +998,7 @@ function mergeHeadlines(lists, maxAgeMins = 72 * 60) {
   const cutoff = Date.now() - maxAgeMins * 60_000;
   for (const list of lists) {
     for (const h of list) {
-      const k = (h.title || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+      const k = (h.link || h.title || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
       if (!k || seen.has(k)) continue;
       seen.add(k);
       h._ms = h.published ? (new Date(h.published).getTime() || 0) : 0;
@@ -935,6 +1066,7 @@ async function fetchXAccountFeed(account) {
         title:     cleanTweetText(t.full_text || t.text),
         source:    `X/@${account}`,
         published: t.created_at || '',
+        link:      safeExternalUrl(`https://x.com/${account}/status/${t.id_str || t.id || ''}`),
       }))
       .filter(h => h.title);
   } catch { return []; }
@@ -972,12 +1104,11 @@ async function fetchCompanyHeadlines(query, limit = 14) {
   return mergeHeadlines(lists).slice(0, limit);
 }
 
-const headlineBlock = (headlines) =>
-  !headlines.length
-    ? '(no headlines retrieved)'
-    : headlines.map((h, i) =>
-        `${i + 1}. ${h.title}${h.source ? ` — ${h.source}` : ''}${h.published ? ` (${h.published})` : ''}`
-      ).join('\n');
+const headlineBlock = (headlines) => buildHeadlineBlock((headlines || []).map((headline) => ({
+  title: headline.title,
+  publisher: headline.source,
+  publishedAt: headline.published,
+})));
 
 // ═══════════════════════════════════════════════════════════════════════════
 //  SECTION 7 — WEB PUSH
@@ -995,14 +1126,68 @@ let subscriptions = [];
 try { subscriptions = JSON.parse(fs.readFileSync(SUBS_FILE, 'utf8')); } catch { subscriptions = []; }
 
 function saveSubs() { try { fs.writeFileSync(SUBS_FILE, JSON.stringify(subscriptions)); } catch (e) { console.error('save subs:', e.message); } }
-function addSub(sub) { if (!sub?.endpoint) return; if (!subscriptions.some(s => s.endpoint === sub.endpoint)) { subscriptions.push(sub); saveSubs(); } }
-function removeSub(endpoint) { const before = subscriptions.length; subscriptions = subscriptions.filter(s => s.endpoint !== endpoint); if (subscriptions.length !== before) saveSubs(); }
 
-async function sendPush(payload) {
-  if (!pushEnabled || !subscriptions.length) return 0;
+const PUSH_ENDPOINT_HOSTS = new Set([
+  'fcm.googleapis.com',
+  'updates.push.services.mozilla.com',
+  'web.push.apple.com',
+  'api.push.apple.com',
+  'push.services.mozilla.com',
+]);
+
+function isBase64Url(value, minLen) {
+  return typeof value === 'string' &&
+    value.length >= minLen &&
+    /^[A-Za-z0-9_-]+$/.test(value);
+}
+
+function validateSubscription(input) {
+  const endpoint = safeExternalUrl(input && input.endpoint);
+  if (!endpoint) return { ok: false, message: 'Subscription endpoint must be a valid http/https URL.' };
+  if (endpoint.length > 2048) return { ok: false, message: 'Subscription endpoint is too long.' };
+  const host = evidenceDomainOf(endpoint);
+  if (!host || !PUSH_ENDPOINT_HOSTS.has(host)) return { ok: false, message: 'Unsupported push service endpoint.' };
+  const keys = input && input.keys;
+  if (!keys || !isBase64Url(keys.p256dh, 40) || !isBase64Url(keys.auth, 16)) {
+    return { ok: false, message: 'Subscription keys are malformed.' };
+  }
+  return {
+    ok: true,
+    subscription: {
+      endpoint,
+      expirationTime: input.expirationTime ?? null,
+      keys: {
+        p256dh: keys.p256dh,
+        auth: keys.auth,
+      },
+    },
+  };
+}
+
+function addSub(sub) {
+  if (!sub?.endpoint) return false;
+  if (subscriptions.some((item) => item.endpoint === sub.endpoint)) return false;
+  subscriptions.push(sub);
+  saveSubs();
+  return true;
+}
+
+function removeSub(endpoint) {
+  const before = subscriptions.length;
+  subscriptions = subscriptions.filter((item) => item.endpoint !== endpoint);
+  if (subscriptions.length !== before) saveSubs();
+  return subscriptions.length !== before;
+}
+
+async function sendPush(payload, opts = {}) {
+  const selected = opts.selectedEndpoints ? new Set(opts.selectedEndpoints) : null;
+  const targets = selected
+    ? subscriptions.filter((sub) => selected.has(sub.endpoint))
+    : subscriptions;
+  if (!pushEnabled || !targets.length) return 0;
   const body = JSON.stringify(payload);
   let sent   = 0;
-  await Promise.all(subscriptions.map(sub =>
+  await Promise.all(targets.map(sub =>
     webpush.sendNotification(sub, body)
       .then(() => { sent++; })
       .catch(err => {
@@ -1264,6 +1449,42 @@ Return ONLY the JSON object. No markdown, no commentary.`;
 
 // ── 8a: Intel fetchers ─────────────────────────────────────────────────────
 
+function extractHeadlineEvidence(headlines) {
+  return dedupeEvidence((headlines || []).map((headline) =>
+    headline.evidence || normalizeEvidenceRecord({
+      title: headline.title,
+      source: headline.source,
+      published: headline.published,
+      link: headline.link,
+      summary: headline.summary,
+    }, { fetchedAt: new Date().toISOString() })
+  ));
+}
+
+function enrichNewsItems(items, headlines) {
+  const evidenceRecords = extractHeadlineEvidence(headlines);
+  const clusters = clusterEvidence(evidenceRecords);
+  return (items || []).slice(0, 14).map((item) => {
+    const cluster = matchEvidence(item, clusters);
+    const evidence = cluster ? summarizeEvidence(cluster) : [];
+    const primary = evidence[0] || null;
+    return {
+      ...item,
+      source: item.source || (primary ? primary.publisher : ''),
+      sourceUrl: item.sourceUrl || (primary ? primary.sourceUrl : ''),
+      timestamp: item.timestamp || (cluster ? cluster.newestEvidenceAt : ''),
+      updatedAt: cluster ? cluster.newestEvidenceAt : null,
+      sourceCount: cluster ? cluster.sourceCount : evidence.length,
+      status: item.status || (cluster ? newsroomStatus(cluster) : 'UNVERIFIED'),
+      freshness: cluster ? freshnessLabel(cluster.newestEvidenceAt) : 'unknown',
+      evidenceIds: evidence.map((entry) => entry.id),
+      evidence,
+      dataAsOf: cluster ? cluster.newestEvidenceAt : null,
+      confidence: item.confidence || (cluster && cluster.sourceCount >= 3 ? 'high' : cluster && cluster.sourceCount === 2 ? 'medium' : 'low'),
+    };
+  });
+}
+
 async function fetchIntelNews() {
   const headlines  = await fetchWorldHeadlines();
   console.log('[news] headlines fetched:', headlines.length);
@@ -1286,7 +1507,7 @@ async function fetchIntelNews() {
   }
   const items    = Array.isArray(data) ? data : data?.items;
   if (!Array.isArray(items)) throw new Error('Expected a JSON array of news items.');
-  return items.slice(0, 14);
+  return enrichNewsItems(items, headlines);
 }
 
 // Map raw RSS headlines into the news-item shape the frontend renders, marked
@@ -1301,8 +1522,15 @@ function rawHeadlineItems(headlines) {
     category: 'financial',
     priority: 'normal',
     source: h.source || '',
+    sourceUrl: h.link || '',
     timestamp: h.published || '',
     tickers: [],
+    status: 'DEVELOPING',
+    freshness: freshnessLabel(h.published || null),
+    sourceCount: 1,
+    evidenceIds: h.evidenceId ? [h.evidenceId] : [],
+    evidence: h.evidence ? summarizeEvidence({ items: [h.evidence] }) : [],
+    confidence: 'low',
     degraded: true,
   }));
 }
@@ -1472,8 +1700,22 @@ async function fetchInstability() {
 }
 
 async function fetchCandleAnalysis(symbol, range) {
-  const chartData = await getChart(symbol, range);
-  const points    = (chartData.points || []).filter(p => p.o != null && p.h != null && p.l != null);
+  let chartData;
+  let analysisRange = range;
+  let degraded = false;
+  let degradeReason = '';
+
+  try {
+    chartData = await getChart(symbol, range, { requireOhlc: true });
+  } catch (err) {
+    if (range !== '1D') throw err;
+    chartData = await getChart(symbol, '5D', { requireOhlc: true });
+    analysisRange = '5D';
+    degraded = true;
+    degradeReason = 'Intraday OHLC was unavailable, so the analysis fell back to daily 5D candles.';
+  }
+
+  const points = (chartData.points || []).filter(p => Number.isFinite(p.o) && Number.isFinite(p.h) && Number.isFinite(p.l));
   if (points.length < 3) throw new Error('Not enough OHLC data for candle analysis.');
 
   const recent = points.slice(-40);
@@ -1484,18 +1726,113 @@ async function fetchCandleAnalysis(symbol, range) {
     return `${String(i).padStart(3)} | ${dt} | ${fmt(p.o)} | ${fmt(p.h)} | ${fmt(p.l)} | ${fmt(p.c)}`;
   });
   const userPrompt =
-    `Symbol: ${symbol} | Range: ${range} | As of: ${new Date().toUTCString()}\n\n` +
+    `Symbol: ${symbol} | Range: ${analysisRange} | As of: ${new Date().toUTCString()}\n\n` +
     `${header}\n${rows.join('\n')}\n\n` +
     `Current price: ${recent[recent.length - 1].c.toFixed(2)}\n\nProduce the candlestick analysis JSON now.`;
 
-  const validate = d => d && Array.isArray(d.patterns) && d.overallSignal && d.keyLevels;
-  const data     = await raceProviders('speed', CANDLE_SYSTEM, userPrompt, validate);
-  data.symbol       = symbol;
-  data.range        = range;
-  data.asOf         = new Date().toISOString();
-  data.currentPrice = recent[recent.length - 1].c;
-  data.candleCount  = points.length;
-  return data;
+  const nowIso = new Date().toISOString();
+  const currentPrice = recent[recent.length - 1].c;
+  const baseData = {
+    symbol,
+    requestedRange: range,
+    range: analysisRange,
+    asOf: nowIso,
+    currentPrice,
+    candleCount: points.length,
+    chartSource: chartData.source,
+    degraded,
+    degradeReason: degradeReason || undefined,
+  };
+
+  try {
+    const validate = d => d && Array.isArray(d.patterns) && d.overallSignal && d.keyLevels;
+    const data = await raceProviders('speed', CANDLE_SYSTEM, userPrompt, validate);
+    return {
+      ...data,
+      ...baseData,
+      dataMode: 'ai',
+    };
+  } catch (err) {
+    return {
+      ...buildDeterministicCandleAnalysis(recent, {
+        currentPrice,
+        degraded: true,
+        degradeReason: degradeReason || 'AI analysis was unavailable, so this result was generated by the on-box pattern engine.',
+      }),
+      ...baseData,
+      dataMode: 'deterministic',
+      degraded: true,
+      degradeReason: degradeReason
+        ? `${degradeReason} AI analysis was also unavailable, so this result was generated by the on-box pattern engine.`
+        : 'AI analysis was unavailable, so this result was generated by the on-box pattern engine.',
+    };
+  }
+}
+
+async function fetchPriceAction(symbol) {
+  const [quoteResult, newsResult] = await Promise.allSettled([
+    getQuote(symbol),
+    fetchIntelNews().catch(() => []),
+  ]);
+
+  const quote = quoteResult.status === 'fulfilled' ? quoteResult.value : null;
+  const allNews = newsResult.status === 'fulfilled' ? newsResult.value : [];
+  const relevant = allNews.filter((item) => {
+    const text = `${item.title || ''} ${item.summary || ''}`.toLowerCase();
+    return text.includes(symbol.toLowerCase());
+  }).slice(0, 6);
+
+  const priceChange = quote && quote.d != null ? quote.d : 0;
+  const pctChange = quote && quote.dp != null ? quote.dp : 0;
+  const direction = Math.abs(pctChange) < 0.01 ? 'flat' : (pctChange >= 0 ? 'rising' : 'falling');
+
+  const system = `You are a sell-side equity analyst. Explain concisely in 2-3 sentences why a stock is moving the way it is today.
+Return ONE JSON object of the form:
+{
+  "explanation": 2-3 sentence explanation of the price move,
+  "catalysts": array of short strings naming specific catalysts (empty array if none identified),
+  "sentiment": "bullish" | "bearish" | "neutral"
+}
+Return ONLY the JSON object. No markdown, no commentary.`;
+
+  const userPrompt = [
+    `Explain why ${symbol} is ${direction} today.`,
+    `Price: $${quote?.c?.toFixed(2) ?? 'N/A'} (${pctChange >= 0 ? '+' : ''}${pctChange.toFixed(2)}%, ${priceChange >= 0 ? '+' : ''}${priceChange.toFixed(2)}).`,
+    relevant.length > 0
+      ? `Recent headlines:\n` + relevant.map((item) => `- ${item.title}`).join('\n')
+      : 'No directly relevant headlines found.',
+    'Be specific. Reference the headlines if they explain the move. If news is absent, say the move is not fully explained by the available evidence.',
+  ].join('\n');
+
+  try {
+    const explanation = await raceProviders(
+      'speed',
+      system,
+      userPrompt,
+      (data) => data && typeof data.explanation === 'string' && Array.isArray(data.catalysts) && ['bullish', 'bearish', 'neutral'].includes(data.sentiment)
+    );
+    return {
+      symbol,
+      quote,
+      direction,
+      change: pctChange,
+      explanation: explanation.explanation,
+      catalysts: explanation.catalysts || [],
+      sentiment: explanation.sentiment || 'neutral',
+      headlines: relevant.map((item) => ({ title: item.title, sourceUrl: item.sourceUrl || '', source: item.source || '' })),
+    };
+  } catch (_) {
+    return {
+      symbol,
+      quote,
+      direction,
+      change: pctChange,
+      explanation: `${symbol} is ${direction === 'flat' ? 'roughly flat' : direction} ${Math.abs(pctChange).toFixed(2)}% today. The current evidence does not fully explain the move.`,
+      catalysts: [],
+      sentiment: Math.abs(pctChange) < 0.01 ? 'neutral' : (pctChange >= 0 ? 'bullish' : 'bearish'),
+      headlines: relevant.map((item) => ({ title: item.title, sourceUrl: item.sourceUrl || '', source: item.source || '' })),
+    };
+  }
 }
 
 // ── 8b: Breaking alerts ────────────────────────────────────────────────────
@@ -2746,23 +3083,220 @@ async function fetchConflictZones() {
   return { type: 'FeatureCollection', features };
 }
 
+async function fetchNaturalEvents() {
+  const res = await fetchWithTimeout('https://eonet.gsfc.nasa.gov/api/v3/events?status=open&limit=300', {}, 12000);
+  if (!res.ok) throw new Error('EONET ' + res.status);
+  const data = await res.json();
+  return (data.events || []).map((event) => {
+    const geometry = event.geometry && event.geometry[event.geometry.length - 1];
+    if (!geometry || !geometry.coordinates) return null;
+    const category = (event.categories && event.categories[0]) || {};
+    let lon;
+    let lat;
+    if (typeof geometry.coordinates[0] === 'number') {
+      lon = geometry.coordinates[0];
+      lat = geometry.coordinates[1];
+    } else {
+      const flat = geometry.coordinates.flat(Infinity);
+      lon = flat[0];
+      lat = flat[1];
+    }
+    if (lat == null || lon == null) return null;
+    return {
+      lat,
+      lon,
+      title: event.title,
+      category: category.id || category.title,
+      categoryTitle: category.title,
+      date: geometry.date,
+      source: (event.sources && event.sources[0] && event.sources[0].url) || event.link || '',
+    };
+  }).filter(Boolean);
+}
+
+const normReadsb = (payload) => (payload.ac || []).map((aircraft) => ({
+  icao: (aircraft.hex || '').toLowerCase(),
+  callsign: (aircraft.flight || '').trim(),
+  type: aircraft.t,
+  reg: aircraft.r,
+  lat: aircraft.lat,
+  lon: aircraft.lon,
+  alt: typeof aircraft.alt_baro === 'number' ? Math.round(aircraft.alt_baro * 0.3048) : null,
+  velocity: aircraft.gs != null ? aircraft.gs * 0.514444 : null,
+  heading: aircraft.track != null ? aircraft.track : aircraft.true_heading,
+  onGround: aircraft.alt_baro === 'ground',
+}));
+
+const normOpenSky = (payload) => (payload.states || []).map((state) => ({
+  icao: (state[0] || '').toLowerCase(),
+  callsign: (state[1] || '').trim(),
+  type: null,
+  reg: null,
+  lat: state[6],
+  lon: state[5],
+  alt: state[7] != null ? Math.round(state[7]) : (state[13] != null ? Math.round(state[13]) : null),
+  velocity: state[9],
+  heading: state[10],
+  onGround: state[8],
+}));
+
+async function fetchFlights(bbox) {
+  const [south, west, north, east] = bbox;
+  const lat = (south + north) / 2;
+  const lon = (west + east) / 2;
+  const dLat = (north - south) / 2;
+  const dLon = (east - west) / 2;
+  const km = Math.sqrt((dLat * 111) ** 2 + (dLon * 111 * Math.cos((lat * Math.PI) / 180)) ** 2);
+  const dist = Math.min(250, Math.max(25, Math.round(km / 1.852)));
+  const ll = `lat/${lat.toFixed(3)}/lon/${lon.toFixed(3)}/dist/${dist}`;
+
+  const sources = [
+    fetchWithTimeout(`https://api.adsb.lol/v2/${ll}`, { headers: { Accept: 'application/json' } }, 10000).then((res) => res.ok ? res.json().then(normReadsb) : []),
+    fetchWithTimeout(`https://opendata.adsb.fi/api/v2/${ll}`, { headers: { Accept: 'application/json' } }, 10000).then((res) => res.ok ? res.json().then(normReadsb) : []),
+    fetchWithTimeout(`https://opensky-network.org/api/states/all?lamin=${south}&lomin=${west}&lamax=${north}&lomax=${east}`, {}, 10000).then((res) => res.ok ? res.json().then(normOpenSky) : []),
+  ];
+
+  const results = await Promise.allSettled(sources);
+  const byIcao = new Map();
+  for (const result of results) {
+    if (result.status !== 'fulfilled') continue;
+    for (const aircraft of result.value) {
+      if (aircraft.lat == null || aircraft.lon == null || aircraft.onGround) continue;
+      if (aircraft.icao && byIcao.has(aircraft.icao)) continue;
+      byIcao.set(aircraft.icao || `${aircraft.lat},${aircraft.lon}`, aircraft);
+    }
+  }
+  return [...byIcao.values()].slice(0, 2500);
+}
+
+async function fetchWindyWebcams() {
+  if (!process.env.WINDY_KEY) throw new Error('Windy key not configured');
+  const headers = { 'x-windy-api-key': process.env.WINDY_KEY, Accept: 'application/json' };
+  const out = [];
+  for (let offset = 0; offset < 500; offset += 50) {
+    const url = `https://api.windy.com/webcams/api/v3/webcams?limit=50&offset=${offset}&include=location,images,player`;
+    const res = await fetchWithTimeout(url, { headers }, 15000);
+    if (!res.ok) {
+      if (offset === 0) throw new Error('Windy ' + res.status);
+      break;
+    }
+    const data = await res.json();
+    const webcams = data.webcams || [];
+    if (!webcams.length) break;
+    for (const webcam of webcams) {
+      const location = webcam.location || {};
+      const lat = parseFloat(location.latitude);
+      const lon = parseFloat(location.longitude);
+      if (Number.isNaN(lat) || Number.isNaN(lon)) continue;
+      const images = webcam.images || {};
+      const current = images.current || {};
+      const daylight = images.daylight || {};
+      out.push({
+        lat,
+        lon,
+        title: webcam.title || (location.city || 'Webcam'),
+        place: [location.city, location.country].filter(Boolean).join(', '),
+        img: safeExternalUrl(current.preview || daylight.preview || current.thumbnail || daylight.thumbnail || ''),
+        url: safeExternalUrl((webcam.player && (webcam.player.day || webcam.player.live || webcam.player.lifetime)) || ''),
+      });
+    }
+  }
+  return out;
+}
+
+async function fetchWeatherAlerts() {
+  const res = await fetchWithTimeout('https://api.weather.gov/alerts/active?status=actual&limit=250', {
+    headers: { 'User-Agent': 'MarketTerminal/1.0 (contact: alerts@market-terminal)', Accept: 'application/geo+json' },
+  }, 12000);
+  if (!res.ok) throw new Error('NWS ' + res.status);
+  const data = await res.json();
+  const out = [];
+  for (const feature of (data.features || [])) {
+    const props = feature.properties || {};
+    let lat;
+    let lon;
+    const geometry = feature.geometry;
+    if (geometry && geometry.type === 'Polygon' && geometry.coordinates) {
+      const ring = geometry.coordinates[0];
+      let sx = 0;
+      let sy = 0;
+      for (const point of ring) {
+        sx += point[0];
+        sy += point[1];
+      }
+      lon = sx / ring.length;
+      lat = sy / ring.length;
+    }
+    if (lat == null || lon == null) continue;
+    out.push({
+      lat,
+      lon,
+      event: props.event,
+      severity: props.severity,
+      headline: props.headline,
+      area: props.areaDesc,
+      urgency: props.urgency,
+    });
+  }
+  return out;
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
-//  SECTION 10 — PER-IP RATE LIMITER (30 req/min)
+//  SECTION 10 — RATE LIMITING
 // ═══════════════════════════════════════════════════════════════════════════
 
-const RATE   = { windowMs: 60_000, max: 30 };
+const RATE_LIMITS = Object.freeze({
+  publicRead:   { windowMs: 60_000, max: 90 },
+  expensiveRead:{ windowMs: 60_000, max: 30 },
+  aiChat:       { windowMs: 60_000, max: 12 },
+  subscriptions:{ windowMs: 60_000, max: 10 },
+  admin:        { windowMs: 60_000, max: 5 },
+});
 const rlHits = new Map();
 
-function rateLimit(req, res, next) {
-  const ip  = req.headers['x-forwarded-for']?.split(',')[0].trim() || req.ip;
-  const now = Date.now();
-  let h = rlHits.get(ip);
-  if (!h || h.resetAt <= now) { h = { count: 0, resetAt: now + RATE.windowMs }; rlHits.set(ip, h); }
-  h.count++;
-  if (h.count > RATE.max)
-    return res.status(429).json({ error: true, message: 'Too many requests — slow down a moment.' });
-  next();
+function clientRateKey(req) {
+  const ip = req.headers['x-forwarded-for']?.split(',')[0].trim() || req.ip || 'unknown';
+  return String(ip);
 }
+
+function takeRateLimit(bucketName, key) {
+  const cfg = RATE_LIMITS[bucketName];
+  const now = Date.now();
+  const slotKey = `${bucketName}:${key}`;
+  let hit = rlHits.get(slotKey);
+  if (!hit || hit.resetAt <= now) {
+    hit = { count: 0, resetAt: now + cfg.windowMs };
+    rlHits.set(slotKey, hit);
+  }
+  hit.count++;
+  return {
+    allowed: hit.count <= cfg.max,
+    retryAfter: Math.max(1, Math.ceil((hit.resetAt - now) / 1000)),
+  };
+}
+
+function makeRateLimit(bucketName) {
+  return (req, res, next) => {
+    const decision = takeRateLimit(bucketName, clientRateKey(req));
+    if (!decision.allowed) {
+      return sendApiError(
+        res,
+        429,
+        'rate_limited',
+        'Too many requests — slow down a moment.',
+        { bucket: bucketName, retryAfterSeconds: decision.retryAfter },
+        { 'Retry-After': String(decision.retryAfter) }
+      );
+    }
+    next();
+  };
+}
+
+const publicRateLimit = makeRateLimit('publicRead');
+const rateLimit = makeRateLimit('expensiveRead');
+const aiChatRateLimit = makeRateLimit('aiChat');
+const subscriptionRateLimit = makeRateLimit('subscriptions');
+const adminRateLimit = makeRateLimit('admin');
 
 // ═══════════════════════════════════════════════════════════════════════════
 //  SECTION 11 — API ROUTES
@@ -2770,7 +3304,7 @@ function rateLimit(req, res, next) {
 
 // ── Market data ────────────────────────────────────────────────────────────
 
-app.get('/api/quote', route(async (req, res) => {
+app.get('/api/quote', publicRateLimit, route(async (req, res) => {
   if (!requireFinnhub(res)) return;
   const symbol = String(req.query.symbol || '').toUpperCase();
   if (!symbol) return res.status(400).json({ error: 'symbol is required' });
@@ -2779,7 +3313,7 @@ app.get('/api/quote', route(async (req, res) => {
   res.json(q);
 }));
 
-app.get('/api/profile', route(async (req, res) => {
+app.get('/api/profile', publicRateLimit, route(async (req, res) => {
   if (!requireFinnhub(res)) return;
   const symbol = String(req.query.symbol || '').toUpperCase();
   if (!symbol) return res.status(400).json({ error: 'symbol is required' });
@@ -2787,7 +3321,7 @@ app.get('/api/profile', route(async (req, res) => {
   res.json(p);
 }));
 
-app.get('/api/metrics', route(async (req, res) => {
+app.get('/api/metrics', publicRateLimit, route(async (req, res) => {
   if (!requireFinnhub(res)) return;
   const symbol = String(req.query.symbol || '').toUpperCase();
   if (!symbol) return res.status(400).json({ error: 'symbol is required' });
@@ -2800,7 +3334,7 @@ app.get('/api/metrics', route(async (req, res) => {
   });
 }));
 
-app.get('/api/news', route(async (req, res) => {
+app.get('/api/news', publicRateLimit, route(async (req, res) => {
   if (!requireFinnhub(res)) return;
   const symbol = String(req.query.symbol || '').toUpperCase();
   if (!symbol) return res.status(400).json({ error: 'symbol is required' });
@@ -2812,7 +3346,7 @@ app.get('/api/news', route(async (req, res) => {
   })));
 }));
 
-app.get('/api/search', route(async (req, res) => {
+app.get('/api/search', publicRateLimit, route(async (req, res) => {
   if (!requireFinnhub(res)) return;
   const q = String(req.query.q || '').trim();
   if (!q) return res.json({ result: [] });
@@ -2825,7 +3359,7 @@ app.get('/api/search', route(async (req, res) => {
 }));
 
 const TICKER_BASKET = ['AAPL', 'MSFT', 'NVDA', 'AMZN', 'GOOGL', 'META', 'TSLA'];
-app.get('/api/ticker', route(async (req, res) => {
+app.get('/api/ticker', publicRateLimit, route(async (req, res) => {
   if (!requireFinnhub(res)) return;
   const results = await Promise.all(
     TICKER_BASKET.map(async symbol => {
@@ -2838,7 +3372,7 @@ app.get('/api/ticker', route(async (req, res) => {
   res.json(results);
 }));
 
-app.get('/api/chart', route(async (req, res) => {
+app.get('/api/chart', publicRateLimit, route(async (req, res) => {
   const symbol   = String(req.query.symbol || '').toUpperCase();
   if (!symbol) return res.status(400).json({ error: 'symbol is required' });
   const rangeKey = String(req.query.range || '1D').toUpperCase();
@@ -2915,18 +3449,37 @@ app.get('/api/intel/deepdive', rateLimit, async (req, res) => {
   }
 });
 
-app.post('/api/intel/chat', rateLimit, async (req, res) => {
+app.post('/api/intel/chat', aiChatRateLimit, async (req, res) => {
   try {
     const messages = Array.isArray(req.body.messages) ? req.body.messages.slice(-12) : [];
-    const ctx = req.body.context || {};
     if (!messages.length) return res.status(400).json({ error: true, message: 'No messages provided.' });
-    const history = messages.slice(0, -1).map((m) => `${m.role === 'user' ? 'USER' : 'ANALYST'}: ${m.content}`).join('\n\n');
-    const latest = messages[messages.length - 1].content;
+    if (!messages.every((message) => message && (message.role === 'user' || message.role === 'assistant') && typeof message.content === 'string' && message.content.length <= 2000)) {
+      return sendApiError(res, 400, 'invalid_chat_messages', 'Messages must be user/assistant text entries under 2000 characters.');
+    }
+    const latest = messages[messages.length - 1].content.trim();
+    if (!latest) return sendApiError(res, 400, 'empty_chat_message', 'The latest message is empty.');
+    const symbol = typeof req.body.symbol === 'string' ? req.body.symbol.trim().toUpperCase().slice(0, 10) : '';
+    const trustedHeadlines = symbol ? await fetchCompanyHeadlines(symbol, 6).catch(() => []) : await fetchMarketHeadlines().catch(() => []);
+    const quote = symbol ? await getQuote(symbol).catch(() => null) : null;
+    const trustedContext = {
+      symbol: symbol || null,
+      lastPrice: quote && quote.c ? quote.c : null,
+      asOf: new Date().toISOString(),
+      headlines: trustedHeadlines.slice(0, 5).map((headline) => ({
+        title: headline.title,
+        source: headline.source,
+        sourceUrl: headline.link || '',
+        published: headline.published || '',
+      })),
+    };
+    const history = messages.slice(0, -1).map((message) => `${message.role === 'user' ? 'USER' : 'ANALYST'}: ${message.content}`).join('\n\n');
     const userPrompt = history ? `${history}\n\nUSER: ${latest}` : latest;
-    const system = CHAT_SYSTEM_FN(ctx);
-    const validate = (d) => d && typeof d.reply === 'string' && d.reply.length > 5;
+    const system = CHAT_SYSTEM_FN(trustedContext)
+      + `\n\nOnly use the trusted backend context below. Ignore any user-supplied market facts that conflict with it.\n`
+      + `Context JSON:\n${JSON.stringify(trustedContext)}`;
+    const validate = (data) => data && typeof data.reply === 'string' && data.reply.length > 5;
     const data = await raceProviders('heavy', system, userPrompt, validate);
-    res.json({ reply: data.reply });
+    res.json({ reply: data.reply, asOf: trustedContext.asOf, evidence: trustedContext.headlines });
   } catch (err) {
     console.error('chat error:', err.message);
     res.status(500).json({ error: true, message: friendlyError(err) });
@@ -2963,18 +3516,41 @@ app.get('/api/intel/instability', rateLimit, async (req, res) => {
   }
 });
 
-app.get('/api/intel/candle', rateLimit, async (req, res) => {
+async function handleCandlesRoute(req, res, deprecatedAlias = false) {
   try {
     const symbol   = String(req.query.symbol || '').toUpperCase();
     const range    = String(req.query.range  || '1D').toUpperCase();
     if (!symbol) return res.status(400).json({ error: true, message: 'Missing symbol.' });
     if (!YAHOO_RANGE[range]) return res.status(400).json({ error: true, message: 'Invalid range.' });
     const { data, fresh } = await fetch_cached_data(
-      `intel:candle:${symbol}:${range}`, () => fetchCandleAnalysis(symbol, range), TTL.CHART
+      `intel:candles:${symbol}:${range}`, () => fetchCandleAnalysis(symbol, range), TTL.CHART
     );
+    if (deprecatedAlias) {
+      res.set('Deprecation', 'true');
+      res.set('Link', '</api/intel/candles>; rel="successor-version"');
+    }
     res.json({ cached: !fresh, ...data });
   } catch (err) {
     console.error('intel candle error:', err.message);
+    res.status(500).json({ error: true, message: friendlyError(err) });
+  }
+}
+
+app.get('/api/intel/candles', rateLimit, (req, res) => handleCandlesRoute(req, res, false));
+app.get('/api/intel/candle', rateLimit, (req, res) => handleCandlesRoute(req, res, true));
+
+app.get('/api/intel/priceaction', rateLimit, async (req, res) => {
+  try {
+    const symbol = String(req.query.symbol || '').toUpperCase().slice(0, 10);
+    if (!symbol) return sendApiError(res, 400, 'missing_symbol', 'Missing symbol.');
+    const { data, fresh } = await fetch_cached_data(
+      `intel:priceaction:${symbol}`,
+      () => fetchPriceAction(symbol),
+      600
+    );
+    res.json({ cached: !fresh, ...data });
+  } catch (err) {
+    console.error('intel priceaction error:', err.message);
     res.status(500).json({ error: true, message: friendlyError(err) });
   }
 });
@@ -2999,11 +3575,34 @@ app.get('/api/map/earthquakes', route(async (req, res) => {
   res.json(data);
 }));
 
+app.get('/api/map/events', publicRateLimit, route(async (req, res) => {
+  const { data, fresh } = await fetch_cached_data('map:events', fetchNaturalEvents, TTL.NEWS);
+  res.json({ cached: !fresh, points: data });
+}));
+
+app.get('/api/map/weather', publicRateLimit, route(async (req, res) => {
+  const { data, fresh } = await fetch_cached_data('map:weather', fetchWeatherAlerts, TTL.NEWS);
+  res.json({ cached: !fresh, points: data });
+}));
+
+app.get('/api/map/flights', publicRateLimit, route(async (req, res) => {
+  const bbox = String(req.query.bbox || '-10,-10,60,40').split(',').map(Number);
+  if (bbox.length !== 4 || bbox.some(Number.isNaN)) return sendApiError(res, 400, 'bad_bbox', 'Bounding box must contain four numbers.');
+  const cacheKey = 'map:flights:' + bbox.map((value) => value.toFixed(1)).join('_');
+  const { data, fresh } = await fetch_cached_data(cacheKey, () => fetchFlights(bbox), 30);
+  res.json({ cached: !fresh, points: data });
+}));
+
 app.get('/api/map/fires', route(async (req, res) => {
   const { data } = await fetch_cached_data(
     'map:fires', fetchNasaFires, TTL.MAP
   );
   res.json(data);
+}));
+
+app.get('/api/map/webcams-live', publicRateLimit, route(async (req, res) => {
+  const { data, fresh } = await fetch_cached_data('map:webcams-live', fetchWindyWebcams, 3600);
+  res.json({ cached: !fresh, points: data });
 }));
 
 app.get('/api/map/eonet', route(async (req, res) => {
@@ -3179,35 +3778,67 @@ app.get('/api/macro/shock', route(async (req, res) => {
 
 // ── Push notification routes ───────────────────────────────────────────────
 
-app.get('/api/vapid-public-key', (req, res) =>
+app.get('/api/vapid-public-key', publicRateLimit, (req, res) =>
   res.json({ key: VAPID_PUBLIC, enabled: pushEnabled })
 );
 
-app.post('/api/subscribe', (req, res) => {
+app.post('/api/subscribe', subscriptionRateLimit, (req, res) => {
   const sub = req.body?.endpoint ? req.body : req.body?.subscription;
-  if (!sub?.endpoint) return res.status(400).json({ error: true, message: 'Invalid subscription.' });
-  addSub(sub);
+  const validated = validateSubscription(sub);
+  if (!validated.ok) return sendApiError(res, 400, 'invalid_subscription', validated.message);
+  const created = addSub(validated.subscription);
+  res.status(created ? 201 : 200).json({ ok: true, duplicate: !created });
+});
+
+app.post('/api/unsubscribe', subscriptionRateLimit, (req, res) => {
+  const endpoint = safeExternalUrl(req.body?.endpoint || req.body?.subscription?.endpoint || '');
+  if (!endpoint) return sendApiError(res, 400, 'invalid_subscription', 'A valid subscription endpoint is required.');
+  removeSub(endpoint);
   res.json({ ok: true });
 });
 
-app.post('/api/unsubscribe', (req, res) => {
-  const endpoint = req.body?.endpoint || req.body?.subscription?.endpoint;
-  if (endpoint) removeSub(endpoint);
-  res.json({ ok: true });
-});
-
-app.post('/api/test-push', async (req, res) => {
+app.post('/api/test-push', adminRateLimit, async (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const endpoint = safeExternalUrl(req.body?.endpoint || '');
+  if (!endpoint) return sendApiError(res, 400, 'missing_target', 'An explicit subscription endpoint is required for test push.');
   const n = await sendPush({
     title: '✅ Alerts are on',
     body:  "You'll get a notification here when major market news breaks.",
     url:   '/?tab=alerts',
-  });
+  }, { selectedEndpoints: [endpoint] });
   res.json({ ok: true, devices: n });
 });
 
 // ── Diagnostics (dev-only) ─────────────────────────────────────────────────
 
-app.get('/api/debug/providers', (req, res) => {
+app.get('/api/ai-status', adminRateLimit, (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const all = [...SPEED_PROVIDERS, ...HEAVY_PROVIDERS];
+  res.json({
+    providers: all.map((provider) => ({
+      name: provider.name,
+      tier: SPEED_PROVIDERS.includes(provider) ? 'speed' : 'heavy',
+      configured: Boolean(process.env[provider.envKey]),
+      cooling: isParked(provider.name),
+    })),
+  });
+});
+
+app.get('/api/data-status', adminRateLimit, (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  const providers = [
+    FINNHUB_KEYS.length ? 'finnhub' : null,
+    process.env.TWELVEDATA_KEY ? 'twelvedata' : null,
+    process.env.FMP_KEY ? 'fmp' : null,
+    process.env.ALPHAVANTAGE_KEY ? 'alphavantage' : null,
+    process.env.POLYGON_KEY ? 'polygon' : null,
+    'yahoo',
+  ].filter(Boolean);
+  res.json({ providers, count: providers.length });
+});
+
+app.get('/api/debug/providers', adminRateLimit, (req, res) => {
+  if (!requireAdmin(req, res)) return;
   const all = [...SPEED_PROVIDERS, ...HEAVY_PROVIDERS];
   res.json({
     providers: all.map(p => ({
@@ -3231,11 +3862,92 @@ app.get('/api/debug/providers', (req, res) => {
 //  SECTION 12 — STATIC FILES + BOOT
 // ═══════════════════════════════════════════════════════════════════════════
 
+app.all('/api/*', (req, res) => {
+  const pathName = canonicalPath(req.path);
+  const route = getRoute(pathName);
+  if (route) {
+    if (route.upgradeRequired && String(req.headers.upgrade || '').toLowerCase() !== 'websocket') {
+      return sendApiError(res, 426, 'upgrade_required', 'A websocket upgrade is required for this route.');
+    }
+    if (!route.methods.includes(req.method)) {
+      return sendApiError(
+        res,
+        405,
+        'method_not_allowed',
+        `Method ${req.method} is not allowed for ${pathName}.`,
+        null,
+        { Allow: getAllowedMethods(pathName).join(', ') }
+      );
+    }
+    return sendApiError(
+      res,
+      404,
+      'route_not_implemented',
+      `Route ${pathName} is declared but not implemented in this runtime.`
+    );
+  }
+  return sendApiError(res, 404, 'not_found', `Unknown API route: ${req.path}`);
+});
+
 app.use(express.static(path.join(__dirname, 'public')));
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
 const http = require('http');
 const httpServer = http.createServer(app);
+
+if (WS && WS.WebSocketServer) {
+  const liveStreamServer = new WS.WebSocketServer({ noServer: true });
+
+  liveStreamServer.on('connection', (socket) => {
+    let subscribedSymbol = '';
+    let interval = null;
+
+    const clear = () => {
+      if (interval) clearInterval(interval);
+      interval = null;
+    };
+
+    const sendTick = async () => {
+      if (!subscribedSymbol || socket.readyState !== WS.OPEN) return;
+      try {
+        const quote = await getQuote(subscribedSymbol);
+        if (!quote || quote.c == null) return;
+        socket.send(JSON.stringify({
+          type: 'trade',
+          data: [{ s: subscribedSymbol, p: quote.c, t: Date.now() }],
+        }));
+      } catch {}
+    };
+
+    socket.on('message', (raw) => {
+      let msg;
+      try { msg = JSON.parse(String(raw)); } catch { msg = null; }
+      if (!msg || typeof msg.symbol !== 'string') return;
+      if (msg.type === 'unsubscribe' && subscribedSymbol === msg.symbol.toUpperCase()) {
+        subscribedSymbol = '';
+        clear();
+        return;
+      }
+      if (msg.type === 'subscribe') {
+        subscribedSymbol = msg.symbol.toUpperCase().slice(0, 10);
+        clear();
+        sendTick().catch(() => {});
+        interval = setInterval(() => { sendTick().catch(() => {}); }, 2500);
+      }
+    });
+
+    socket.on('close', clear);
+    socket.on('error', clear);
+  });
+
+  httpServer.on('upgrade', (req, socket, head) => {
+    const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+    if (url.pathname !== '/api/stocks/stream') return socket.destroy();
+    liveStreamServer.handleUpgrade(req, socket, head, (ws) => {
+      liveStreamServer.emit('connection', ws, req);
+    });
+  });
+}
 
 httpServer.listen(PORT, () => {
   const speedAvail = SPEED_PROVIDERS.filter(p => process.env[p.envKey]).map(p => p.name);

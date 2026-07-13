@@ -7,7 +7,7 @@ Act as a Principal Software Architect, Lead Quantitative Mathematician, and Geos
 - **Frontend Framework:** Vanilla JavaScript, HTML5, CSS3. **ABSOLUTELY NO React, Vue, Svelte, or Webpack.**
 - **Rendering Engine:** Native HTML5 `<canvas>` (`app.js`).
 - **Mathematics Engine:** Pure JavaScript utilizing `Float64Array` and typed arrays for bare-metal execution speeds (`quant.js`).
-- **Deployment:** Cloudflare Wrangler (`npx wrangler deploy`).
+- **Deployment:** GitHub push to `main`, which auto-deploys the Cloudflare Worker via the dashboard integration. Do not use manual `wrangler deploy` for production.
 
 ## EXECUTION RULES
 1. **No Placeholders:** Do not write `// logic goes here`, `// implement later`, or use ellipses. Write every mathematical array, API handler, and UI renderer in full.

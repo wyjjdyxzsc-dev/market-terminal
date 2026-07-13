@@ -25,6 +25,7 @@ async function check(label, url, opts = {}) {
     allowStatuses = [200],
     validate = () => true,
     skipError = false,   // set true for routes that need keys (may return 502/503)
+    allowErrorPayload = false,
     fetchOpts = undefined, // e.g. { method: 'POST', headers, body } for non-GET routes
   } = opts;
 
@@ -55,7 +56,7 @@ async function check(label, url, opts = {}) {
     fail++; return;
   }
 
-  if (!skipError && json.error === true) {
+  if (!skipError && !allowErrorPayload && json.error === true) {
     console.error(`  ✗ ${label} — error: ${json.message}`);
     fail++; return;
   }
@@ -107,6 +108,12 @@ async function checkHtml(label, url) {
   await check('GET /api/intel/analysis', `${BASE}/api/intel/analysis`,
     { skipError: true, validate: d => Array.isArray(d.industries) || d.error });
 
+  await check('GET /api/intel/candles?symbol=AAPL&range=1D', `${BASE}/api/intel/candles?symbol=AAPL&range=1D`,
+    { skipError: true, validate: d => Array.isArray(d.patterns) && typeof d.overallSignal === 'string' });
+
+  await check('GET /api/intel/priceaction?symbol=AAPL', `${BASE}/api/intel/priceaction?symbol=AAPL`,
+    { skipError: true, validate: d => typeof d.direction === 'string' || d.error });
+
   // Map layers (no key required — embedded baseline)
   await check('GET /api/map/layers', `${BASE}/api/map/layers`,
     { validate: d => d.points || d.lines || d.regions });
@@ -126,6 +133,18 @@ async function checkHtml(label, url) {
 
   await check('GET /api/map/gpsjam', `${BASE}/api/map/gpsjam`,
     { skipError: true, validate: d => d.tileUrl || d.type === 'FeatureCollection' || d.error });
+
+  await check('GET /api/map/events', `${BASE}/api/map/events`,
+    { skipError: true, validate: d => Array.isArray(d.points) || d.error });
+
+  await check('GET /api/map/weather', `${BASE}/api/map/weather`,
+    { skipError: true, validate: d => Array.isArray(d.points) || d.error });
+
+  await check('GET /api/map/flights?bbox=-10,-10,60,40', `${BASE}/api/map/flights?bbox=-10,-10,60,40`,
+    { skipError: true, validate: d => Array.isArray(d.points) || d.error });
+
+  await check('GET /api/map/webcams-live', `${BASE}/api/map/webcams-live`,
+    { skipError: true, validate: d => Array.isArray(d.points) || d.error });
 
   // Sentiment
   await check('GET /api/sentiment/twitter', `${BASE}/api/sentiment/twitter`,
@@ -161,6 +180,24 @@ async function checkHtml(label, url) {
   // Situation room
   await check('GET /api/intel/situation', `${BASE}/api/intel/situation`,
     { skipError: true, validate: d => d.narrative || d.threatLevel || d.error });
+
+  // Contract guards
+  await check('POST /api/quote', `${BASE}/api/quote`, {
+    allowStatuses: [405],
+    allowErrorPayload: true,
+    fetchOpts: {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    },
+    validate: d => d.code === 'method_not_allowed',
+  });
+
+  await check('GET /api/stocks/stream (no upgrade)', `${BASE}/api/stocks/stream`,
+    { allowStatuses: [426], allowErrorPayload: true, validate: d => d.code === 'upgrade_required' });
+
+  await check('GET /api/does-not-exist', `${BASE}/api/does-not-exist`,
+    { allowStatuses: [404], allowErrorPayload: true, validate: d => d.code === 'not_found' || d.code === 'route_not_implemented' });
 
   // ── Summary ──────────────────────────────────────────────────────────────
   const total = pass + fail;

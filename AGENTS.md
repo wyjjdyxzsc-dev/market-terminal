@@ -163,7 +163,3 @@ git push origin main
 **Why:** GitHub is connected to Cloudflare Workers via the dashboard integration (Workers & Pages → market-terminal → Settings → Builds). Every push to `main` auto-triggers a Cloudflare build and deploys `worker.js` to `https://market-terminal.wyjjdyxzsc.workers.dev`. Manual `wrangler deploy` bypasses this and can create version drift.
 
 Check `wrangler.toml` for KV binding (`MT_KV`), AI binding, asset serving.
-
-## Latest external-agent handoff
-
-- `/Users/krishivjain/Desktop/claude projects/market-terminal/docs/CODEX_HANDOFF_TO_CLAUDE_2026-07-13.md`

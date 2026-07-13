@@ -13,6 +13,15 @@ small Express backend that keeps every API key server-side.
 
 ---
 
+## Repository operational state (2026-07-13)
+
+- Deploy by pushing to `main`. Do not run `wrangler deploy` manually for production; GitHub is wired to Cloudflare Workers and is the canonical deploy path for this repo.
+- `npm test` now runs unit coverage plus the local smoke suite. Start the local server first with `npm start`.
+- `npm run test:prod` hits the deployed Worker at `https://market-terminal.wyjjdyxzsc.workers.dev` and is the required post-deploy parity check.
+- The latest external-agent checkpoint and evidence log lives in [docs/CODEX_HANDOFF_TO_CLAUDE_2026-07-13.md](/Users/krishivjain/Desktop/claude projects/market-terminal/docs/CODEX_HANDOFF_TO_CLAUDE_2026-07-13.md).
+
+---
+
 ## Tabs
 
 | Tab          | What it does                                                                                   |
@@ -100,6 +109,13 @@ You need **Node.js 18 or newer** (this uses the built-in global `fetch`). Check 
    type any symbol and press **GO**, or switch tabs along the top.
 
 > `npm run dev` runs it with `node --watch` (auto-restarts when you edit `server.js`).
+
+**Run tests**
+
+```bash
+npm test
+npm run test:prod
+```
 
 ---
 
