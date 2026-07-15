@@ -15,7 +15,7 @@ Research date: 2026-07-13
   - in-app browser verification passed on `http://localhost:3000`
   - production smoke suite `28/28` passed on 2026-07-13 (checkpoint 1)
   - production smoke suite `29/29` passed on 2026-07-15 (checkpoint 2)
-  - map provenance checkpoint is locally verified: `16/16` unit tests and `23/23` local smoke checks passed on 2026-07-15; production verification is pending
+  - map provenance checkpoint source commit `a25e6be` is production verified: `16/16` unit tests, `23/23` local smoke checks, and `29/29` production smoke checks passed on 2026-07-15
 
 ## Capability rows
 
@@ -55,7 +55,7 @@ Research date: 2026-07-13
 - Evaluation criteria: provenance on every feature, live/reference separation, performance
 - Provenance links: `https://www.worldmonitor.app/`, `https://www.worldmonitor.app/docs/data-sources`
 - Licensing or trademark notes: independent datasets only
-- Final evidence: intelligence/news pipeline preserves evidence IDs, source URLs, timestamps, and freshness in production payloads. Checkpoint 3 adds a versioned map-layer catalog and active-layer disclosure for data class, source, cache/refresh state, and honest snapshot/served time; production verification remains pending.
+- Final evidence: intelligence/news pipeline preserves evidence IDs, source URLs, timestamps, and freshness in production payloads. Checkpoint 3 adds a production-verified versioned map-layer catalog and active-layer disclosure for data class, source, cache/refresh state, and honest snapshot/served time.
 
 ### 2026-07-13 checkpoint 2 update
 
@@ -63,11 +63,11 @@ Research date: 2026-07-13
 - Data sources and authority tier: benchmark quotes from the project quote pool plus source-attributed public RSS evidence; no unauthenticated social scraping.
 - Evidence: deterministic unit tests and local endpoint verification passed. Production deployment of `55e014c` served `app.js?v=20260713b`; `npm run test:prod` passed `29/29` on 2026-07-15. The canonical response was `live` and `deterministic` with five benchmarks, 18 headlines, 13 sources, attributable evidence, and methodology; no production visual browser pass is claimed for this checkpoint.
 
-### 2026-07-15 checkpoint 3 local update
+### 2026-07-15 checkpoint 3 production update
 
 - Current-project map capability: `/api/map/layers` now provides a versioned catalog for all Leaflet layers, while live map API payloads retain their data and add a `provenance` envelope.
 - Evidence disclosure: `live`, `curated`, `hybrid`, `computed`, and `model-derived` labels are explicit. Active layer controls safely show a primary source, cache state, refresh target, and a source snapshot or served time without manufacturing upstream timestamps.
-- Evidence: map-provenance unit coverage and the local smoke suite passed (`16/16`, `23/23`). This improves the partial map capability but does not establish full World Monitor parity; production verification is pending.
+- Evidence: map-provenance unit coverage and the local smoke suite passed (`16/16`, `23/23`); source commit `a25e6be` then served `20260715b` and production smoke passed `29/29`. This improves the partial map capability but does not establish full World Monitor parity.
 
 ### WM-003 Country dossiers and instability scoring
 

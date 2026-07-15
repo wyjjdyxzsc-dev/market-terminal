@@ -2,7 +2,7 @@ This work was performed by OpenAI Codex without Claude’s involvement. This doc
 
 # Status
 
-- Handoff status: checkpoint 3 locally verified; production verification pending
+- Handoff status: production-verified checkpoint complete
 - Research date: 2026-07-13
 - Deployment URL: `https://market-terminal.wyjjdyxzsc.workers.dev`
 
@@ -381,7 +381,11 @@ This work was performed by OpenAI Codex without Claude’s involvement. This doc
   - `npm run test:unit` passed `16/16`
   - local smoke against `http://localhost:3201` passed `23/23`; keyed/network-dependent routes reported only their documented skips
   - targeted local probe returned a 34-entry `layer-catalog`, a `layer` envelope for earthquakes, and a `conflictZones` envelope for conflict; the unconfigured FIRMS path returned its expected `502`
-- Production deployment and visual browser verification are not yet claimed for checkpoint 3. The browser bridge failed to initialize and the `agent-browser` CLI was unavailable in this session; that limitation is deliberate evidence, not a pass.
+- Production verification completed for source commit `a25e6be` on 2026-07-15:
+  - production HTML served `app.js?v=20260715b` and `mapintel.js?v=20260715b`
+  - `npm run test:prod` passed `29/29`; `/api/map/weather` was the explicitly allowed upstream `502` skip
+  - targeted production responses returned the 34-entry `layer-catalog`, a `live` earthquakes envelope (265 points at probe time), a `hybrid` conflict envelope, a `live` fires envelope, and a `curated` infrastructure envelope, each with source metadata and a served time
+  - production visual browser verification is still not claimed. The browser bridge failed to initialize and the `agent-browser` CLI was unavailable in this session; that limitation is deliberate evidence, not a pass.
 
 # Unresolved risks and technical debt
 
@@ -398,14 +402,13 @@ This work was performed by OpenAI Codex without Claude’s involvement. This doc
   - `ff58850` — `Add static asset security headers`
   - `e161369` — `Add prompt continuation log`
   - `55e014c` — `Replace social scraper with market sentiment composite`
-- Checkpoint 3 source commit: pending production checkpoint commit at the time of this locally verified handoff update.
+  - `a25e6be` — `Add map provenance contracts`
 - Push/deploy:
-  - `git push origin main` completed for all listed checkpoint commits
+  - `git push origin main` completed for all listed checkpoint commits, including `a25e6be`
   - production deployment verified on `https://market-terminal.wyjjdyxzsc.workers.dev`
 
 # Recommended next step for Claude
 
 - Next recommended step:
-  - complete production verification for the locally verified map provenance checkpoint before opening another vertical slice
   - extend unit coverage beyond the new candle fallback into the broader quant surface and route-policy layer
   - continue modular decomposition of `server.js` and `worker.js`

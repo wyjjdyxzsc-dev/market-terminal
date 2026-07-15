@@ -14,7 +14,7 @@ Research date: 2026-07-13
   - local smoke suite `21/21` passed on 2026-07-13
   - production smoke suite `28/28` passed on 2026-07-13 (checkpoint 1)
   - production smoke suite `29/29` passed on 2026-07-15 (checkpoint 2)
-  - map provenance checkpoint is locally verified: `16/16` unit tests and `23/23` local smoke checks passed on 2026-07-15; production verification is pending
+  - map provenance checkpoint source commit `a25e6be` is production verified: `16/16` unit tests, `23/23` local smoke checks, and `29/29` production smoke checks passed on 2026-07-15
 
 ## Capability rows
 
@@ -35,7 +35,7 @@ Research date: 2026-07-13
 - Evaluation criteria: global coverage, conflict-centric filtering, provenance
 - Provenance links: `https://war-monitor.com/`, `https://war-monitor.com/dashboard`
 - Licensing or trademark notes: original UI and taxonomy only
-- Final evidence: local and production checkpoint verified conflict/map event endpoints and structured JSON contract behavior. Checkpoint 3 locally adds an explicit `conflictZones` provenance envelope and active-layer source/cache disclosure; production verification remains pending.
+- Final evidence: local and production checkpoint verified conflict/map event endpoints and structured JSON contract behavior. Checkpoint 3 adds a production-verified explicit `conflictZones` provenance envelope and active-layer source/cache disclosure.
 
 ### WAR-002 AI event classification and severity scoring
 
@@ -61,10 +61,10 @@ Research date: 2026-07-13
 - Source-reliability control: market sentiment now uses attributable benchmark and RSS inputs rather than a social-feed scrape.
 - Evidence: deterministic unit tests and local smoke verification passed. Production deployment of `55e014c` served `app.js?v=20260713b`; `npm run test:prod` passed `29/29` on 2026-07-15. The canonical endpoint returned attributable evidence and methodology with `status: "live"` and `dataMode: "deterministic"`; the compatibility alias carried deprecation and successor headers.
 
-### 2026-07-15 checkpoint 3 local update
+### 2026-07-15 checkpoint 3 production update
 
 - Conflict-map disclosure: the independent map now identifies conflict zones as a hybrid of project-curated context and public GDELT/ACLED inputs. The panel distinguishes that evidence class from a live authoritative feed and shows cache/refresh state.
-- Evidence: `/api/map/conflict` locally returned its `conflictZones` provenance envelope; map-provenance unit coverage and the complete local smoke suite passed (`16/16`, `23/23`). This remains a partial, non-authoritative conflict-monitor capability and awaits production verification.
+- Evidence: `/api/map/conflict` locally and in production returned its `conflictZones` provenance envelope; map-provenance unit coverage and the complete local smoke suite passed (`16/16`, `23/23`), then production smoke passed `29/29` for source commit `a25e6be`. This remains a partial, non-authoritative conflict-monitor capability.
 
 ### WAR-003 Conflict threads and timelines
 

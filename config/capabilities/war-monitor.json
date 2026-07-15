@@ -18,7 +18,7 @@
     "evaluationCriteria": ["global coverage", "conflict-centric filtering", "provenance"],
     "provenanceLinks": ["https://war-monitor.com/", "https://war-monitor.com/dashboard"],
     "licensingNotes": "Original UI and taxonomy only.",
-    "finalEvidence": "Checkpoint 3 is locally verified on 2026-07-15: conflict map payloads now carry a hybrid conflictZones provenance envelope with explicit source/cache disclosure. Unit tests passed 16/16 and local smoke passed 23/23; production verification is pending."
+    "finalEvidence": "Checkpoint 3 source commit a25e6be is production verified on 2026-07-15: conflict map payloads carry a hybrid conflictZones provenance envelope with explicit source/cache disclosure. Unit tests passed 16/16, local smoke passed 23/23, production served 20260715b, and production smoke passed 29/29."
   },
   {
     "id": "WAR-002",

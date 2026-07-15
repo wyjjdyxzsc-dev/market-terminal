@@ -39,7 +39,7 @@
     "evaluationCriteria": ["provenance on every feature", "live/reference separation", "performance"],
     "provenanceLinks": ["https://www.worldmonitor.app/", "https://www.worldmonitor.app/docs/data-sources"],
     "licensingNotes": "Independent datasets only.",
-    "finalEvidence": "Checkpoint 3 is locally verified on 2026-07-15: the versioned map catalog classifies every Leaflet layer and live map responses expose provenance envelopes. Unit tests passed 16/16 and local smoke passed 23/23; production verification is pending."
+    "finalEvidence": "Checkpoint 3 source commit a25e6be is production verified on 2026-07-15: the versioned map catalog classifies every Leaflet layer and live map responses expose provenance envelopes. Unit tests passed 16/16, local smoke passed 23/23, production served 20260715b, and production smoke passed 29/29."
   },
   {
     "id": "WM-003",
