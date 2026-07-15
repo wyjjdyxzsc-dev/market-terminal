@@ -12,7 +12,8 @@ Research date: 2026-07-13
 - Blocked-by-law: 0
 - Checkpoint evidence:
   - local smoke suite `21/21` passed on 2026-07-13
-  - production smoke suite `28/28` passed on 2026-07-13
+  - production smoke suite `28/28` passed on 2026-07-13 (checkpoint 1)
+  - production smoke suite `29/29` passed on 2026-07-15 (checkpoint 2)
 
 ## Capability rows
 
@@ -57,7 +58,7 @@ Research date: 2026-07-13
 ### 2026-07-13 checkpoint 2 update
 
 - Source-reliability control: market sentiment now uses attributable benchmark and RSS inputs rather than a social-feed scrape.
-- Evidence: deterministic unit tests and local smoke verification pass; production verification is pending this checkpoint’s deployment.
+- Evidence: deterministic unit tests and local smoke verification passed. Production deployment of `55e014c` served `app.js?v=20260713b`; `npm run test:prod` passed `29/29` on 2026-07-15. The canonical endpoint returned attributable evidence and methodology with `status: "live"` and `dataMode: "deterministic"`; the compatibility alias carried deprecation and successor headers.
 
 ### WAR-003 Conflict threads and timelines
 

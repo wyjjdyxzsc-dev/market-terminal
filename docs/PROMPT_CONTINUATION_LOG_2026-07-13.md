@@ -24,6 +24,30 @@ This file is a portable handoff for continuing work on another account. It recor
 
 > create a log with all prompts that were given so it can continue on other account
 
+### User prompt 4
+
+> continue
+
+### User prompt 5
+
+> continue
+
+### User prompt 6
+
+> go on
+
+### User prompt 7
+
+> continue
+
+### User prompt 8
+
+> continue
+
+### User prompt 9
+
+> continue
+
 ## Authoritative Prompt Sources
 
 - Full master prompt: [MARKET_TERMINAL_TOTAL_PLATFORM_CODEX_MASTER_PROMPT.md](/Users/krishivjain/Desktop/claude projects/market-terminal/MARKET_TERMINAL_TOTAL_PLATFORM_CODEX_MASTER_PROMPT.md)
@@ -63,7 +87,7 @@ The following production-oriented vertical slices were implemented and deployed:
 - Frontend URL allowlisting and safer DOM rendering in terminal, intelligence, and map views.
 - SRI for the `globe.gl` CDN asset.
 - Cache-buster updated to `20260713b`.
-- Replaced the unreliable X syndication sentiment path with a deterministic, source-attributed market-sentiment composite. Production verification for this checkpoint is pending deployment.
+- Replaced the unreliable X syndication sentiment path with a deterministic, source-attributed market-sentiment composite, production-verified on 2026-07-15.
 - Unit tests for API contracts, evidence helpers, and candle analysis.
 - Expanded smoke tests covering local and production endpoint contracts.
 
@@ -87,14 +111,21 @@ Production verification completed:
 - News intelligence payloads included source URLs and evidence metadata.
 - Malformed push subscriptions returned `400 invalid_subscription`.
 - Production `/` and API responses carried CSP, Permissions-Policy, Referrer-Policy, `X-Content-Type-Options`, `X-Frame-Options`, and `Cross-Origin-Resource-Policy` headers after the static asset header fix.
+- Checkpoint 2 production verification on 2026-07-15:
+  - production HTML served `app.js?v=20260713b` for deployed commit `55e014c`
+  - `npm run test:prod` passed `29/29`; the weather route returned its allowed `502` skip and no checks failed
+  - `/api/sentiment/market` returned `200` with `status: "live"`, `dataMode: "deterministic"`, five benchmarks, 18 headlines, 13 sources, source-attributed evidence, and methodology at `2026-07-15T12:18:39.910Z`
+  - `/api/sentiment/twitter` returned `200` with `Deprecation: true` and `Link: </api/sentiment/market>; rel="successor-version"`
 
 ## Checkpoints
 
 - `aa4f85b` — `Harden API parity and evidence fallbacks`
 - `ff58850` — `Add static asset security headers`
 - `cb27ef4` — `Record production verification evidence`
+- `e161369` — `Add prompt continuation log`
+- `55e014c` — `Replace social scraper with market sentiment composite`
 
-All three commits were pushed to `origin/main`. The working tree is clean except for unrelated untracked files listed below.
+All listed commits were pushed to `origin/main`. The working tree is clean except for unrelated untracked files listed below.
 
 ## Remaining Work
 

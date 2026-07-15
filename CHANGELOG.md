@@ -16,6 +16,10 @@
 - Replaced unreliable X syndication sentiment with `/api/sentiment/market`, a deterministic benchmark-breadth and attributable-RSS composite with evidence counts, methodology, and degraded coverage disclosure. `/api/sentiment/twitter` is now a deprecated compatibility alias.
 - Added shared market-sentiment unit coverage and expanded smoke coverage for the canonical endpoint and alias.
 - Bumped the frontend cache-buster to `20260713b`.
+- Verified the deployed market-sentiment slice: production served `20260713b`, `npm run test:prod` passed `29/29` on 2026-07-15, and the legacy alias returned its deprecation/successor headers.
+- Bumped the frontend cache-buster to `20260715a` for this production-verification documentation deployment.
 - Checkpoint commits:
   - `aa4f85b` `Harden API parity and evidence fallbacks`
   - `ff58850` `Add static asset security headers`
+  - `e161369` `Add prompt continuation log`
+  - `55e014c` `Replace social scraper with market sentiment composite`

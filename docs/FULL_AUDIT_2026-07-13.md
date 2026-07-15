@@ -39,6 +39,15 @@ This document is a live audit ledger. Findings start as `open` and are updated o
   - production intelligence payload verification:
     - `/api/intel/news` returns `sourceUrl`, `status`, `freshness`, `sourceCount`, and `evidence`
 
+## Checkpoint 2 summary
+
+- Source-change commit: `55e014c` (`Replace social scraper with market sentiment composite`)
+- Production HTML served `app.js?v=20260713b`, confirming the sentiment implementation was live.
+- `npm run test:prod` passed `29/29` checks on 2026-07-15. The weather route produced its explicitly allowed `502` skip; no smoke checks failed.
+- Production `GET /api/sentiment/market` at `2026-07-15T12:18:39.910Z` returned `200` with `status: "live"`, `dataMode: "deterministic"`, score `0.298`, five benchmarks, 18 headlines, 13 sources, source-attributed evidence, and disclosed methodology.
+- Production `GET /api/sentiment/twitter` returned `200` with `Deprecation: true` and `Link: </api/sentiment/market>; rel="successor-version"`.
+- No production browser visual pass is claimed for this checkpoint: the browser bridge could not initialize in the verification session. The page-shell smoke check and cache-busted asset probe passed, while the prior local browser verification remains separate evidence.
+
 ## Findings
 
 | ID | Severity | Confidence | Area | Affected files/functions | User impact | Evidence | Remediation | Test required | Status | Resolved commit |
@@ -54,7 +63,7 @@ This document is a live audit ledger. Findings start as `open` and are updated o
 | AUD-009 | medium | high | Documentation drift | `README.md`, `CLAUDE.md`, `AGENTS.md`, `prompt.md` | Operators and future agents may use wrong deploy path or miss tests | Docs still say “No tests yet” and mention manual `wrangler deploy` | Reconcile docs to verified behavior and current deployment policy | Documentation review plus command verification | resolved-committed | aa4f85b |
 | AUD-010 | medium | high | Browser security | `public/index.html`, `server.js`, `worker.js` | CSP and supply-chain controls are incomplete | Third-party assets load from `unpkg.com`; `globe.gl` lacks SRI; no strong response security headers observed in code | Add security headers, SRI where possible, and document remaining external dependencies | Header and HTML assertions | resolved-production-verified | ff58850 |
 | AUD-011 | medium | medium | Push subscription validation | `server.js`, `worker.js` | Abuse and malformed subscriptions can enter storage | `/api/subscribe` only checks `endpoint` and, in Worker, `keys` presence | Add schema validation, body checks, idempotence, and endpoint policy | Subscription security tests | resolved-production-verified | aa4f85b |
-| AUD-012 | medium | medium | Source reliability | `server.js`, `worker.js`, `shared/market-sentiment-core.js` | Unreliable social scraping can be presented as live market intelligence | X syndication was removed from the sentiment and world-news paths; a deterministic benchmark/RSS composite now exposes source counts, evidence, methodology, and degraded coverage | Keep benchmark and RSS inputs attributable; maintain coverage tests and production verification | Unit, local smoke, production smoke, and UI-state tests | resolved-local-verified | pending production checkpoint |
+| AUD-012 | medium | medium | Source reliability | `server.js`, `worker.js`, `shared/market-sentiment-core.js` | Unreliable social scraping can be presented as live market intelligence | X syndication was removed from the sentiment and world-news paths; a deterministic benchmark/RSS composite now exposes source counts, evidence, methodology, and degraded coverage | Keep benchmark and RSS inputs attributable; maintain coverage tests and production verification | Unit, local smoke, production smoke, and UI-state tests | resolved-production-verified | 55e014c |
 | AUD-013 | medium | high | Map provenance | `server.js`, `worker.js`, `public/mapintel.js` | Users cannot consistently distinguish live, curated, estimated, or stale infrastructure layers | Many map layers lack first-class provenance metadata and status labeling | Add provenance/status fields and UI display | API schema and UI tests | open | |
 | AUD-014 | medium | medium | Quant validation | `public/quant.js` | Mathematical correctness is largely unverified | No reference/unit suite exists for the indicator surface | Add deterministic reference tests and known limitations | Unit tests with fixtures | partially-resolved-local | |
 | AUD-015 | low | high | Repository hygiene | local working tree, packaging process | Unsafe exports can include ignored files and local artifacts | Local repo contains `.env`, `.DS_Store`, `.wrangler`, `worker-startup.cpuprofile`, and `node_modules` in workspace | Add safe packaging/export script or procedure; keep ignored artifacts out of tracked state | Script verification | open | |
@@ -89,4 +98,5 @@ This document is a live audit ledger. Findings start as `open` and are updated o
 
 - Repository guidance and current prompt both indicate GitHub push is the canonical deployment path.
 - Production version was observed via cache-busted asset markers, not commit hash headers.
-- The updated asset cache-buster `20260713a` is now confirmed live in production.
+- The checkpoint 1 asset cache-buster `20260713a` was confirmed live in production.
+- The checkpoint 2 asset cache-buster `20260713b` was confirmed live in production before its production smoke suite.

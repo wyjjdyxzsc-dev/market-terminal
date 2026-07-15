@@ -14,7 +14,8 @@ Research date: 2026-07-13
   - local unit suite `9/9` passed on 2026-07-13
   - local smoke suite `21/21` passed on 2026-07-13
   - in-app browser verification passed on `http://localhost:3000`
-  - production smoke suite `28/28` passed on 2026-07-13
+  - production smoke suite `28/28` passed on 2026-07-13 (checkpoint 1)
+  - production smoke suite `29/29` passed on 2026-07-15 (checkpoint 2)
 
 ## Capability rows
 
@@ -61,7 +62,7 @@ Research date: 2026-07-13
 - Current-project sentiment capability: deterministic market breadth plus RSS-news tone through `/api/sentiment/market`.
 - Data and methodology: SPY, QQQ, DIA, IWM, available VIX data, and a disclosed financial-headline lexicon; the response returns weights, counts, benchmark signals, evidence, and a degraded status when coverage is insufficient.
 - Status: partial. This is transparent public-data sentiment, not a licensed professional sentiment or news-analytics entitlement.
-- Evidence: unit tests and local endpoint verification pass; production verification is pending this checkpoint’s deployment.
+- Evidence: `13/13` unit tests and local endpoint verification passed. Production deployment of `55e014c` served `app.js?v=20260713b`; `npm run test:prod` passed `29/29` on 2026-07-15. The canonical response was live and deterministic with five benchmarks, 18 headlines, 13 sources, attributable evidence, and disclosed methodology; the legacy alias returned its deprecation and successor headers.
 
 ### FT-003 Real-time market monitors
 

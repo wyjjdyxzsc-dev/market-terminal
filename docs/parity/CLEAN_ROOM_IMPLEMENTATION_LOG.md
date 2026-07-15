@@ -54,3 +54,4 @@ This file records how parity work is implemented without copying protected code,
 - The implementation uses this project’s own benchmark breadth calculation and financial-headline lexicon in `shared/market-sentiment-core.js`.
 - Attributable RSS evidence and quote-provider labels are retained in the API payload; no external social-media code, prompts, schemas, assets, or tests were copied.
 - The legacy `/api/sentiment/twitter` path is retained only as a documented deprecation alias to `/api/sentiment/market`.
+- Production verification on 2026-07-15 confirmed the independently implemented route through the `29/29` production smoke suite and a live payload containing five benchmarks, 18 headlines, 13 sources, evidence, and disclosed methodology.

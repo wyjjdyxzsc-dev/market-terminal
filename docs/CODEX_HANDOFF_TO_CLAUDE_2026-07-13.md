@@ -85,6 +85,8 @@ This work was performed by OpenAI Codex without Claude’s involvement. This doc
 - Added `shared/candle-analysis-core.js`
   - deterministic candlestick-pattern engine extracted as a shared pure module
   - used as the fallback when AI is unavailable or when 1D intraday OHLC falls back to 5D daily candles
+- Added `shared/market-sentiment-core.js`
+  - independent benchmark-breadth and financial-headline-lexicon composite used by Express and Worker
 - Express and Worker now share the same route-contract semantics:
   - structured JSON `404`
   - structured JSON `405` with `Allow`
@@ -128,6 +130,7 @@ This work was performed by OpenAI Codex without Claude’s involvement. This doc
   - `/api/map/webcams-live`
 - Added Express API catch-all so unknown `/api/*` routes no longer fall through to the SPA shell.
 - Added lightweight local websocket implementation for `/api/stocks/stream` to match frontend expectations during local development.
+- Added canonical `GET /api/sentiment/market` with transparent benchmark/news evidence and a deprecated `GET /api/sentiment/twitter` alias.
 
 # AI-provider and prompt changes
 
@@ -152,7 +155,7 @@ This work was performed by OpenAI Codex without Claude’s involvement. This doc
 # Data-source additions and removals
 
 - Preserved RSS source URLs and publisher metadata through the intelligence pipeline.
-- X/Twitter sentiment was not replaced in this checkpoint, but the UI/browser verification confirmed the current degraded state is visible and non-fatal when no tweets are retrieved.
+- Replaced X/Twitter sentiment ingestion with the independent deterministic market-sentiment composite. X was also removed from the broader world-headline aggregation path.
 
 # UI changes
 
@@ -167,7 +170,7 @@ This work was performed by OpenAI Codex without Claude’s involvement. This doc
 - [public/mapintel.js](/Users/krishivjain/Desktop/claude projects/market-terminal/public/mapintel.js)
   - webcam/player URLs and images protocol-sanitized
 - [public/index.html](/Users/krishivjain/Desktop/claude projects/market-terminal/public/index.html)
-  - cache-buster bumped to `20260713a`
+  - cache-buster bumped to `20260713b` for the market-sentiment deploy
   - `globe.gl` script now carries SRI
 - [public/_headers](/Users/krishivjain/Desktop/claude projects/market-terminal/public/_headers)
   - Cloudflare static-asset security headers for production HTML/assets
@@ -212,6 +215,7 @@ This work was performed by OpenAI Codex without Claude’s involvement. This doc
   - `shared/api-contract.js`
   - `shared/evidence-core.js`
   - `shared/candle-analysis-core.js`
+  - `shared/market-sentiment-core.js`
   - `public/app.js`
   - `public/intel.js`
   - `public/mapintel.js`
@@ -222,6 +226,7 @@ This work was performed by OpenAI Codex without Claude’s involvement. This doc
   - `tests/api-contract.test.js`
   - `tests/evidence-core.test.js`
   - `tests/candle-analysis-core.test.js`
+  - `tests/market-sentiment-core.test.js`
 - Documentation/operating artifacts:
   - `README.md`
   - `prompt.md`
@@ -312,6 +317,15 @@ This work was performed by OpenAI Codex without Claude’s involvement. This doc
   - malformed `POST /api/unsubscribe` -> `400 application/json`
   - `/api/intel/news` -> production payload includes `sourceUrl`, `status`, `freshness`, `sourceCount`, and `evidence`
   - `/` and `/api/quote?symbol=AAPL` -> production security headers verified after follow-up commit `ff58850`
+- checkpoint 2 local verification:
+  - `npm run test:unit` -> `13/13` passed
+  - syntax checks passed for `server.js`, Worker module mode, `public/app.js`, and `shared/market-sentiment-core.js`
+  - local `/api/sentiment/market` returned `200` with deterministic, source-attributed coverage fields
+- checkpoint 2 production verification:
+  - production HTML served `app.js?v=20260713b` for deployed commit `55e014c`
+  - `npm run test:prod` -> `29/29` passed on 2026-07-15; `/api/map/weather` produced its allowed `502` skip
+  - `/api/sentiment/market` at `2026-07-15T12:18:39.910Z` -> `200` with `status: "live"`, `dataMode: "deterministic"`, score `0.298`, five benchmarks, 18 headlines, 13 sources, evidence, and methodology
+  - `/api/sentiment/twitter` -> `200` with `Deprecation: true` and `Link: </api/sentiment/market>; rel="successor-version"`
 
 # Production deployment and smoke-test evidence
 
@@ -321,7 +335,7 @@ This work was performed by OpenAI Codex without Claude’s involvement. This doc
   - asset versions `style.css?v=20260705c` and `app.js?v=20260705c`
 - Production smoke suite passed against `https://market-terminal.wyjjdyxzsc.workers.dev`
 - Post-change production verification completed.
-- Production cache-buster observed live: `20260713a`
+- Production cache-busters observed live: `20260713a` for checkpoint 1 and `20260713b` for checkpoint 2.
 
 # Decisions rejected and why
 
@@ -345,7 +359,12 @@ This work was performed by OpenAI Codex without Claude’s involvement. This doc
   - syntax checks passed for `server.js`, Worker module mode, `public/app.js`, and the shared module
   - local `/api/sentiment/market` returned `200` with 4 benchmarks, 18 headlines, 7 sources, evidence, and `status: "live"`
   - local deprecated alias returned `Deprecation: true` and a successor link
-- Production verification is pending deployment of this checkpoint. Do not mark this checkpoint production-verified until `npm run test:prod` and targeted production probes pass.
+- Production verification completed on 2026-07-15:
+  - production HTML served `app.js?v=20260713b` after the `55e014c` push
+  - `npm run test:prod` passed `29/29`; `/api/map/weather` was an explicitly allowed `502` skip
+  - canonical payload at `2026-07-15T12:18:39.910Z` was `live` and `deterministic`, with score `0.298`, five benchmarks, 18 headlines, 13 sources, attributable evidence, and methodology
+  - deprecated alias returned its `Deprecation: true` and successor `Link` headers
+  - production visual browser verification is not claimed for this checkpoint because the browser bridge could not initialize; the page-shell smoke check and asset-version probe passed.
 
 # Unresolved risks and technical debt
 
@@ -359,8 +378,10 @@ This work was performed by OpenAI Codex without Claude’s involvement. This doc
 - Checkpoint commits:
   - `aa4f85b` — `Harden API parity and evidence fallbacks`
   - `ff58850` — `Add static asset security headers`
+  - `e161369` — `Add prompt continuation log`
+  - `55e014c` — `Replace social scraper with market sentiment composite`
 - Push/deploy:
-  - `git push origin main` completed for both checkpoint commits
+  - `git push origin main` completed for all listed checkpoint commits
   - production deployment verified on `https://market-terminal.wyjjdyxzsc.workers.dev`
 
 # Recommended next step for Claude

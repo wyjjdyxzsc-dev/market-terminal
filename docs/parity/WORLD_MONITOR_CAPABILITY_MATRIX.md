@@ -13,7 +13,8 @@ Research date: 2026-07-13
 - Checkpoint evidence:
   - local smoke suite `21/21` passed on 2026-07-13
   - in-app browser verification passed on `http://localhost:3000`
-  - production smoke suite `28/28` passed on 2026-07-13
+  - production smoke suite `28/28` passed on 2026-07-13 (checkpoint 1)
+  - production smoke suite `29/29` passed on 2026-07-15 (checkpoint 2)
 
 ## Capability rows
 
@@ -59,7 +60,7 @@ Research date: 2026-07-13
 
 - Current-project sentiment surface: `/api/sentiment/market` and the terminal gauge.
 - Data sources and authority tier: benchmark quotes from the project quote pool plus source-attributed public RSS evidence; no unauthenticated social scraping.
-- Evidence: deterministic unit tests pass and local endpoint verification returned benchmark, headline, source, methodology, and degraded-status fields. Production verification is pending this checkpoint’s deployment.
+- Evidence: deterministic unit tests and local endpoint verification passed. Production deployment of `55e014c` served `app.js?v=20260713b`; `npm run test:prod` passed `29/29` on 2026-07-15. The canonical response was `live` and `deterministic` with five benchmarks, 18 headlines, 13 sources, attributable evidence, and methodology; no production visual browser pass is claimed for this checkpoint.
 
 ### WM-003 Country dossiers and instability scoring
 
