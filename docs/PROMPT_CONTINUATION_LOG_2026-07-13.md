@@ -88,6 +88,7 @@ The following production-oriented vertical slices were implemented and deployed:
 - SRI for the `globe.gl` CDN asset.
 - Cache-buster updated to `20260713b`.
 - Replaced the unreliable X syndication sentiment path with a deterministic, source-attributed market-sentiment composite, production-verified on 2026-07-15.
+- Added an original map-provenance catalog and active-layer freshness disclosure. This checkpoint is locally verified and explicitly pending production deployment at this point in the log.
 - Unit tests for API contracts, evidence helpers, and candle analysis.
 - Expanded smoke tests covering local and production endpoint contracts.
 
@@ -97,6 +98,8 @@ Local verification completed:
 
 - `node --check server.js` passed.
 - `npm test` passed: 9 unit tests and 21 smoke checks.
+- Checkpoint 3 local verification on 2026-07-15: syntax checks passed for the server, Worker, map UI, and map-provenance core; `npm run test:unit` passed `16/16`; local smoke passed `23/23` with documented optional-provider skips.
+- A targeted local map probe returned the 34-entry provenance catalog plus layer envelopes for earthquakes and conflict. The missing local FIRMS key surfaced as the expected `502`, not synthetic map data.
 - New local routes returned JSON instead of SPA HTML.
 - Negative contract checks returned JSON `405`, `426`, and `404` as expected.
 - Local security headers were present on `/` and API responses.
@@ -125,7 +128,7 @@ Production verification completed:
 - `e161369` — `Add prompt continuation log`
 - `55e014c` — `Replace social scraper with market sentiment composite`
 
-All listed commits were pushed to `origin/main`. The working tree is clean except for unrelated untracked files listed below.
+All listed commits were pushed to `origin/main`. The current map-provenance checkpoint is locally verified and pending its production checkpoint commit; unrelated untracked files listed below remain preserved.
 
 ## Remaining Work
 
@@ -134,6 +137,7 @@ These items are intentionally not marked complete:
 - Expand quant-engine unit coverage beyond the candlestick fallback engine.
 - Continue modular decomposition of the large `server.js` and `worker.js` files.
 - Re-run the full production smoke suite after any subsequent deployment.
+- Complete production verification for the current map-provenance checkpoint and record its deployed asset version before moving to the next vertical slice.
 - Update this log and the Claude handoff after every future checkpoint commit.
 
 ## Unrelated Untracked Files

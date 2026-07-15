@@ -31,6 +31,7 @@ const apiContract = require('./shared/api-contract.js');
 const evidenceCore = require('./shared/evidence-core.js');
 const candleAnalysisCore = require('./shared/candle-analysis-core.js');
 const marketSentimentCore = require('./shared/market-sentiment-core.js');
+const mapProvenanceCore = require('./shared/map-provenance-core.js');
 
 // Optional WebSocket for Finnhub live feed.  npm i ws  to enable.
 let WS;
@@ -65,6 +66,7 @@ const {
 
 const { buildDeterministicCandleAnalysis } = candleAnalysisCore;
 const { analyzeMarketSentiment } = marketSentimentCore;
+const { annotateMapPayload } = mapProvenanceCore;
 
 const PORT         = process.env.PORT || 3000;
 const FINNHUB_BASE = 'https://finnhub.io/api/v1';
@@ -2022,11 +2024,26 @@ async function fetchOverpassLayers() {
 
 async function fetchEarthquakes() {
   const res = await fetchWithTimeout(
-    'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_day.geojson',
+    'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson',
     {}, 12000
   );
   if (!res.ok) throw new Error(`USGS responded ${res.status}`);
-  return res.json();
+  const data = await res.json();
+  return (data.features || []).map((feature) => {
+    const coordinates = feature.geometry && feature.geometry.coordinates;
+    const properties = feature.properties || {};
+    if (!coordinates) return null;
+    return {
+      lat: coordinates[1],
+      lon: coordinates[0],
+      depth: coordinates[2],
+      mag: properties.mag,
+      place: properties.place,
+      time: properties.time,
+      url: properties.url,
+      tsunami: properties.tsunami,
+    };
+  }).filter(Boolean);
 }
 
 async function fetchNasaFires() {
@@ -2038,21 +2055,23 @@ async function fetchNasaFires() {
   if (!res.ok) throw new Error(`FIRMS responded ${res.status}`);
   const csv = await res.text();
   const lines = csv.trim().split('\n');
-  if (lines.length < 2) return { type: 'FeatureCollection', features: [] };
+  if (lines.length < 2) return [];
   const hdrs = lines[0].split(',').map(h => h.trim());
   const latI = hdrs.indexOf('latitude'),  lonI = hdrs.indexOf('longitude');
-  const briI = hdrs.indexOf('bright_ti4'), frpI = hdrs.indexOf('frp');
-  const features = lines.slice(1).map(line => {
+  const briI = hdrs.indexOf('bright_ti4') >= 0 ? hdrs.indexOf('bright_ti4') : hdrs.indexOf('brightness');
+  const confI = hdrs.indexOf('confidence'), dateI = hdrs.indexOf('acq_date');
+  return lines.slice(1).map(line => {
     const c = line.split(',');
     const lat = parseFloat(c[latI]), lon = parseFloat(c[lonI]);
     if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
     return {
-      type: 'Feature',
-      geometry: { type: 'Point', coordinates: [lon, lat] },
-      properties: { layer: 'fire', brightness: c[briI] ? parseFloat(c[briI]) : null, frp: c[frpI] ? parseFloat(c[frpI]) : null },
+      lat,
+      lon,
+      bright: briI >= 0 && c[briI] ? parseFloat(c[briI]) : null,
+      conf: confI >= 0 ? c[confI] : '',
+      date: dateI >= 0 ? c[dateI] : '',
     };
-  }).filter(Boolean);
-  return { type: 'FeatureCollection', features };
+  }).filter(Boolean).slice(0, 5000);
 }
 
 async function fetchNasaEonet() {
@@ -3521,20 +3540,20 @@ app.get('/api/map/overpass', route(async (req, res) => {
 }));
 
 app.get('/api/map/earthquakes', route(async (req, res) => {
-  const { data } = await fetch_cached_data(
-    'map:earthquakes', fetchEarthquakes, TTL.MAP
+  const { data, fresh } = await fetch_cached_data(
+    'map:earthquakes', fetchEarthquakes, TTL.NEWS
   );
-  res.json(data);
+  res.json(annotateMapPayload({ cached: !fresh, points: data }, 'earthquakes', { cached: !fresh }));
 }));
 
 app.get('/api/map/events', publicRateLimit, route(async (req, res) => {
   const { data, fresh } = await fetch_cached_data('map:events', fetchNaturalEvents, TTL.NEWS);
-  res.json({ cached: !fresh, points: data });
+  res.json(annotateMapPayload({ cached: !fresh, points: data }, 'events', { cached: !fresh }));
 }));
 
 app.get('/api/map/weather', publicRateLimit, route(async (req, res) => {
   const { data, fresh } = await fetch_cached_data('map:weather', fetchWeatherAlerts, TTL.NEWS);
-  res.json({ cached: !fresh, points: data });
+  res.json(annotateMapPayload({ cached: !fresh, points: data }, 'weather', { cached: !fresh }));
 }));
 
 app.get('/api/map/flights', publicRateLimit, route(async (req, res) => {
@@ -3542,50 +3561,50 @@ app.get('/api/map/flights', publicRateLimit, route(async (req, res) => {
   if (bbox.length !== 4 || bbox.some(Number.isNaN)) return sendApiError(res, 400, 'bad_bbox', 'Bounding box must contain four numbers.');
   const cacheKey = 'map:flights:' + bbox.map((value) => value.toFixed(1)).join('_');
   const { data, fresh } = await fetch_cached_data(cacheKey, () => fetchFlights(bbox), 30);
-  res.json({ cached: !fresh, points: data });
+  res.json(annotateMapPayload({ cached: !fresh, points: data }, 'flights', { cached: !fresh }));
 }));
 
 app.get('/api/map/fires', route(async (req, res) => {
-  const { data } = await fetch_cached_data(
-    'map:fires', fetchNasaFires, TTL.MAP
+  const { data, fresh } = await fetch_cached_data(
+    'map:fires', fetchNasaFires, 1800
   );
-  res.json(data);
+  res.json(annotateMapPayload({ cached: !fresh, points: data }, 'fires', { cached: !fresh }));
 }));
 
 app.get('/api/map/webcams-live', publicRateLimit, route(async (req, res) => {
   const { data, fresh } = await fetch_cached_data('map:webcams-live', fetchWindyWebcams, 3600);
-  res.json({ cached: !fresh, points: data });
+  res.json(annotateMapPayload({ cached: !fresh, points: data }, 'webcams-live', { cached: !fresh }));
 }));
 
 app.get('/api/map/eonet', route(async (req, res) => {
-  const { data } = await fetch_cached_data(
+  const { data, fresh } = await fetch_cached_data(
     'map:eonet', fetchNasaEonet, TTL.MAP
   );
-  res.json(data);
+  res.json(annotateMapPayload(data, 'events', { cached: !fresh }));
 }));
 
 app.get('/api/map/disease', route(async (req, res) => {
   // 15-min TTL — ProMED posts several alerts per day, WHO less frequently
-  const { data } = await fetch_cached_data('map:disease', fetchDiseaseOutbreaks, TTL.NEWS);
-  res.json(data);
+  const { data, fresh } = await fetch_cached_data('map:disease', fetchDiseaseOutbreaks, TTL.NEWS);
+  res.json(annotateMapPayload(data, 'diseaseOutbreaks', { cached: !fresh }));
 }));
 
 app.get('/api/map/gpsjam', route(async (req, res) => {
   // Daily file — cache 6 hours so we repull if yesterday's becomes today's
-  const { data } = await fetch_cached_data('map:gpsjam', fetchGpsJamming, 21600);
-  res.json(data);
+  const { data, fresh } = await fetch_cached_data('map:gpsjam', fetchGpsJamming, 21600);
+  res.json(annotateMapPayload(data, 'gpsJamming', { cached: !fresh }));
 }));
 
 app.get('/api/map/conflict', route(async (req, res) => {
   // 15-min TTL — GDELT updates every 15 min; ACLED updates daily
-  const { data } = await fetch_cached_data('map:conflict', fetchConflictZones, TTL.NEWS);
-  res.json(data);
+  const { data, fresh } = await fetch_cached_data('map:conflict', fetchConflictZones, TTL.NEWS);
+  res.json(annotateMapPayload(data, 'conflictZones', { cached: !fresh }));
 }));
 
 app.get('/api/map/layers', route(async (req, res) => {
   // 24-hour TTL — curated reference data + live augmentation
-  const { data } = await fetch_cached_data('map:layers', fetchAugmentedLayers, TTL.MAP);
-  res.json(data);
+  const { data, fresh } = await fetch_cached_data('map:layers', fetchAugmentedLayers, TTL.MAP);
+  res.json(annotateMapPayload(data, 'layers', { cached: !fresh }));
 }));
 
 app.get('/api/map/infrastructure', route(async (req, res) => {
@@ -3607,14 +3626,14 @@ app.get('/api/map/infrastructure', route(async (req, res) => {
     return { id: slug(name), name, type, status: 'operational', coords, desc };
   });
 
-  res.json({
+  res.json(annotateMapPayload({
     cables, pipelines, routes,
     cable_source: 'curated',
     cable_count: cables.length,
     pipeline_count: pipelines.length,
     route_count: routes.length,
     generated: Date.now(),
-  });
+  }, 'infrastructure'));
 }));
 
 // ── Market sentiment ────────────────────────────────────────────────────────

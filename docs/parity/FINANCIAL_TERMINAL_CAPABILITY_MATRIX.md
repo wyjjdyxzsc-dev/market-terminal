@@ -16,6 +16,7 @@ Research date: 2026-07-13
   - in-app browser verification passed on `http://localhost:3000`
   - production smoke suite `28/28` passed on 2026-07-13 (checkpoint 1)
   - production smoke suite `29/29` passed on 2026-07-15 (checkpoint 2)
+  - map provenance checkpoint is locally verified: `16/16` unit tests and `23/23` local smoke checks passed on 2026-07-15; production verification is pending
 
 ## Capability rows
 
@@ -63,6 +64,11 @@ Research date: 2026-07-13
 - Data and methodology: SPY, QQQ, DIA, IWM, available VIX data, and a disclosed financial-headline lexicon; the response returns weights, counts, benchmark signals, evidence, and a degraded status when coverage is insufficient.
 - Status: partial. This is transparent public-data sentiment, not a licensed professional sentiment or news-analytics entitlement.
 - Evidence: `13/13` unit tests and local endpoint verification passed. Production deployment of `55e014c` served `app.js?v=20260713b`; `npm run test:prod` passed `29/29` on 2026-07-15. The canonical response was live and deterministic with five benchmarks, 18 headlines, 13 sources, attributable evidence, and disclosed methodology; the legacy alias returned its deprecation and successor headers.
+
+### 2026-07-15 checkpoint 3 local update
+
+- Infrastructure context: commodity ports, trade routes, cables, and pipelines now disclose whether they are project-curated references or hybrid public-data augmentation. This helps separate illustrative infrastructure context from live operational or entitlement-grade flow data.
+- Evidence: the shared map catalog covers all active Leaflet layers and the infrastructure response; `16/16` unit tests and `23/23` local smoke checks passed. This preserves the matrix's `partial` assessment and does not claim Bloomberg-grade data coverage or entitlement parity. Production verification is pending.
 
 ### FT-003 Real-time market monitors
 

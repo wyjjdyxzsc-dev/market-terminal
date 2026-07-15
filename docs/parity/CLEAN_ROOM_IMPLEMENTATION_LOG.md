@@ -55,3 +55,9 @@ This file records how parity work is implemented without copying protected code,
 - Attributable RSS evidence and quote-provider labels are retained in the API payload; no external social-media code, prompts, schemas, assets, or tests were copied.
 - The legacy `/api/sentiment/twitter` path is retained only as a documented deprecation alias to `/api/sentiment/market`.
 - Production verification on 2026-07-15 confirmed the independently implemented route through the `29/29` production smoke suite and a live payload containing five benchmarks, 18 headlines, 13 sources, evidence, and disclosed methodology.
+
+## 2026-07-15 checkpoint 3
+
+- Implemented `shared/map-provenance-core.js` as an original project-local schema and browser disclosure pattern; no external map code, prompts, schemas, styles, or tests were copied.
+- Public source names and URLs are retained only as attribution metadata for existing project feeds and curated reference data. The schema distinguishes public live feeds, curated project references, hybrid augmentation, browser-computed overlays, and model-derived risk views rather than reproducing any external product taxonomy.
+- Local Express normalization was based on this repository's Worker response shape and existing map consumers, not external source code. Production verification is intentionally recorded separately after deployment.

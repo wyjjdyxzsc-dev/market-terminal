@@ -14,6 +14,20 @@
   const timers = {};        // layerId -> interval
   const loadedOnce = {};    // layerId -> bool
   const active = {};        // layerId -> bool
+  let _layerProvenance = {};
+  const _runtimeLayerProvenance = {};
+
+  const API_LAYER_IDS = Object.freeze({
+    '/api/map/earthquakes': 'earthquakes',
+    '/api/map/events': 'events',
+    '/api/map/weather': 'weather',
+    '/api/map/flights': 'flights',
+    '/api/map/fires': 'fires',
+    '/api/map/conflict': 'conflictZones',
+    '/api/map/disease': 'diseaseOutbreaks',
+    '/api/map/gpsjam': 'gpsJamming',
+    '/api/map/webcams-live': 'webcams-live',
+  });
 
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const safeHttpUrl = (value) => {
@@ -26,7 +40,15 @@
   };
   async function getJSON(url) {
     const r = await fetch(url, { headers: { Accept: 'application/json' } });
-    return r.json();
+    const data = await r.json();
+    try {
+      const layerId = API_LAYER_IDS[new URL(url, location.href).pathname];
+      if (layerId && data?.provenance?.layer) {
+        _runtimeLayerProvenance[layerId] = data.provenance.layer;
+        renderLayerProvenance(layerId, data.provenance.layer);
+      }
+    } catch { /* external feeds and malformed URLs have no terminal provenance metadata */ }
+    return data;
   }
   const drill = (t) => { try { window.dispatchEvent(new CustomEvent('mt:drill', { detail: { ticker: t } })); } catch {} };
 
@@ -36,7 +58,11 @@
   async function ensureLayerData() {
     if (_layerDataPromise) return _layerDataPromise;
     _layerDataPromise = getJSON('/api/map/layers')
-      .then((d) => (d && d._updated ? d : DATA))
+      .then((d) => {
+        if (!d || !d._updated) return DATA;
+        _layerProvenance = d.provenance?.catalog || {};
+        return d;
+      })
       .catch(() => DATA);
     return _layerDataPromise;
   }
@@ -557,15 +583,101 @@
       if (groups[id]) map.removeLayer(groups[id]);
       clearInterval(timers[id]);
       if (def.viewport && def._mv) map.off('moveend', def._mv);
+      delete _runtimeLayerProvenance[id];
+      renderLayerProvenance(id, null);
     }
     updateActiveCount();
   }
+
+  function humanizeProvenance(value) {
+    return String(value || 'unknown').replace(/-/g, ' ').toUpperCase();
+  }
+
+  function refreshLabel(seconds) {
+    const value = Number(seconds);
+    if (!Number.isFinite(value) || value <= 0) return '';
+    if (value >= 3600 && value % 3600 === 0) return `${value / 3600}h target`;
+    if (value >= 60 && value % 60 === 0) return `${value / 60}m target`;
+    return `${value}s target`;
+  }
+
+  function provenanceTime(value) {
+    const date = new Date(value || '');
+    if (Number.isNaN(date.valueOf())) return '';
+    return new Intl.DateTimeFormat(undefined, {
+      month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZoneName: 'short',
+    }).format(date);
+  }
+
+  async function catalogProvenance(layerId) {
+    if (_runtimeLayerProvenance[layerId]) return _runtimeLayerProvenance[layerId];
+    if (_layerProvenance[layerId]) return _layerProvenance[layerId];
+    const data = await ensureLayerData();
+    return data?.provenance?.catalog?.[layerId] || null;
+  }
+
+  function renderLayerProvenance(layerId, metadata) {
+    const row = document.querySelector(`.mlp-row[data-id="${layerId}"]`);
+    const meta = row?.querySelector('.mlp-meta');
+    if (!meta) return;
+    meta.replaceChildren();
+    if (!metadata) {
+      meta.hidden = true;
+      return;
+    }
+
+    const state = document.createElement('span');
+    state.className = 'mlp-meta-state';
+    state.textContent = `${humanizeProvenance(metadata.dataClass)} / ${humanizeProvenance(metadata.status)}`;
+    meta.append(state);
+
+    const source = Array.isArray(metadata.sources) ? metadata.sources[0] : null;
+    if (source?.name) {
+      const url = safeHttpUrl(source.url || '');
+      const sourceEl = url ? document.createElement('a') : document.createElement('span');
+      sourceEl.className = 'mlp-meta-source';
+      sourceEl.textContent = source.name;
+      sourceEl.title = metadata.note || '';
+      if (url) {
+        sourceEl.href = url;
+        sourceEl.target = '_blank';
+        sourceEl.rel = 'noopener noreferrer';
+      }
+      meta.append(sourceEl);
+    }
+
+    const cadence = refreshLabel(metadata.refreshSeconds);
+    if (cadence) {
+      const cadenceEl = document.createElement('span');
+      cadenceEl.className = 'mlp-meta-cadence';
+      cadenceEl.textContent = `${metadata.cacheState || 'unknown'} / ${cadence}`;
+      meta.append(cadenceEl);
+    }
+
+    const observedAt = metadata.sourceUpdatedAt || metadata.servedAt;
+    const observedLabel = provenanceTime(observedAt);
+    if (observedLabel) {
+      const timeEl = document.createElement('span');
+      timeEl.className = 'mlp-meta-time';
+      timeEl.textContent = `${metadata.sourceUpdatedAt ? 'snapshot' : 'served'} ${observedLabel}`;
+      timeEl.title = new Date(observedAt).toISOString();
+      meta.append(timeEl);
+    }
+    meta.hidden = false;
+  }
+
   async function refreshLayer(def) {
     const lg = groups[def.id];
     if (!lg) return;
     const badge = document.querySelector(`.mlp-row[data-id="${def.id}"] .mlp-spin`);
     if (badge) badge.classList.add('on');
-    try { lg.clearLayers(); await def.load(lg); loadedOnce[def.id] = true; }
+    try {
+      lg.clearLayers();
+      await def.load(lg);
+      const metadata = await catalogProvenance(def.id);
+      if (metadata) renderLayerProvenance(def.id, metadata);
+      loadedOnce[def.id] = true;
+    }
     catch (e) { /* leave layer empty on error */ }
     finally { if (badge) badge.classList.remove('on'); }
   }
@@ -592,7 +704,7 @@
           groupsOrder.filter((g) => byGroup[g]).map((g) =>
             `<div class="mlp-group"><div class="mlp-gname">${g}</div>` +
             byGroup[g].map((l) =>
-              `<label class="mlp-row" data-id="${l.id}"><input type="checkbox" data-layer="${l.id}"><span class="mlp-ico">${l.icon}</span><span class="mlp-lbl">${l.label}</span><span class="mlp-spin"></span></label>`
+              `<label class="mlp-row" data-id="${l.id}"><input type="checkbox" data-layer="${l.id}"><span class="mlp-ico">${l.icon}</span><span class="mlp-copy"><span class="mlp-lbl">${l.label}</span><span class="mlp-meta" hidden></span></span><span class="mlp-spin"></span></label>`
             ).join('') + `</div>`
           ).join('') + `</div>`;
         L.DomEvent.disableClickPropagation(div);

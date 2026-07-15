@@ -14,11 +14,11 @@
     "uiSurfaces": ["GLOBAL MAP"],
     "backendRoutes": ["/api/map/conflict", "/api/map/events", "/api/map/layers"],
     "securityClass": "public-read",
-    "deterministicTests": [],
+    "deterministicTests": ["tests/map-provenance-core.test.js", "tests/smoke.js (23/23 local checkpoint)"],
     "evaluationCriteria": ["global coverage", "conflict-centric filtering", "provenance"],
     "provenanceLinks": ["https://war-monitor.com/", "https://war-monitor.com/dashboard"],
     "licensingNotes": "Original UI and taxonomy only.",
-    "finalEvidence": null
+    "finalEvidence": "Checkpoint 3 is locally verified on 2026-07-15: conflict map payloads now carry a hybrid conflictZones provenance envelope with explicit source/cache disclosure. Unit tests passed 16/16 and local smoke passed 23/23; production verification is pending."
   },
   {
     "id": "WAR-002",

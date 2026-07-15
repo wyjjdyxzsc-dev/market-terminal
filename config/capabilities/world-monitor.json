@@ -35,11 +35,11 @@
     "uiSurfaces": ["GLOBAL MAP"],
     "backendRoutes": ["/api/map/layers", "/api/map/conflict", "/api/map/flights", "/api/map/weather", "/api/map/webcams-live"],
     "securityClass": "public-read",
-    "deterministicTests": [],
+    "deterministicTests": ["tests/map-provenance-core.test.js", "tests/smoke.js (23/23 local checkpoint)"],
     "evaluationCriteria": ["provenance on every feature", "live/reference separation", "performance"],
     "provenanceLinks": ["https://www.worldmonitor.app/", "https://www.worldmonitor.app/docs/data-sources"],
     "licensingNotes": "Independent datasets only.",
-    "finalEvidence": null
+    "finalEvidence": "Checkpoint 3 is locally verified on 2026-07-15: the versioned map catalog classifies every Leaflet layer and live map responses expose provenance envelopes. Unit tests passed 16/16 and local smoke passed 23/23; production verification is pending."
   },
   {
     "id": "WM-003",

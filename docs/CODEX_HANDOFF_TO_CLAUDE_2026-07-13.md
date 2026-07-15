@@ -2,7 +2,7 @@ This work was performed by OpenAI Codex without Claude’s involvement. This doc
 
 # Status
 
-- Handoff status: production-verified checkpoint complete
+- Handoff status: checkpoint 3 locally verified; production verification pending
 - Research date: 2026-07-13
 - Deployment URL: `https://market-terminal.wyjjdyxzsc.workers.dev`
 
@@ -366,11 +366,29 @@ This work was performed by OpenAI Codex without Claude’s involvement. This doc
   - deprecated alias returned its `Deprecation: true` and successor `Link` headers
   - production visual browser verification is not claimed for this checkpoint because the browser bridge could not initialize; the page-shell smoke check and asset-version probe passed.
 
+# 2026-07-15 checkpoint 3: map provenance and freshness disclosure
+
+- Added `shared/map-provenance-core.js`, an original shared schema with a `2026-07-15` versioned catalog covering every implemented Leaflet layer plus the infrastructure response.
+- The schema intentionally distinguishes `live`, `curated`, `hybrid`, `computed`, and `model-derived` layers. It carries primary-source metadata, authority tier, cache state, configured refresh target, a usage note, and only the source-snapshot/served timestamps actually available to the runtime.
+- Express and Worker map payloads retain their established fields and add `provenance` for the layer catalog, earthquakes, natural events, weather alerts, flights, fires, webcams, disease, GPS interference, conflict, and infrastructure.
+- Corrected local map-runtime drift:
+  - earthquakes now use the Worker-compatible normalized USGS all-day point payload and 15-minute refresh target
+  - FIRMS CSV is normalized to the Worker-compatible point payload and uses the same 30-minute refresh target
+- `public/mapintel.js` captures the catalog and live endpoint envelopes. Active-layer rows safely render class/status, primary source, cache/refresh cadence, and either an available source snapshot or the truthful response served time. No upstream timestamp is invented.
+- New tests: `tests/map-provenance-core.test.js` verifies classification, complete Leaflet-layer catalog coverage, source-note presence, and response-shape preservation. `tests/smoke.js` now asserts map catalog and earthquake provenance contracts.
+- Local verification completed on 2026-07-15:
+  - `node --check server.js`, Worker module syntax, `node --check public/mapintel.js`, and `node --check shared/map-provenance-core.js` passed
+  - `npm run test:unit` passed `16/16`
+  - local smoke against `http://localhost:3201` passed `23/23`; keyed/network-dependent routes reported only their documented skips
+  - targeted local probe returned a 34-entry `layer-catalog`, a `layer` envelope for earthquakes, and a `conflictZones` envelope for conflict; the unconfigured FIRMS path returned its expected `502`
+- Production deployment and visual browser verification are not yet claimed for checkpoint 3. The browser bridge failed to initialize and the `agent-browser` CLI was unavailable in this session; that limitation is deliberate evidence, not a pass.
+
 # Unresolved risks and technical debt
 
 - The repository still has very large `server.js` and `worker.js` monoliths.
 - AI task grounding/abstention is improved for chat context and news evidence, but a full task-policy registry for high-risk workflows is still not implemented.
 - Quant coverage now exists only for the new candlestick fallback engine, not the broader 40-indicator surface.
+- Map source snapshots are not universally supplied by upstreams. The new UI differentiates a provided snapshot from response-served time, but per-feature citations and direct upstream timestamps remain future data-source work.
 
 # Final branch, commits, tags, and working-tree state
 
@@ -380,6 +398,7 @@ This work was performed by OpenAI Codex without Claude’s involvement. This doc
   - `ff58850` — `Add static asset security headers`
   - `e161369` — `Add prompt continuation log`
   - `55e014c` — `Replace social scraper with market sentiment composite`
+- Checkpoint 3 source commit: pending production checkpoint commit at the time of this locally verified handoff update.
 - Push/deploy:
   - `git push origin main` completed for all listed checkpoint commits
   - production deployment verified on `https://market-terminal.wyjjdyxzsc.workers.dev`
@@ -387,5 +406,6 @@ This work was performed by OpenAI Codex without Claude’s involvement. This doc
 # Recommended next step for Claude
 
 - Next recommended step:
+  - complete production verification for the locally verified map provenance checkpoint before opening another vertical slice
   - extend unit coverage beyond the new candle fallback into the broader quant surface and route-policy layer
   - continue modular decomposition of `server.js` and `worker.js`

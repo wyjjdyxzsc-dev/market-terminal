@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-07-15
+
+- Added `shared/map-provenance-core.js`, a versioned source/freshness catalog covering every Leaflet layer and infrastructure response.
+- Added provenance envelopes to map APIs in both Express and the Worker without changing the existing map payload fields.
+- Brought local earthquake and active-fire responses into the Worker-compatible `{ cached, points }` shape and aligned their refresh targets.
+- Added safe map-panel disclosure of data class, current status, primary source, cache state, refresh target, and an honest snapshot or served time.
+- Added map-provenance unit coverage and smoke assertions. Local verification passed: syntax checks, `16/16` unit tests, and `23/23` smoke checks; optional keyed/network routes were explicitly skipped.
+- Bumped the frontend cache-buster to `20260715b` for the pending production checkpoint.
+
 ## 2026-07-13
 
 - Revision author: OpenAI Codex

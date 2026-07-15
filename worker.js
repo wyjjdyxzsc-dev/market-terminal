@@ -20,6 +20,7 @@ import './shared/api-contract.js';
 import './shared/evidence-core.js';
 import './shared/candle-analysis-core.js';
 import './shared/market-sentiment-core.js';
+import './shared/map-provenance-core.js';
 
 const FINNHUB_BASE = 'https://finnhub.io/api/v1';
 const CACHE_MS = 15 * 60 * 1000; // news refreshes every 15 min
@@ -49,6 +50,7 @@ const {
 
 const { buildDeterministicCandleAnalysis } = globalThis.MarketTerminalCandleAnalysis;
 const { analyzeMarketSentiment } = globalThis.MarketTerminalMarketSentiment;
+const { annotateMapPayload } = globalThis.MarketTerminalMapProvenance;
 
 const CONTENT_SECURITY_POLICY = [
   "default-src 'self'",
@@ -2846,19 +2848,19 @@ async function handleApi(request, env, ctx, url) {
   // --- GLOBAL MAP layers (free public feeds, normalized + cached) ---
 
   if (p === '/api/map/layers') {
-    try { const { data, fresh } = await getData(env, ctx, 'map:layers', fetchAugmentedLayers, 86400 * 1000); return json({ cached: !fresh, ...data }); }
+    try { const { data, fresh } = await getData(env, ctx, 'map:layers', fetchAugmentedLayers, 86400 * 1000); return json(annotateMapPayload({ cached: !fresh, ...data }, 'layers', { cached: !fresh })); }
     catch (err) { return json({ error: true, message: friendlyError(err) }, 502); }
   }
   if (p === '/api/map/conflict') {
-    try { const { data, fresh } = await getData(env, ctx, 'map:conflict', fetchConflictZones, 900 * 1000); return json({ cached: !fresh, ...data }); }
+    try { const { data, fresh } = await getData(env, ctx, 'map:conflict', fetchConflictZones, 900 * 1000); return json(annotateMapPayload({ cached: !fresh, ...data }, 'conflictZones', { cached: !fresh })); }
     catch (err) { return json({ error: true, message: friendlyError(err) }, 502); }
   }
   if (p === '/api/map/disease') {
-    try { const { data, fresh } = await getData(env, ctx, 'map:disease', fetchDiseaseOutbreaks, 900 * 1000); return json({ cached: !fresh, ...data }); }
+    try { const { data, fresh } = await getData(env, ctx, 'map:disease', fetchDiseaseOutbreaks, 900 * 1000); return json(annotateMapPayload({ cached: !fresh, ...data }, 'diseaseOutbreaks', { cached: !fresh })); }
     catch (err) { return json({ error: true, message: friendlyError(err) }, 502); }
   }
   if (p === '/api/map/gpsjam') {
-    try { const { data, fresh } = await getData(env, ctx, 'map:gpsjam', fetchGpsJamming, 21600 * 1000); return json({ cached: !fresh, ...data }); }
+    try { const { data, fresh } = await getData(env, ctx, 'map:gpsjam', fetchGpsJamming, 21600 * 1000); return json(annotateMapPayload({ cached: !fresh, ...data }, 'gpsJamming', { cached: !fresh })); }
     catch (err) { return json({ error: true, message: friendlyError(err) }, 502); }
   }
 
@@ -2932,15 +2934,15 @@ async function handleApi(request, env, ctx, url) {
   }
 
   if (p === '/api/map/earthquakes') {
-    try { const { data, fresh } = await getData(env, ctx, 'map:quakes', fetchQuakes); return json({ cached: !fresh, points: data }); }
+    try { const { data, fresh } = await getData(env, ctx, 'map:quakes', fetchQuakes); return json(annotateMapPayload({ cached: !fresh, points: data }, 'earthquakes', { cached: !fresh })); }
     catch (err) { return json({ error: true, message: friendlyError(err) }, 502); }
   }
   if (p === '/api/map/events') {
-    try { const { data, fresh } = await getData(env, ctx, 'map:events', fetchNaturalEvents); return json({ cached: !fresh, points: data }); }
+    try { const { data, fresh } = await getData(env, ctx, 'map:events', fetchNaturalEvents); return json(annotateMapPayload({ cached: !fresh, points: data }, 'events', { cached: !fresh })); }
     catch (err) { return json({ error: true, message: friendlyError(err) }, 502); }
   }
   if (p === '/api/map/weather') {
-    try { const { data, fresh } = await getData(env, ctx, 'map:weather', fetchWeatherAlerts); return json({ cached: !fresh, points: data }); }
+    try { const { data, fresh } = await getData(env, ctx, 'map:weather', fetchWeatherAlerts); return json(annotateMapPayload({ cached: !fresh, points: data }, 'weather', { cached: !fresh })); }
     catch (err) { return json({ error: true, message: friendlyError(err) }, 502); }
   }
   if (p === '/api/map/conflictnews') {
@@ -2949,12 +2951,12 @@ async function handleApi(request, env, ctx, url) {
   }
   if (p === '/api/map/fires') {
     if (!env.FIRMS_MAP_KEY) return json({ error: true, message: 'FIRMS key not configured' }, 503);
-    try { const { data, fresh } = await getData(env, ctx, 'map:fires', () => fetchFires(env), 30 * 60 * 1000); return json({ cached: !fresh, points: data }); }
+    try { const { data, fresh } = await getData(env, ctx, 'map:fires', () => fetchFires(env), 30 * 60 * 1000); return json(annotateMapPayload({ cached: !fresh, points: data }, 'fires', { cached: !fresh })); }
     catch (err) { return json({ error: true, message: friendlyError(err) }, 502); }
   }
   if (p === '/api/map/webcams-live') {
     if (!env.WINDY_KEY) return json({ error: true, message: 'Windy key not configured' }, 503);
-    try { const { data, fresh } = await getData(env, ctx, 'map:webcams', () => fetchWindyWebcams(env), 60 * 60 * 1000); return json({ cached: !fresh, points: data }); }
+    try { const { data, fresh } = await getData(env, ctx, 'map:webcams', () => fetchWindyWebcams(env), 60 * 60 * 1000); return json(annotateMapPayload({ cached: !fresh, points: data }, 'webcams-live', { cached: !fresh })); }
     catch (err) { return json({ error: true, message: friendlyError(err) }, 502); }
   }
   if (p === '/api/map/flights') {
@@ -2964,7 +2966,7 @@ async function handleApi(request, env, ctx, url) {
     try {
       const key = 'map:flights:' + b.map((x) => x.toFixed(1)).join('_');
       const { data, fresh } = await getData(env, ctx, key, () => fetchFlights(b), 30 * 1000);
-      return json({ cached: !fresh, points: data });
+      return json(annotateMapPayload({ cached: !fresh, points: data }, 'flights', { cached: !fresh }));
     } catch (err) { return json({ error: true, message: friendlyError(err) }, 502); }
   }
 
@@ -3184,10 +3186,10 @@ async function handleApi(request, env, ctx, url) {
   if (p === '/api/map/infrastructure') {
     const cacheKey = 'cache:map:infrastructure';
     const cached = await env.MT_KV.get(cacheKey).catch(() => null);
-    if (cached) return json(JSON.parse(cached));
+    if (cached) return json(annotateMapPayload(JSON.parse(cached), 'infrastructure', { cached: true }));
     const data = await buildInfrastructureData(env);
     await env.MT_KV.put(cacheKey, JSON.stringify(data), { expirationTtl: 86400 }).catch(() => {});
-    return json(data);
+    return json(annotateMapPayload(data, 'infrastructure'));
   }
 
   // --- Price action AI explainer ---

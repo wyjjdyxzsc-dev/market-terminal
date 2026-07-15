@@ -122,10 +122,10 @@ async function checkHtml(label, url) {
 
   // Map layers (no key required — embedded baseline)
   await check('GET /api/map/layers', `${BASE}/api/map/layers`,
-    { validate: d => d.points || d.lines || d.regions });
+    { validate: d => (d.points || d.lines || d.regions) && d.provenance?.kind === 'layer-catalog' });
 
   await check('GET /api/map/earthquakes', `${BASE}/api/map/earthquakes`,
-    { skipError: true, validate: d => d.type === 'FeatureCollection' || Array.isArray(d.points) || d.error });
+    { skipError: true, validate: d => Array.isArray(d.points) && d.provenance?.layer?.layerId === 'earthquakes' });
 
   await check('GET /api/map/fires', `${BASE}/api/map/fires`,
     { skipError: true, validate: () => true });
