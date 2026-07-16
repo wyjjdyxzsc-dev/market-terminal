@@ -374,10 +374,10 @@ async function loadPriceAction(symbol) {
     loadingEl.hidden = true;
 
     const pct = d.change != null ? (d.change >= 0 ? '+' : '') + d.change.toFixed(2) + '%' : '';
-    sentEl.textContent = (d.sentiment || 'neutral').toUpperCase() + (pct ? '  ' + pct : '');
-    sentEl.className = 'why-sentiment ' + (d.sentiment || 'neutral');
+    sentEl.textContent = (d.abstained ? 'EVIDENCE INSUFFICIENT' : (d.sentiment || 'neutral').toUpperCase()) + (pct ? '  ' + pct : '');
+    sentEl.className = 'why-sentiment ' + (d.abstained ? 'neutral' : (d.sentiment || 'neutral'));
 
-    textEl.textContent = d.explanation || '';
+    textEl.textContent = [d.explanation || '', d.abstained && d.policy?.reason ? d.policy.reason : ''].filter(Boolean).join(' ');
 
     if (d.catalysts && d.catalysts.length) {
       const frag = document.createDocumentFragment();

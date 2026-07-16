@@ -20,6 +20,12 @@ const BASE = (() => {
 
 let pass = 0, fail = 0;
 
+const hasPolicy = (data, taskId) =>
+  data && data.policy && data.policy.taskId === taskId &&
+  typeof data.policy.schemaVersion === 'string' &&
+  (data.policy.status === 'grounded' || data.policy.status === 'abstained') &&
+  Array.isArray(data.evidenceIds) && Array.isArray(data.policy.availableEvidenceIds);
+
 async function check(label, url, opts = {}) {
   const {
     allowStatuses = [200],
@@ -118,7 +124,7 @@ async function checkHtml(label, url) {
     { skipError: true, validate: d => Array.isArray(d.patterns) && typeof d.overallSignal === 'string' });
 
   await check('GET /api/intel/priceaction?symbol=AAPL', `${BASE}/api/intel/priceaction?symbol=AAPL`,
-    { skipError: true, validate: d => typeof d.direction === 'string' || d.error });
+    { skipError: true, validate: d => hasPolicy(d, 'intel.price-action') && typeof d.direction === 'string' });
 
   // Map layers (no key required — embedded baseline)
   await check('GET /api/map/layers', `${BASE}/api/map/layers`,
@@ -168,7 +174,7 @@ async function checkHtml(label, url) {
 
   // Supply chain — uses ?q= param
   await check('GET /api/intel/supplychain?q=Apple', `${BASE}/api/intel/supplychain?q=Apple`,
-    { skipError: true, validate: d => d.suppliers || d.customers || d.error });
+    { skipError: true, validate: d => hasPolicy(d, 'intel.supply-chain') && d.abstained === true && Array.isArray(d.suppliers) && d.suppliers.length === 0 && Array.isArray(d.customers) && d.customers.length === 0 });
 
   // Push (vapid key — always returns even without keys)
   await check('GET /api/vapid-public-key', `${BASE}/api/vapid-public-key`,
@@ -176,7 +182,7 @@ async function checkHtml(label, url) {
 
   // Deep-dive — uses ?q= param
   await check('GET /api/intel/deepdive?q=AAPL', `${BASE}/api/intel/deepdive?q=AAPL`,
-    { skipError: true, validate: d => (d.investment && d.options) || d.error });
+    { skipError: true, validate: d => hasPolicy(d, 'intel.deep-dive') && d.investment?.rating === 'Not Rated' && d.investment?.score == null && d.options?.bias === 'Avoid' && /^N\/A/.test(d.priceTarget || '') });
 
   // AI chat (skipError — needs a heavy-tier AI key)
   await check('POST /api/intel/chat', `${BASE}/api/intel/chat`, {
@@ -186,12 +192,18 @@ async function checkHtml(label, url) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ messages: [{ role: 'user', content: 'In one sentence, what does a P/E ratio measure?' }] }),
     },
-    validate: d => typeof d.reply === 'string' || d.error,
+    validate: d => hasPolicy(d, 'intel.chat') && typeof d.reply === 'string',
   });
 
   // Situation room
   await check('GET /api/intel/situation', `${BASE}/api/intel/situation`,
-    { skipError: true, validate: d => d.narrative || d.threatLevel || d.error });
+    { skipError: true, validate: d => hasPolicy(d, 'intel.situation') && (d.abstained ? d.defcon == null : Number.isFinite(Number(d.defcon))) });
+
+  await check('GET /api/intel/report', `${BASE}/api/intel/report`,
+    { skipError: true, validate: d => hasPolicy(d, 'intel.investment-report') && d.abstained === true && Array.isArray(d.topPicks) && d.topPicks.length === 0 });
+
+  await check('GET /api/intel/instability', `${BASE}/api/intel/instability`,
+    { skipError: true, validate: d => hasPolicy(d, 'intel.instability') && d.abstained === true && Array.isArray(d.countries) && d.countries.length === 0 });
 
   // Contract guards
   await check('POST /api/quote', `${BASE}/api/quote`, {

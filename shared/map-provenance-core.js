@@ -32,9 +32,9 @@
     fires: definition('Active Fires', 'live', 1800, [
       source('NASA FIRMS', 'https://firms.modaps.eosdis.nasa.gov', 'official'),
     ], 'Satellite fire detections, not a complete incident or evacuation feed.'),
-    instability: definition('Country Instability', 'model-derived', 180, [
+    instability: definition('Country Risk', 'model-derived', 180, [
       source('Terminal evidence pipeline', '', 'internal'),
-    ], 'Model-derived risk view. It is not an official risk assessment and must be read with its underlying evidence.'),
+    ], 'Model-derived scores are withheld unless verified country-risk inputs are connected; this is never an official risk assessment.'),
     daynight: definition('Day / Night', 'computed', 300, [
       source('Local astronomical calculation', '', 'computed'),
     ], 'Computed in the browser from the current time; no external data source is used.'),

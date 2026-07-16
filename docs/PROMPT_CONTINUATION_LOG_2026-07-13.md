@@ -48,10 +48,26 @@ This file is a portable handoff for continuing work on another account. It recor
 
 > continue
 
+### User prompt 10
+
+> continue
+
+### User prompt 11
+
+> # AGENTS.md instructions
+>
+> &lt;INSTRUCTIONS&gt;
+> The previously provided AGENTS.md instructions no longer apply.
+> &lt;/INSTRUCTIONS&gt;
+
+### User prompt 12
+
+> conTinue
+
 ## Authoritative Prompt Sources
 
 - Full master prompt: [MARKET_TERMINAL_TOTAL_PLATFORM_CODEX_MASTER_PROMPT.md](/Users/krishivjain/Desktop/claude projects/market-terminal/MARKET_TERMINAL_TOTAL_PLATFORM_CODEX_MASTER_PROMPT.md)
-- Repository operating instructions: [AGENTS.md](/Users/krishivjain/Desktop/claude projects/market-terminal/AGENTS.md)
+- Repository operating reference: [AGENTS.md](/Users/krishivjain/Desktop/claude projects/market-terminal/AGENTS.md). User prompt 11 superseded the previously supplied AGENTS instructions for the active session; the file remains a repository/handoff artifact, not an active instruction source for that session.
 - Claude project instructions: [CLAUDE.md](/Users/krishivjain/Desktop/claude projects/market-terminal/CLAUDE.md)
 - Project README and current-state reference: [README.md](/Users/krishivjain/Desktop/claude projects/market-terminal/README.md)
 - Original project prompt/reference: [prompt.md](/Users/krishivjain/Desktop/claude projects/market-terminal/prompt.md)
@@ -89,6 +105,10 @@ The following production-oriented vertical slices were implemented and deployed:
 - Cache-buster updated to `20260713b`.
 - Replaced the unreliable X syndication sentiment path with a deterministic, source-attributed market-sentiment composite, production-verified on 2026-07-15.
 - Added an original map-provenance catalog and active-layer freshness disclosure, production-verified through source commit `a25e6be` on 2026-07-15.
+- Added a shared AI task-policy core with provider allowlists, evidence freshness/diversity gates, citation validation, safe financial constraints, and structured abstentions across Express and Worker.
+- Replaced unsupported supply-chain edges, investment picks, country-risk scores, deep-dive ratings/levels/options constructions, and uncited price-move causes with explicit withheld/unknown states.
+- Added evidence-policy UI notices to terminal, deep dive, report, situation, supply chain, map/globe, and chat surfaces.
+- Added eight AI-policy unit cases and expanded smoke coverage to 28 route contracts. Checkpoint 4 is local verified and pending production deployment evidence.
 - Unit tests for API contracts, evidence helpers, and candle analysis.
 - Expanded smoke tests covering local and production endpoint contracts.
 
@@ -105,6 +125,8 @@ Local verification completed:
 - Negative contract checks returned JSON `405`, `426`, and `404` as expected.
 - Local security headers were present on `/` and API responses.
 - In-app browser verification showed the Market Terminal page, live ticker, AAPL quote panel, chart canvas, and graceful sentiment degradation. Browser console errors and warnings were empty during the check.
+- Checkpoint 4 local verification on 2026-07-16: clean dependency installation completed; dependency audit reported zero vulnerabilities; Wrangler `4.111.0` dry-run bundling passed without deployment; all modified modules passed syntax checks; `npm run test:unit` passed `24/24`; local smoke passed `28/28`; targeted policy probes confirmed schema `2026-07-15a`, explicit abstentions, empty unsupported relationships/picks/country scores, speed-tier generic chat, `Not Rated` deep-dive output with no valuation/trade/options fields, and seven `20260716a` asset references.
+- The Desktop-backed workspace had macOS dataless files. Source was hydrated and the exact working tree was mirrored to `/tmp/market-terminal-verify` for stable local runtime tests; no temporary runtime artifact is part of the source checkpoint.
 
 Production verification completed:
 
@@ -130,6 +152,8 @@ Production verification completed:
 - `55e014c` — `Replace social scraper with market sentiment composite`
 - `a25e6be` — `Add map provenance contracts`
 
+Checkpoint 4 source changes are local verified but intentionally not listed with a commit hash until the commit succeeds. Production verification is also pending.
+
 All listed commits were pushed to `origin/main`. The map-provenance source checkpoint `a25e6be` is production verified; unrelated untracked files listed below remain preserved.
 
 ## Remaining Work
@@ -137,6 +161,9 @@ All listed commits were pushed to `origin/main`. The map-provenance source check
 These items are intentionally not marked complete:
 
 - Expand quant-engine unit coverage beyond the candlestick fallback engine.
+- Deploy checkpoint 4 through `git push origin main`, wait for `20260716a`, run production smoke and targeted policy probes, then record the source commit and evidence commit.
+- Extend the policy registry to sector analysis, company-news impact, candle commentary, and alert prioritization.
+- Add independent claim-level verification, provider/model-version telemetry, enforced token/cost budgets, and measured golden AI evaluation fixtures. The current deterministic citation check is not an independent verifier.
 - Continue modular decomposition of the large `server.js` and `worker.js` files.
 - Re-run the full production smoke suite after any subsequent deployment.
 - Update this log and the Claude handoff after every future checkpoint commit.

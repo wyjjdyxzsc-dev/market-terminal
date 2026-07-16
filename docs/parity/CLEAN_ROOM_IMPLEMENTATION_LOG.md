@@ -62,3 +62,10 @@ This file records how parity work is implemented without copying protected code,
 - Public source names and URLs are retained only as attribution metadata for existing project feeds and curated reference data. The schema distinguishes public live feeds, curated project references, hybrid augmentation, browser-computed overlays, and model-derived risk views rather than reproducing any external product taxonomy.
 - Local Express normalization was based on this repository's Worker response shape and existing map consumers, not external source code. Production verification is intentionally recorded separately after deployment.
 - Production verification for source commit `a25e6be` completed on 2026-07-15: deployed assets served `20260715b`, the production smoke suite passed `29/29`, and targeted map payloads showed the independent 34-entry catalog and provenance envelopes. No external code or protected product material was introduced during the deployment evidence pass.
+
+## 2026-07-16 checkpoint 4
+
+- Implemented `shared/ai-task-policy-core.js`, policy-aware provider routing, abstention envelopes, and evidence-policy UI states from original project-local logic.
+- Public competitor capability descriptions informed only the desired outcomes of evidence grounding, uncertainty, and safe research workflows. No external prompt, model policy, response schema, code, test, protected UI, or proprietary scoring method was copied.
+- The checkpoint adds no new licensed dataset. Where verified relationship, issuer evaluation, options-chain, or country-risk inputs do not exist, the original implementation emits an explicit empty/withheld result rather than simulating competitor coverage.
+- Local verification passed `24/24` unit tests and `28/28` smoke contracts. Production evidence remains pending and no new parity claim is made.

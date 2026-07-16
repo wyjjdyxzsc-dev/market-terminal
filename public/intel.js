@@ -758,6 +758,11 @@
     try {
       const data = await fetchJSON('/api/intel/supplychain?q=' + encodeURIComponent(q));
       if (data.error) throw new Error(data.message);
+      if (data.abstained) {
+        $('#scStatus').className = 'status policy-status';
+        $('#scStatus').textContent = data.policy?.reason || data.summary || 'Verified relationship data is unavailable.';
+        return;
+      }
       $('#scStatus').textContent = '';
       renderSupplyChain(data);
     } catch (err) {
@@ -808,6 +813,35 @@
 
   const liList = (arr) => (Array.isArray(arr) ? arr : []).map((x) => `<li>${esc(x)}</li>`).join('');
 
+  function policyNotice(data) {
+    const policy = data && data.policy;
+    if (!policy) return '';
+    const evidence = Array.isArray(data.evidence) ? data.evidence : [];
+    const citedIds = new Set(Array.isArray(data.evidenceIds) ? data.evidenceIds : []);
+    const shownEvidence = policy.status === 'grounded' && citedIds.size
+      ? evidence.filter((entry) => citedIds.has(entry.id))
+      : evidence;
+    const sourceLinks = shownEvidence.slice(0, 3).map((entry) => {
+      const url = safeHttpUrl(entry.sourceUrl || '');
+      const label = entry.publisher || entry.publisherDomain || 'source';
+      return url
+        ? `<a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc(label)}</a>`
+        : `<span>${esc(label)}</span>`;
+    }).join(' · ');
+    const asOf = policy.dataAsOf && !Number.isNaN(new Date(policy.dataAsOf).valueOf())
+      ? new Date(policy.dataAsOf).toLocaleString()
+      : '';
+    const title = policy.status === 'abstained' ? 'RESEARCH WITHHELD' : 'EVIDENCE-GATED RESEARCH';
+    const count = Number(policy.evidenceCount || 0);
+    return `<div class="policy-notice ${policy.status === 'abstained' ? 'is-abstained' : 'is-grounded'}">
+      <div class="policy-notice-title">${title}</div>
+      ${policy.reason ? `<div class="policy-notice-reason">${esc(policy.reason)}</div>` : ''}
+      <div class="policy-notice-meta">${count} qualifying source record${count === 1 ? '' : 's'}${asOf ? ` · as of ${esc(asOf)}` : ''} · ${esc(policy.verifier || 'policy check')}</div>
+      ${sourceLinks ? `<div class="policy-notice-sources">${policy.status === 'grounded' ? 'Cited' : 'Available evidence'}: ${sourceLinks}</div>` : ''}
+      ${policy.disclaimer ? `<div class="policy-notice-disclaimer">${esc(policy.disclaimer)}</div>` : ''}
+    </div>`;
+  }
+
   function renderDeepDive(d) {
     const inv = d.investment || {}, opt = d.options || {}, st = d.stats || {};
     const html = `
@@ -820,6 +854,8 @@
           </div>
           <div class="dd-quote">${pctChangeHtml(d.quote)}</div>
         </div>
+
+        ${policyNotice(d)}
 
         <p class="dd-summary">${esc(d.summary)}</p>
 
@@ -1422,25 +1458,30 @@
         </div>
       </div>`).join('');
 
+    const picksSection = picks
+      ? `<h3 class="section-label">★ TOP ACTIONABLE IDEAS</h3><div class="picks-grid">${picks}</div>`
+      : (d.abstained ? '<div class="policy-empty">No actionable ideas are shown until verified market and issuer inputs are available.</div>' : '');
+    const themesSection = themes
+      ? `<h3 class="section-label">⊞ THEMES IN PLAY</h3><div class="themes-wrap">${themes}</div>`
+      : '';
+
     const html = `
       <div class="report-card">
         <div class="report-banner ${REGIME_CLASS(d.marketRegime)}">
           <span class="report-regime">${esc(d.marketRegime || '—')}</span>
           <span class="report-headline">${esc(d.headline || '')}</span>
         </div>
+        ${policyNotice(d)}
         <p class="report-summary">${esc(d.summary || '')}</p>
 
-        <h3 class="section-label">★ TOP ACTIONABLE IDEAS</h3>
-        <div class="picks-grid">${picks}</div>
-
-        <h3 class="section-label">⊞ THEMES IN PLAY</h3>
-        <div class="themes-wrap">${themes}</div>
+        ${picksSection}
+        ${themesSection}
 
         <div class="report-foot">
           <div class="report-col"><h4>⚠ KEY RISKS</h4><ul>${(d.risks || []).map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>
           <div class="report-col"><h4>📅 WATCH NEXT</h4><ul>${(d.watchEvents || []).map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>
         </div>
-        <p class="dd-disclaimer">AI-generated from live world &amp; market headlines — educational only, not investment advice.</p>
+        <p class="dd-disclaimer">Evidence-gated research output — educational only, not investment advice.</p>
       </div>`;
     const wrap = $('#reportBody');
     wrap.innerHTML = html;
@@ -1482,16 +1523,19 @@
         <div><div class="sit-dom-name">${esc(x.domain)} <span class="sit-lvl">${esc(x.level || '')}</span></div>
         <div class="sit-dom-sum">${esc(x.summary || '')}</div></div>
       </div>`).join('');
-    const defcon = Math.min(5, Math.max(1, parseInt(d.defcon, 10) || 5));
-    const DEFCON_COL = ['#ff453a', '#ff453a', '#ff8c00', '#ffd23f', '#45c8dc', '#2bd97c'][defcon];
-    const pizza = String(d.pizzaIndex || 'Normal');
+    const parsedDefcon = Number.parseInt(d.defcon, 10);
+    const defcon = Number.isFinite(parsedDefcon) && parsedDefcon >= 1 && parsedDefcon <= 5 ? parsedDefcon : null;
+    const DEFCON_COL = defcon == null
+      ? 'var(--muted)'
+      : ['#ff453a', '#ff453a', '#ff8c00', '#ffd23f', '#45c8dc', '#2bd97c'][defcon];
+    const pizza = String(d.pizzaIndex || 'Unknown');
     const PIZZA_COL = { Quiet: '#2bd97c', Normal: '#45c8dc', Elevated: '#ff8c00', Spiking: '#ff453a' }[pizza] || '#45c8dc';
     const gauges = `
       <div class="gauges">
         <div class="gauge defcon">
           <div class="gauge-lbl">DEFCON</div>
-          <div class="gauge-val" style="color:${DEFCON_COL}">${defcon}</div>
-          <div class="defcon-pips">${[1, 2, 3, 4, 5].map((n) => `<span class="${n >= defcon ? 'on' : ''}" style="${n >= defcon ? 'background:' + DEFCON_COL : ''}"></span>`).join('')}</div>
+          <div class="gauge-val" style="color:${DEFCON_COL}">${defcon == null ? 'N/A' : defcon}</div>
+          <div class="defcon-pips">${defcon == null ? '' : [1, 2, 3, 4, 5].map((n) => `<span class="${n >= defcon ? 'on' : ''}" style="${n >= defcon ? 'background:' + DEFCON_COL : ''}"></span>`).join('')}</div>
           <div class="gauge-sub">${esc(d.defconLabel || '')}</div>
         </div>
         <div class="gauge pizza">
@@ -1506,12 +1550,13 @@
           <span class="sit-threat">THREAT: ${esc(d.threatLevel || '—')}</span>
           <span class="sit-over">${esc(d.overview || '')}</span>
         </div>
+        ${policyNotice(d)}
         ${gauges}
         <div class="sit-domains">${domains}</div>
         <div class="sit-conv"><span class="sit-lbl">⊕ CONVERGENCE</span> ${esc(d.convergence || '')}</div>
         <div class="sit-conv"><span class="sit-lbl">📈 MARKET IMPLICATION</span> ${esc(d.marketImplication || '')}</div>
         <div class="report-col" style="margin-top:12px"><h4>👁 WATCHLIST</h4><ul>${(d.watchlist || []).map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>
-        <p class="dd-disclaimer">AI synthesis of live world headlines — educational only, not advice.</p>
+        <p class="dd-disclaimer">Cited public-news interpretation — not an official threat assessment or investment advice.</p>
       </div>`;
   }
   async function loadSituation() {
@@ -2221,6 +2266,15 @@
     return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
 
+  function safeChatUrl(value) {
+    try {
+      const url = new URL(String(value || ''), location.href);
+      return /^https?:$/i.test(url.protocol) ? url.toString() : '';
+    } catch {
+      return '';
+    }
+  }
+
   function formatReply(text) {
     // Bold **text** and *text*, convert newlines to <br>
     return escHtml(text)
@@ -2247,6 +2301,45 @@
     messagesEl.appendChild(div);
     messagesEl.scrollTop = messagesEl.scrollHeight;
     return bubble;
+  }
+
+  function appendPolicyMeta(bubble, data) {
+    const policy = data && data.policy;
+    if (!bubble || !policy) return;
+    const note = document.createElement('div');
+    note.className = `chat-policy-note ${policy.status === 'abstained' ? 'is-abstained' : 'is-grounded'}`;
+    const count = Number(policy.evidenceCount || 0);
+    const summary = document.createElement('div');
+    summary.textContent = policy.status === 'abstained'
+      ? `Evidence gate withheld this answer: ${policy.reason || 'insufficient verified inputs.'}`
+      : `Evidence-gated response · ${count} qualifying source record${count === 1 ? '' : 's'}`;
+    note.appendChild(summary);
+
+    const cited = new Set(Array.isArray(data.evidenceIds) ? data.evidenceIds : []);
+    const evidence = (Array.isArray(data.evidence) ? data.evidence : [])
+      .filter((entry) => policy.status !== 'grounded' || cited.has(entry.id))
+      .slice(0, 3);
+    if (evidence.length) {
+      const links = document.createElement('div');
+      links.className = 'chat-policy-sources';
+      links.append(document.createTextNode(policy.status === 'grounded' ? 'Cited: ' : 'Available: '));
+      evidence.forEach((entry, index) => {
+        if (index) links.append(document.createTextNode(' · '));
+        const url = safeChatUrl(entry.sourceUrl || '');
+        if (url) {
+          const link = document.createElement('a');
+          link.href = url;
+          link.target = '_blank';
+          link.rel = 'noopener noreferrer';
+          link.textContent = entry.publisher || entry.publisherDomain || 'source';
+          links.appendChild(link);
+        } else {
+          links.append(document.createTextNode(entry.publisher || entry.publisherDomain || 'source'));
+        }
+      });
+      note.appendChild(links);
+    }
+    bubble.appendChild(note);
   }
 
   function showTyping() {
@@ -2286,7 +2379,8 @@
       const data = await resp.json();
       removeTyping();
       if (data && data.reply) {
-        appendMsg('ai', data.reply);
+        const bubble = appendMsg('ai', data.reply);
+        appendPolicyMeta(bubble, data);
         chatHistory.push({ role: 'assistant', content: data.reply });
       } else {
         appendMsg('ai', 'Sorry, I couldn\'t get a response. Try again in a moment.');
@@ -2312,7 +2406,7 @@
           <button class="ai-sug" data-q="What's moving the market right now?">What's moving the market?</button>
           <button class="ai-sug" data-q="What evidence explains the currently loaded stock's move today?">Explain this stock's move</button>
           <button class="ai-sug" data-q="What are the highest-confidence risks around the currently loaded stock right now?">Risks around this stock</button>
-          <button class="ai-sug" data-q="What sectors should I be in right now?">Which sectors to be in?</button>
+          <button class="ai-sug" data-q="Compare the current evidence across market sectors and state what remains unknown.">Compare sector evidence</button>
           <button class="ai-sug" data-q="What are the biggest macro risks to the market?">Biggest macro risks?</button>
           <button class="ai-sug" data-q="Summarize the strongest market narratives with evidence and caveats.">Summarize market narratives</button>
         </div>

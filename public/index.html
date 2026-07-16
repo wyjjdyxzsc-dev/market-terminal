@@ -14,7 +14,7 @@
   <meta name="apple-mobile-web-app-title" content="MktTerminal" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
     integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-  <link rel="stylesheet" href="style.css?v=20260715c" />
+  <link rel="stylesheet" href="style.css?v=20260716a" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%230a0a0a'/><text x='8' y='12' font-size='11' text-anchor='middle' fill='%23ffa028' font-family='monospace'>M</text></svg>" />
 </head>
 <body>
@@ -408,7 +408,7 @@
   <!-- ───────────── AI Chat Panel ───────────── -->
   <div id="aiChatPanel" class="ai-chat-panel" hidden>
     <div class="ai-chat-header">
-      <span class="ai-chat-title">💬 AI ANALYST</span>
+      <span class="ai-chat-title">💬 AI RESEARCH</span>
       <span class="ai-chat-ctx" id="aiChatCtx"></span>
       <button class="ai-chat-clear" id="aiChatClear" type="button" title="Clear chat">Clear</button>
       <button class="ai-chat-close" id="aiChatClose" type="button" title="Close">✕</button>
@@ -418,16 +418,16 @@
         <div class="ai-chat-welcome-title">What do you want to know?</div>
         <div class="ai-chat-suggestions" id="aiChatSuggestions">
           <button class="ai-sug" data-q="What's moving the market right now?">What's moving the market?</button>
-          <button class="ai-sug" data-q="What's the best options trade right now?">Best options trade now?</button>
-          <button class="ai-sug" data-q="Should I buy or sell the currently loaded stock?">Buy or sell this stock?</button>
-          <button class="ai-sug" data-q="What sectors should I be in right now?">Which sectors to be in?</button>
+          <button class="ai-sug" data-q="What evidence explains the currently loaded stock's move today?">Explain this stock's move</button>
+          <button class="ai-sug" data-q="What are the highest-confidence risks around the currently loaded stock right now?">Risks around this stock</button>
+          <button class="ai-sug" data-q="Compare the current evidence across market sectors and state what remains unknown.">Compare sector evidence</button>
           <button class="ai-sug" data-q="What are the biggest macro risks to the market?">Biggest macro risks?</button>
-          <button class="ai-sug" data-q="Give me a trade idea for today.">Give me a trade idea</button>
+          <button class="ai-sug" data-q="Summarize the strongest market narratives with evidence and caveats.">Summarize market narratives</button>
         </div>
       </div>
     </div>
     <div class="ai-chat-input-row">
-      <input type="text" id="aiChatInput" class="ai-chat-input" placeholder="Ask anything about markets, stocks, options…" autocomplete="off" />
+      <input type="text" id="aiChatInput" class="ai-chat-input" placeholder="Ask about market evidence, risks, or research…" autocomplete="off" />
       <button id="aiChatSend" class="ai-chat-send" type="button">↑</button>
     </div>
   </div>
@@ -442,12 +442,12 @@
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
     integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-  <script src="quant.js?v=20260713b"></script>
-  <script src="app.js?v=20260715c"></script>
-  <script src="intel.js?v=20260715c"></script>
-  <script src="mapintel.js?v=20260715c"></script>
-  <script src="ships.js?v=20260715c"></script>
+  <script src="quant.js?v=20260716a"></script>
+  <script src="app.js?v=20260716a"></script>
+  <script src="intel.js?v=20260716a"></script>
+  <script src="mapintel.js?v=20260716a"></script>
+  <script src="ships.js?v=20260716a"></script>
   <script src="https://unpkg.com/globe.gl@2.34.0/dist/globe.gl.min.js" integrity="sha384-mGWIMpfF9wMIV/OPDBkP9zd5uJ0D5XOls3hZGSdPlyIKzoTw7ETT4f/Uc0Bu0/T3" crossorigin="anonymous"></script>
-  <script src="globe.js?v=20260715c"></script>
+  <script src="globe.js?v=20260716a"></script>
 </body>
 </html>

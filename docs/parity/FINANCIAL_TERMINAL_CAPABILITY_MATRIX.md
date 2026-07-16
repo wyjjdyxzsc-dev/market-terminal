@@ -17,6 +17,7 @@ Research date: 2026-07-13
   - production smoke suite `28/28` passed on 2026-07-13 (checkpoint 1)
   - production smoke suite `29/29` passed on 2026-07-15 (checkpoint 2)
   - map provenance checkpoint source commit `a25e6be` is production verified: `16/16` unit tests, `23/23` local smoke checks, and `29/29` production smoke checks passed on 2026-07-15
+  - AI evidence-policy checkpoint is local verified on 2026-07-16: `24/24` unit tests and `28/28` local smoke contracts passed; production verification is pending
 
 ## Capability rows
 
@@ -70,6 +71,12 @@ Research date: 2026-07-13
 - Infrastructure context: commodity ports, trade routes, cables, and pipelines now disclose whether they are project-curated references or hybrid public-data augmentation. This helps separate illustrative infrastructure context from live operational or entitlement-grade flow data.
 - Evidence: the shared map catalog covers all active Leaflet layers and the infrastructure response; `16/16` unit tests and `23/23` local smoke checks passed, then source commit `a25e6be` served `20260715b` and production smoke passed `29/29`. This preserves the matrix's `partial` assessment and does not claim Bloomberg-grade data coverage or entitlement parity.
 
+### 2026-07-16 checkpoint 4 local update
+
+- AI research control: `shared/ai-task-policy-core.js` now gives Express and the Worker the same task risk, provider allowlist, evidence-age/diversity, deterministic citation, constraint, and abstention rules.
+- Financial-output behavior: unverified supply-chain edges and investment picks are empty; deep dives are `Not Rated` with no fair value, target, entry, stop, or options construction; price-action explanations abstain rather than assigning an unsupported cause. Generic educational chat remains available to the speed tier, while current-market questions require a policy-approved heavy provider and qualifying evidence.
+- Evidence: eight new policy cases contributed to a `24/24` unit pass, and the local API suite passed `28/28`, including explicit policy contracts for price action, supply chain, deep dive, chat, situation, report, and instability. This is a partial safety improvement, not professional-terminal research parity: claim-level verification, deterministic sector/company analysis, options-chain support, and independent model verification remain open. Production verification is not yet claimed.
+
 ### FT-003 Real-time market monitors
 
 - Source product/domain: Bloomberg
@@ -102,11 +109,11 @@ Research date: 2026-07-13
 - UI surfaces and command aliases: TERMINAL, DEEP DIVE, WATCHLIST
 - Backend routes/events/jobs: `/api/profile`, `/api/news`, `/api/intel/company`, `/api/intel/deepdive`
 - Security and privacy class: public read, AI-generated
-- Deterministic tests: smoke only
+- Deterministic tests: shared AI-policy fixtures plus local smoke contracts
 - Evaluation criteria: structured facts, estimates, evidence links, point-in-time handling
 - Provenance links: `https://professional.bloomberg.com/products/bloomberg-terminal/research/`
 - Licensing or trademark notes: analyst and estimates data may require licensed sources
-- Final evidence: pending
+- Final evidence: checkpoint 4 locally verifies evidence-policy metadata and safe deep-dive/supply-chain abstention behavior; production evidence is pending and status remains partial
 
 ### FT-005 Fixed income and credit
 

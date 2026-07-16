@@ -2,7 +2,7 @@ This work was performed by OpenAI Codex without Claude’s involvement. This doc
 
 # Status
 
-- Handoff status: production-verified checkpoint complete
+- Handoff status: checkpoint 4 local verified; source deployment and production verification pending
 - Research date: 2026-07-13
 - Deployment URL: `https://market-terminal.wyjjdyxzsc.workers.dev`
 
@@ -387,10 +387,39 @@ This work was performed by OpenAI Codex without Claude’s involvement. This doc
   - targeted production responses returned the 34-entry `layer-catalog`, a `live` earthquakes envelope (265 points at probe time), a `hybrid` conflict envelope, a `live` fires envelope, and a `curated` infrastructure envelope, each with source metadata and a served time
   - production visual browser verification is still not claimed. The browser bridge failed to initialize and the `agent-browser` CLI was unavailable in this session; that limitation is deliberate evidence, not a pass.
 
+# 2026-07-16 checkpoint 4: AI evidence policy and safe abstention
+
+- Added `shared/ai-task-policy-core.js` and loaded it in both runtimes. Policy schema `2026-07-15a` records task risk, approved provider tier/names, required evidence/input thresholds, maximum evidence age, schema intent, corroboration/verifier flags, cache TTL, latency budget, disclaimer, and abstention behavior.
+- Provider execution now honors the policy allowlist. Generic educational chat uses the speed tier; current-market chat and high-risk analytical tasks require approved heavy providers and do not silently fall back to speed models.
+- Evidence preparation normalizes current source records, rejects stale or insufficient inputs, requires source diversity/trusted sources where configured, builds an evidence-ID allowlist, treats source text as untrusted data, and rejects model responses with missing or out-of-allowlist citations.
+- High-risk route behavior:
+  - supply chain returns no supplier/customer edges until a verified relationship adapter exists
+  - investment report returns no actionable picks until verified market and issuer evaluation inputs exist
+  - instability returns no country scores or markers until a verified country-risk source exists
+  - deep dive is `Not Rated`; score, fair value, target, entry, stop, options chain, strike, DTE, and IV construction are unavailable
+  - price action makes no causal attribution without qualifying current evidence and allowed citations
+  - situation room returns unknown posture fields when evidence or the heavy provider policy cannot be satisfied
+  - chat ignores arbitrary browser context, validates messages, and constructs trusted quote/headline context on the backend
+- High-risk cache keys include `AI_TASK_POLICY_SCHEMA_VERSION`, preventing legacy ungrounded values from being mistaken for policy-compliant cached responses.
+- Frontend changes expose explicit `EVIDENCE-GATED RESEARCH` or `RESEARCH WITHHELD` states in terminal, deep dive, report, situation, supply chain, chat, map, and globe views. Source count, source links, as-of time, deterministic verifier label, reason, and disclaimer are rendered through escaped/allowlisted values.
+- Tests added in `tests/ai-task-policy-core.test.js` cover policy controls, fresh/trusted/diverse evidence, citation allowlists, abstention, stale evidence, prompt-injection-looking evidence, constrained deep-dive output, generic chat, and backend-owned chat context. `tests/smoke.js` asserts the policy envelope and safe output contract for all affected routes.
+- Local verification completed on 2026-07-16:
+  - clean dependency installation from `package-lock.json` completed with `npm ci --no-audit --no-fund`
+  - `npm audit --omit=dev` reported zero known vulnerabilities
+  - Wrangler `4.111.0` bundled the exact Worker and 14 public assets successfully with `deploy --dry-run`; no manual deployment was performed
+  - syntax checks passed for both runtimes, all modified frontend modules, the shared policy, and tests
+  - `npm run test:unit` passed `24/24`
+  - local smoke against the exact working tree passed `28/28`; optional upstream/key failures remained documented skips
+  - targeted probes confirmed schema `2026-07-15a`, explicit abstention reasons, empty unsupported edges/picks/country scores, speed-tier generic chat, `Not Rated` deep-dive output, and disabled valuation/trade/options fields
+  - the local shell served all seven frontend asset references at cache version `20260716a`
+- Environment note: macOS had made Desktop-backed dependency/source files dataless. The files were hydrated and the exact working tree was mirrored to `/tmp/market-terminal-verify` for stable runtime verification. No temporary runtime file is part of the checkpoint.
+- Production status: not yet verified. Do not convert this section or AUD-007 to production-verified until `20260716a` is live, the production smoke suite passes, and targeted deployed policy envelopes are recorded.
+- Scope limit: this is a material partial remediation, not full AI-accuracy completion. The deterministic evidence/citation check is not an independent claim-level model verifier. Sector analysis, company-news impact, candle commentary, alert prioritization, remaining prompt inventory, provider/model-version metadata, enforced token/cost budgets, and measured evaluation metrics remain open.
+
 # Unresolved risks and technical debt
 
 - The repository still has very large `server.js` and `worker.js` monoliths.
-- AI task grounding/abstention is improved for chat context and news evidence, but a full task-policy registry for high-risk workflows is still not implemented.
+- Seven high-risk/current-market workflows now use a shared task policy, but independent claim-level verification, complete AI-task coverage, and measured evaluation metrics are still not implemented.
 - Quant coverage now exists only for the new candlestick fallback engine, not the broader 40-indicator surface.
 - Map source snapshots are not universally supplied by upstreams. The new UI differentiates a provided snapshot from response-served time, but per-feature citations and direct upstream timestamps remain future data-source work.
 
@@ -410,5 +439,6 @@ This work was performed by OpenAI Codex without Claude’s involvement. This doc
 # Recommended next step for Claude
 
 - Next recommended step:
-  - extend unit coverage beyond the new candle fallback into the broader quant surface and route-policy layer
-  - continue modular decomposition of `server.js` and `worker.js`
+  - first verify checkpoint 4 deployment, production smoke, cache version, and targeted policy envelopes if this section still says production pending
+  - then extend the registry to sector/company/candle/alert tasks and add an independent claim-level verifier with golden evaluation fixtures
+  - continue quant reference coverage and modular decomposition without weakening current abstention contracts

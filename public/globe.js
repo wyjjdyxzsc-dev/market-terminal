@@ -3,7 +3,7 @@
 /* ════════════════════════════════════════════════════════════════
    Market Terminal — 3D globe view (GLOBAL MAP · 3D)
    A globe.gl Earth that plots intelligence layers: earthquakes,
-   the AI instability index (as spikes), conflict zones, curated
+   verified country-risk data when available, conflict zones, curated
    reference points, and trade/cable/pipeline paths.
    ════════════════════════════════════════════════════════════════ */
 (() => {
@@ -25,7 +25,13 @@
       return cache.q.map((q) => ({ lat: q.lat, lon: q.lon, color: quakeColor(q.mag || 0), alt: Math.max(0.01, (q.mag || 1) * 0.012), r: 0.25, label: `M${q.mag} ${q.place || ''}` }));
     }
     if (id === 'instability') {
-      if (!cache.cii) cache.cii = (await getJSON('/api/intel/instability')).countries || [];
+      if (!cache.cii) {
+        const data = await getJSON('/api/intel/instability');
+        cache.cii = data.countries || [];
+        cache.ciiPolicy = data.policy || null;
+        const label = document.querySelector('input[data-g="instability"] + span');
+        if (label && data.abstained) label.textContent = '⚠ Country risk · withheld';
+      }
       return cache.cii.map((c) => ({ lat: c.lat, lon: c.lon, color: cii(c.score || 0), alt: (c.score || 0) / 100 * 0.4, r: 0.55, label: `${c.country}: CII ${c.score}` }));
     }
     if (id === 'webcams') {
@@ -56,13 +62,14 @@
     const pts = groups.flat();
     globe.pointsData(pts).arcsData([]);
     globe.pathsData(allPaths());
-    $('#globeStat') && ($('#globeStat').textContent = `${pts.length.toLocaleString()} points · live`);
+    const countryRiskStatus = cache.ciiPolicy?.status === 'abstained' ? ' · country risk withheld' : '';
+    $('#globeStat') && ($('#globeStat').textContent = `${pts.length.toLocaleString()} points · live${countryRiskStatus}`);
   }
 
   function buildToggle(host) {
     const wrap = document.createElement('div');
     wrap.className = 'globe-panel';
-    const rows = [['earthquakes', '🌐 Quakes'], ['instability', '⚠ Instability'], ['conflicts', '⚔ Conflicts'], ['routes', '🛣 Routes'], ['webcams', '📹 Webcams'], ['nuclear', '☢ Nuclear'], ['military', '🪖 Military'], ['exchanges', '🏛 Exchanges']];
+    const rows = [['earthquakes', '🌐 Quakes'], ['instability', '⚠ Country risk'], ['conflicts', '⚔ Conflicts'], ['routes', '🛣 Routes'], ['webcams', '📹 Webcams'], ['nuclear', '☢ Nuclear'], ['military', '🪖 Military'], ['exchanges', '🏛 Exchanges']];
     wrap.innerHTML = `<div class="globe-stat" id="globeStat">Loading…</div>` +
       rows.map(([id, lbl]) => `<label class="globe-row"><input type="checkbox" data-g="${id}" ${active[id] ? 'checked' : ''}><span>${lbl}</span></label>`).join('');
     wrap.querySelectorAll('input[data-g]').forEach((cb) => cb.addEventListener('change', () => { active[cb.dataset.g] = cb.checked; render(); }));

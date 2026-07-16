@@ -16,6 +16,7 @@ Research date: 2026-07-13
   - production smoke suite `28/28` passed on 2026-07-13 (checkpoint 1)
   - production smoke suite `29/29` passed on 2026-07-15 (checkpoint 2)
   - map provenance checkpoint source commit `a25e6be` is production verified: `16/16` unit tests, `23/23` local smoke checks, and `29/29` production smoke checks passed on 2026-07-15
+  - AI evidence-policy checkpoint is local verified on 2026-07-16: `24/24` unit tests and `28/28` local smoke contracts passed; production verification is pending
 
 ## Capability rows
 
@@ -69,6 +70,12 @@ Research date: 2026-07-13
 - Evidence disclosure: `live`, `curated`, `hybrid`, `computed`, and `model-derived` labels are explicit. Active layer controls safely show a primary source, cache state, refresh target, and a source snapshot or served time without manufacturing upstream timestamps.
 - Evidence: map-provenance unit coverage and the local smoke suite passed (`16/16`, `23/23`); source commit `a25e6be` then served `20260715b` and production smoke passed `29/29`. This improves the partial map capability but does not establish full World Monitor parity.
 
+### 2026-07-16 checkpoint 4 local update
+
+- Model-derived risk disclosure: country instability scores and globe/map markers are now withheld when there is no verified country-risk input adapter. Situation summaries require fresh, trusted, source-diverse public evidence and allowed citations; otherwise their posture fields become explicit unknowns.
+- Shared contract: Express and Worker use the same AI policy schema (`2026-07-15a`), cache-key version, provider restrictions, evidence metadata, and abstention envelope. Frontend policy notices expose source count, as-of time, verifier type, source links, disclaimer, and withheld status.
+- Evidence: local policy fixtures passed as part of `24/24` unit tests and the expanded local contract suite passed `28/28`. This does not establish country-dossier, canonical event, corroborated-alert, or World Monitor parity; production verification is pending.
+
 ### WM-003 Country dossiers and instability scoring
 
 - Source product/domain: World Monitor
@@ -76,17 +83,17 @@ Research date: 2026-07-13
 - User outcome: structured country-level situational awareness
 - Current-project equivalent: `/api/intel/instability` and map conflict hotspots
 - Status: partial
-- Data sources and authority tier: mixed public headlines and event feeds
-- Refresh frequency and latency class: 15 minutes for headline-based view
+- Data sources and authority tier: no verified country-risk scoring source is connected; public headlines remain contextual evidence only
+- Refresh frequency and latency class: scores withheld until a verified adapter is connected
 - Geographic and asset-class coverage: global countries
 - UI surfaces and command aliases: Situation Room, map overlays
 - Backend routes/events/jobs: `/api/intel/instability`
 - Security and privacy class: public read
-- Deterministic tests: none yet
+- Deterministic tests: shared AI-policy fixtures plus local instability smoke contract
 - Evaluation criteria: transparent score factors, evidence links, uncertainty display
 - Provenance links: `https://www.worldmonitor.app/`
 - Licensing or trademark notes: do not imply official intelligence scoring
-- Final evidence: pending
+- Final evidence: checkpoint 4 locally verifies an explicit abstention and zero country-score markers without verified inputs; production verification and a real dossier/scoring model remain pending
 
 ### WM-004 Corroborated breaking alerts
 

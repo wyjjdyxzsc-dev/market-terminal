@@ -342,9 +342,21 @@
             .bindPopup(`<b>🔥 Active fire</b><br><small>${f.bright ? 'Brightness ' + Math.round(f.bright) + 'K · ' : ''}conf ${esc(String(f.conf))}<br>${esc(f.date || '')}</small>`).addTo(lg);
         });
       } },
-    { id: 'instability', label: 'Country Instability (AI)', icon: '⚠', group: 'Hazards', live: true, refresh: 180000,
+    { id: 'instability', label: 'Country Risk (verified inputs)', icon: '⚠', group: 'Hazards', live: true, refresh: 180000,
       load: async (lg) => {
         const d = await getJSON('/api/intel/instability');
+        const label = document.querySelector('.mlp-row[data-id="instability"] .mlp-lbl');
+        if (d.abstained) {
+          if (label) {
+            label.textContent = 'Country Risk · evidence required';
+            label.title = d.policy?.reason || 'Verified country-risk data is unavailable.';
+          }
+          return;
+        }
+        if (label) {
+          label.textContent = `Country Risk · ${(d.countries || []).length}`;
+          label.title = '';
+        }
         (d.countries || []).forEach((c) => {
           if (typeof c.lat !== 'number' || typeof c.lon !== 'number') return;
           const s = c.score || 0;

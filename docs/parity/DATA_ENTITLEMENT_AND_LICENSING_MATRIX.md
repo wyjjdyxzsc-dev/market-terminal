@@ -18,3 +18,9 @@
 
 - The intelligence pipeline now preserves source URLs, source tiers, timestamps, and reliability labels locally, which is a prerequisite for entitlement-safe linking and honest degraded modes.
 - No new licensed or gated datasets were added in this checkpoint.
+
+## 2026-07-16 checkpoint note
+
+- No new licensed or gated dataset was added for the AI evidence-policy checkpoint.
+- Supply-chain relationships, actionable investment picks, options-chain-dependent output, and country-risk scores are now explicitly withheld until a terms-compliant verified adapter is connected.
+- Existing public headline metadata may support contextual research, but it is not treated as an entitlement for issuer fundamentals, relationship graphs, official threat posture, or calibrated country scoring.

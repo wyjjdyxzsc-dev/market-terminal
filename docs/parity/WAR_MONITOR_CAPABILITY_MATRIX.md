@@ -15,6 +15,7 @@ Research date: 2026-07-13
   - production smoke suite `28/28` passed on 2026-07-13 (checkpoint 1)
   - production smoke suite `29/29` passed on 2026-07-15 (checkpoint 2)
   - map provenance checkpoint source commit `a25e6be` is production verified: `16/16` unit tests, `23/23` local smoke checks, and `29/29` production smoke checks passed on 2026-07-15
+  - AI evidence-policy checkpoint is local verified on 2026-07-16: `24/24` unit tests and `28/28` local smoke contracts passed; production verification is pending
 
 ## Capability rows
 
@@ -50,11 +51,11 @@ Research date: 2026-07-13
 - UI surfaces and command aliases: BRIEFING, SITUATION ROOM
 - Backend routes/events/jobs: `/api/intel/news`, `/api/intel/situation`
 - Security and privacy class: public read, AI-generated
-- Deterministic tests: none yet
+- Deterministic tests: shared AI-policy fixtures plus local situation/instability smoke contracts
 - Evaluation criteria: transparent categories, severity rules, evidence links
 - Provenance links: `https://war-monitor.com/`
 - Licensing or trademark notes: independent category system allowed
-- Final evidence: RSS ingestion preserves source URLs and reliability labels locally; unauthenticated X syndication was removed from the live ingestion path. Broader OSINT-source expansion remains open.
+- Final evidence: RSS ingestion preserves source URLs and reliability labels locally; unauthenticated X syndication was removed from the live ingestion path. Checkpoint 4 locally verifies cited-or-abstain situation behavior and empty country-risk output without verified inputs; production and broader OSINT-source expansion remain open.
 
 ### 2026-07-13 checkpoint 2 update
 
@@ -65,6 +66,12 @@ Research date: 2026-07-13
 
 - Conflict-map disclosure: the independent map now identifies conflict zones as a hybrid of project-curated context and public GDELT/ACLED inputs. The panel distinguishes that evidence class from a live authoritative feed and shows cache/refresh state.
 - Evidence: `/api/map/conflict` locally and in production returned its `conflictZones` provenance envelope; map-provenance unit coverage and the complete local smoke suite passed (`16/16`, `23/23`), then production smoke passed `29/29` for source commit `a25e6be`. This remains a partial, non-authoritative conflict-monitor capability.
+
+### 2026-07-16 checkpoint 4 local update
+
+- Situation-room control: public-news synthesis now requires fresh, source-diverse trusted evidence, allowed evidence IDs, and a policy-approved heavy provider. If any gate fails, the route returns an explicit abstention with no fabricated DEFCON posture or serious pizza-index inference.
+- Country-risk control: `/api/intel/instability` now emits no country scores or map markers until a verified country-risk adapter exists; the UI says the risk layer is withheld instead of presenting headline-generated scores as intelligence.
+- Evidence: AI-policy fixtures and route contracts passed locally (`24/24` unit, `28/28` smoke). This does not add event-grade classification, official threat posture, conflict timelines, or War Monitor parity, and production verification is pending.
 
 ### WAR-003 Conflict threads and timelines
 
