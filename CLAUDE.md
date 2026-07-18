@@ -84,7 +84,7 @@ Deploys to `https://market-terminal.wyjjdyxzsc.workers.dev`
 - **RJD Monte Carlo** (Module 4 upgrade): `[MC]` fan on chart now defaults to Rough Jump-Diffusion (H=0.45, λ=2) with GBM/RJD switcher pill.
 - **Mobile layout** (Module 5): osc bar wraps on narrow screens, buttons resize at ≤860px/≤480px, canvas min-height fixed, shock table hides columns on small screens.
 
-**Test suite**: `tests/smoke.js` — run `npm test` (requires local server running) or `npm run test:prod` (hits the deployed worker — run after deploys to catch server.js/worker.js drift). The current suite covers 28 endpoint contracts including POST `/api/intel/chat`.
+**Test suite**: `tests/smoke.js` — run `npm test` (requires local server running) or `npm run test:prod` (hits the deployed worker — run after deploys to catch server.js/worker.js drift). The suite has 31 checks including POST `/api/intel/chat`; optional keyed/network routes are skipped locally when unavailable.
 
 **Resilience/UX (2026-07-05)**:
 - Terminal auto-loads last viewed symbol (localStorage `mt:lastSymbol`, default AAPL)
@@ -98,11 +98,11 @@ Deploys to `https://market-terminal.wyjjdyxzsc.workers.dev`
 - Frontend rendering now sanitizes provider URLs and removes unsafe `innerHTML` usage in price-action / intel map flows
 - Manual browser verification evidence for this checkpoint is recorded in `/Users/krishivjain/Desktop/claude projects/market-terminal/docs/CODEX_HANDOFF_TO_CLAUDE_2026-07-13.md`
 
-**AI evidence policy (2026-07-16 checkpoint, local verified)**:
+**AI evidence policy (2026-07-16 checkpoint, production verified)**:
 - `shared/ai-task-policy-core.js` defines task risk, approved provider tiers/names, evidence thresholds, citation validation, output constraints, and structured abstentions shared by Express and the Worker.
 - Supply-chain relationships, investment picks, and country risk scores are withheld until verified input adapters exist. Deep-dive, situation, price-action, and current-market chat outputs must pass their evidence/citation gate; deep-dive trade levels, valuation, and options construction remain disabled.
 - Generic educational chat uses the speed tier; current-market and high-risk tasks require policy-approved heavy providers and abstain when unavailable.
-- Local verification passed `24/24` unit tests and `28/28` smoke contracts. Do not describe this checkpoint as production verified until the handoff records the deployed cache version and production smoke result.
+- Source commit `5a10b79` is production verified: `24/24` unit tests, `28/28` local smoke contracts, `31/31` production smoke contracts, targeted policy-envelope probes, and an interactive browser pass completed. Full independent claim-level verification and remaining AI-task coverage are still open.
 
 **Branches**: All work on `main` (no feature branches yet).
 

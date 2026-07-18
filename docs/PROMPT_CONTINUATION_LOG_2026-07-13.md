@@ -64,6 +64,10 @@ This file is a portable handoff for continuing work on another account. It recor
 
 > conTinue
 
+### User prompt 13
+
+> continue
+
 ## Authoritative Prompt Sources
 
 - Full master prompt: [MARKET_TERMINAL_TOTAL_PLATFORM_CODEX_MASTER_PROMPT.md](/Users/krishivjain/Desktop/claude projects/market-terminal/MARKET_TERMINAL_TOTAL_PLATFORM_CODEX_MASTER_PROMPT.md)
@@ -108,7 +112,7 @@ The following production-oriented vertical slices were implemented and deployed:
 - Added a shared AI task-policy core with provider allowlists, evidence freshness/diversity gates, citation validation, safe financial constraints, and structured abstentions across Express and Worker.
 - Replaced unsupported supply-chain edges, investment picks, country-risk scores, deep-dive ratings/levels/options constructions, and uncited price-move causes with explicit withheld/unknown states.
 - Added evidence-policy UI notices to terminal, deep dive, report, situation, supply chain, map/globe, and chat surfaces.
-- Added eight AI-policy unit cases and expanded smoke coverage to 28 route contracts. Checkpoint 4 is local verified and pending production deployment evidence.
+- Added eight AI-policy unit cases and expanded smoke coverage to 31 checks. Checkpoint 4 source commit `5a10b79` is production verified.
 - Unit tests for API contracts, evidence helpers, and candle analysis.
 - Expanded smoke tests covering local and production endpoint contracts.
 
@@ -142,6 +146,12 @@ Production verification completed:
   - `npm run test:prod` passed `29/29`; the weather route returned its allowed `502` skip and no checks failed
   - `/api/sentiment/market` returned `200` with `status: "live"`, `dataMode: "deterministic"`, five benchmarks, 18 headlines, 13 sources, source-attributed evidence, and methodology at `2026-07-15T12:18:39.910Z`
   - `/api/sentiment/twitter` returned `200` with `Deprecation: true` and `Link: </api/sentiment/market>; rel="successor-version"`
+- Checkpoint 4 production verification on 2026-07-16:
+  - source commit `5a10b79` served all seven `20260716a` asset markers
+  - `npm run test:prod` passed `31/31`; weather was the explicitly allowed upstream `502` skip
+  - targeted routes returned schema `2026-07-15a`, empty unsupported edges/picks/country scores, `Not Rated` deep dive, a five-citation grounded situation response, and grounded speed-tier generic chat
+  - interactive browser verification loaded a live AAPL quote, a `718x495` chart, all seven top-level views, the supply-chain withheld state, and no console warnings/errors
+  - screenshot capture timed out, so no screenshot artifact is claimed
 
 ## Checkpoints
 
@@ -151,8 +161,7 @@ Production verification completed:
 - `e161369` — `Add prompt continuation log`
 - `55e014c` — `Replace social scraper with market sentiment composite`
 - `a25e6be` — `Add map provenance contracts`
-
-Checkpoint 4 source changes are local verified but intentionally not listed with a commit hash until the commit succeeds. Production verification is also pending.
+- `5a10b79` — `Gate high-risk AI outputs with evidence policies`
 
 All listed commits were pushed to `origin/main`. The map-provenance source checkpoint `a25e6be` is production verified; unrelated untracked files listed below remain preserved.
 
@@ -161,7 +170,6 @@ All listed commits were pushed to `origin/main`. The map-provenance source check
 These items are intentionally not marked complete:
 
 - Expand quant-engine unit coverage beyond the candlestick fallback engine.
-- Deploy checkpoint 4 through `git push origin main`, wait for `20260716a`, run production smoke and targeted policy probes, then record the source commit and evidence commit.
 - Extend the policy registry to sector analysis, company-news impact, candle commentary, and alert prioritization.
 - Add independent claim-level verification, provider/model-version telemetry, enforced token/cost budgets, and measured golden AI evaluation fixtures. The current deterministic citation check is not an independent verifier.
 - Continue modular decomposition of the large `server.js` and `worker.js` files.

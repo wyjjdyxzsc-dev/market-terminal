@@ -6,8 +6,11 @@
 - Rebuilt high-risk supply-chain, deep-dive, investment-report, situation, instability, price-action, and current-market chat paths so unavailable evidence or policy-approved providers produce explicit research-withheld responses instead of unsupported relationships, country scores, recommendations, prices, or options constructions.
 - Kept generic educational chat on the speed tier while current-market and high-risk tasks require the heavy tier; client-supplied authoritative chat context remains rejected.
 - Added safe evidence-policy UI states across terminal, deep-dive, report, situation-room, map, globe, and chat surfaces.
-- Added eight AI-policy unit cases and expanded smoke assertions. Local verification passed `24/24` unit tests and `28/28` smoke contracts; production verification is pending the source checkpoint deployment.
+- Added eight AI-policy unit cases and expanded smoke assertions. Local verification passed `24/24` unit tests and `28/28` smoke contracts.
 - Bumped all frontend cache-busters to `20260716a` for the source deployment.
+- Deployed source checkpoint `5a10b79`: production served all seven `20260716a` asset markers, the production smoke suite passed `31/31`, and targeted routes confirmed safe abstention/constraint behavior plus grounded cited output where policy inputs were satisfied.
+- Interactive production-browser verification loaded AAPL at a live quote, rendered a non-zero chart, switched all seven tabs, displayed the supply-chain evidence-required state, and reported no console warnings/errors. Screenshot capture timed out, so no screenshot artifact is claimed.
+- Bumped all frontend cache-busters to `20260716b` for the production-evidence deployment.
 
 ## 2026-07-15
 

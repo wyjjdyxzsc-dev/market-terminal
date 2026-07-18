@@ -2,7 +2,7 @@ This work was performed by OpenAI Codex without Claude’s involvement. This doc
 
 # Status
 
-- Handoff status: checkpoint 4 local verified; source deployment and production verification pending
+- Handoff status: checkpoint 4 production verified
 - Research date: 2026-07-13
 - Deployment URL: `https://market-terminal.wyjjdyxzsc.workers.dev`
 
@@ -413,7 +413,15 @@ This work was performed by OpenAI Codex without Claude’s involvement. This doc
   - targeted probes confirmed schema `2026-07-15a`, explicit abstention reasons, empty unsupported edges/picks/country scores, speed-tier generic chat, `Not Rated` deep-dive output, and disabled valuation/trade/options fields
   - the local shell served all seven frontend asset references at cache version `20260716a`
 - Environment note: macOS had made Desktop-backed dependency/source files dataless. The files were hydrated and the exact working tree was mirrored to `/tmp/market-terminal-verify` for stable runtime verification. No temporary runtime file is part of the checkpoint.
-- Production status: not yet verified. Do not convert this section or AUD-007 to production-verified until `20260716a` is live, the production smoke suite passes, and targeted deployed policy envelopes are recorded.
+- Production verification completed for source commit `5a10b79` on 2026-07-16:
+  - production HTML served all seven frontend asset references at `20260716a`
+  - `npm run test:prod` passed `31/31`; weather was the explicitly allowed upstream `502` skip
+  - all guarded routes returned policy schema `2026-07-15a`
+  - supply chain returned zero supplier/customer edges, investment report returned zero picks, and instability returned zero country scores
+  - deep dive returned `Not Rated`, null score, `Avoid` options bias, and no valuation/trade levels
+  - situation returned a grounded heavy-tier response with five allowed evidence IDs; generic educational chat returned a grounded speed-tier response without pretending to cite current evidence
+  - interactive in-app browser verification loaded a live AAPL quote, a `718x495` chart, all seven tab views, the supply-chain withheld state, and no console warnings/errors
+  - screenshot capture timed out, so no screenshot artifact is claimed
 - Scope limit: this is a material partial remediation, not full AI-accuracy completion. The deterministic evidence/citation check is not an independent claim-level model verifier. Sector analysis, company-news impact, candle commentary, alert prioritization, remaining prompt inventory, provider/model-version metadata, enforced token/cost budgets, and measured evaluation metrics remain open.
 
 # Unresolved risks and technical debt
@@ -432,13 +440,13 @@ This work was performed by OpenAI Codex without Claude’s involvement. This doc
   - `e161369` — `Add prompt continuation log`
   - `55e014c` — `Replace social scraper with market sentiment composite`
   - `a25e6be` — `Add map provenance contracts`
+  - `5a10b79` — `Gate high-risk AI outputs with evidence policies`
 - Push/deploy:
-  - `git push origin main` completed for all listed checkpoint commits, including `a25e6be`
+  - `git push origin main` completed for all listed checkpoint commits, including `5a10b79`
   - production deployment verified on `https://market-terminal.wyjjdyxzsc.workers.dev`
 
 # Recommended next step for Claude
 
 - Next recommended step:
-  - first verify checkpoint 4 deployment, production smoke, cache version, and targeted policy envelopes if this section still says production pending
-  - then extend the registry to sector/company/candle/alert tasks and add an independent claim-level verifier with golden evaluation fixtures
+  - extend the registry to sector/company/candle/alert tasks and add an independent claim-level verifier with golden evaluation fixtures
   - continue quant reference coverage and modular decomposition without weakening current abstention contracts
