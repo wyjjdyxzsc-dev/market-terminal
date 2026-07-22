@@ -69,3 +69,10 @@ This file records how parity work is implemented without copying protected code,
 - Public competitor capability descriptions informed only the desired outcomes of evidence grounding, uncertainty, and safe research workflows. No external prompt, model policy, response schema, code, test, protected UI, or proprietary scoring method was copied.
 - The checkpoint adds no new licensed dataset. Where verified relationship, issuer evaluation, options-chain, or country-risk inputs do not exist, the original implementation emits an explicit empty/withheld result rather than simulating competitor coverage.
 - Local verification passed `24/24` unit tests and `28/28` smoke contracts. Source commit `5a10b79` then passed `31/31` production checks while serving `20260716a`; no new parity claim is made beyond the independently implemented safety workflow.
+
+## 2026-07-22 checkpoint 5
+
+- Extended the project-local task-policy design to sector interpretation, company-news impact, deterministic candle commentary, and deterministic alert eligibility. The implementations were derived from this repository's existing evidence records, OHLC engine, news adapters, and push pipeline.
+- Sector rankings, stock picks, options construction, model-authored alert priority, and uncited company-news facts are removed or withheld. This is an original authority-boundary design, not a reproduction of competitor prompts, ranking systems, alert logic, schemas, or user interfaces.
+- The alert gate checks project-normalized source evidence for recency, trust, source diversity, and bounded breaking-event language. It does not claim canonical event resolution or competitor-equivalent corroboration.
+- No new external code, proprietary prompt, protected asset, test, or licensed dataset was copied. Local verification passed `29/29` unit tests and all 28 smoke contracts available in the keyless environment; production evidence remains pending.

@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const AI_TASK_POLICY_SCHEMA_VERSION = '2026-07-15a';
+  const AI_TASK_POLICY_SCHEMA_VERSION = '2026-07-22a';
 
   // High-risk tasks are intentionally limited to the structured-analysis pool.
   // The backends enforce this list rather than silently falling back to a faster
@@ -31,6 +31,9 @@
     requiredSchema: config.requiredSchema || 'json-object',
     requiresCorroboration: Boolean(config.requiresCorroboration),
     requiresVerifier: Boolean(config.requiresVerifier),
+    verifier: config.verifier || (config.requiresVerifier
+      ? 'deterministic-evidence-and-citation-check'
+      : 'schema-check'),
     requireEvidenceIds: Boolean(config.requireEvidenceIds),
     mayAbstain: config.mayAbstain !== false,
     maxLatencyMs: config.maxLatencyMs || 20_000,
@@ -78,6 +81,65 @@
       cacheTtlSeconds: 600,
       label: 'price-action explanation',
       disclaimer: 'The available evidence may not explain a price move; no causal claim is made without a citation.',
+    }),
+    'intel.sector-analysis': createPolicy('intel.sector-analysis', 'high', {
+      providerTier: 'heavy',
+      requiredEvidenceTypes: ['normalized-news'],
+      maxEvidenceAgeMinutes: 1_440,
+      minEvidence: 3,
+      minDistinctSources: 2,
+      minTrustedSources: 1,
+      requiresCorroboration: true,
+      requiresVerifier: true,
+      requireEvidenceIds: true,
+      cacheTtlSeconds: 900,
+      label: 'sector evidence brief',
+      disclaimer: 'Sector rankings, stock picks, scores, and options strategies are withheld without dedicated verified datasets.',
+    }),
+    'intel.company-news-impact': createPolicy('intel.company-news-impact', 'high', {
+      providerTier: 'heavy',
+      requiredEvidenceTypes: ['normalized-news'],
+      maxEvidenceAgeMinutes: 1_440,
+      minEvidence: 1,
+      minDistinctSources: 1,
+      minTrustedSources: 1,
+      requiresVerifier: true,
+      requireEvidenceIds: true,
+      cacheTtlSeconds: 900,
+      label: 'company-news impact interpretation',
+      disclaimer: 'News impact labels are cited interpretations, not forecasts or recommendations.',
+    }),
+    'intel.candle-commentary': createPolicy('intel.candle-commentary', 'medium', {
+      providerTier: 'deterministic',
+      permittedProviderTiers: ['deterministic'],
+      permittedProviderNames: [],
+      requiredEvidenceTypes: ['ohlc-price-series'],
+      maxEvidenceAgeMinutes: 0,
+      requiredInputs: ['verifiedOhlc'],
+      requiresVerifier: true,
+      verifier: 'deterministic-ohlc-pattern-engine',
+      requireEvidenceIds: false,
+      cacheTtlSeconds: 300,
+      label: 'candlestick pattern commentary',
+      disclaimer: 'Pattern labels and observed levels are deterministic descriptions of the supplied OHLC series, not trade advice.',
+    }),
+    'intel.alert-prioritization': createPolicy('intel.alert-prioritization', 'high', {
+      providerTier: 'deterministic',
+      permittedProviderTiers: ['deterministic'],
+      permittedProviderNames: [],
+      requiredEvidenceTypes: ['normalized-news'],
+      maxEvidenceAgeMinutes: 180,
+      minEvidence: 2,
+      minDistinctSources: 2,
+      minTrustedSources: 1,
+      requiredInputs: ['breakingSignal'],
+      requiresCorroboration: true,
+      requiresVerifier: true,
+      verifier: 'deterministic-corroboration-and-recency-check',
+      requireEvidenceIds: true,
+      cacheTtlSeconds: 0,
+      label: 'breaking-alert eligibility',
+      disclaimer: 'Alerts indicate recent corroborated public reporting, not official confirmation or investment advice.',
     }),
     'intel.deep-dive': createPolicy('intel.deep-dive', 'high', {
       providerTier: 'heavy',
@@ -152,6 +214,22 @@
       disclaimer: 'Country risk scores are withheld until verified country-risk inputs are connected.',
     }),
   });
+
+  const SECTOR_DEFINITIONS = Object.freeze([
+    Object.freeze({ name: 'Technology', etf: 'XLK' }),
+    Object.freeze({ name: 'Healthcare', etf: 'XLV' }),
+    Object.freeze({ name: 'Financials', etf: 'XLF' }),
+    Object.freeze({ name: 'Energy', etf: 'XLE' }),
+    Object.freeze({ name: 'Consumer Discretionary', etf: 'XLY' }),
+    Object.freeze({ name: 'Consumer Staples', etf: 'XLP' }),
+    Object.freeze({ name: 'Industrials', etf: 'XLI' }),
+    Object.freeze({ name: 'Materials', etf: 'XLB' }),
+    Object.freeze({ name: 'Utilities', etf: 'XLU' }),
+    Object.freeze({ name: 'Real Estate', etf: 'XLRE' }),
+    Object.freeze({ name: 'Communication Services', etf: 'XLC' }),
+  ]);
+
+  const BREAKING_ALERT_PATTERN = /\b(?:declares? (?:a )?state of emergency|emergency (?:rate |policy )?(?:cut|hike|decision)|rate (?:cut|hike|decision)|central bank intervention|invasion|missile (?:attack|strike)|airstrike|ceasefire|files? for bankruptcy|trading (?:is )?halted|halts? trading|acquisition|merger|profit warning|withdraws? guidance|sovereign default|major earthquake|hurricane landfall)\b/i;
 
   function simpleHash(value) {
     const text = String(value || '');
@@ -287,6 +365,14 @@
     return cited.length > 0 && cited.every((id) => preparation.evidenceIds.includes(id));
   }
 
+  function validateEvidenceBoundItems(preparation, items) {
+    if (!preparation || !Array.isArray(items) || !items.length) return false;
+    return items.every((item) => {
+      const cited = citedEvidenceIds(item);
+      return cited.length > 0 && cited.every((id) => preparation.evidenceIds.includes(id));
+    });
+  }
+
   function publicEvidence(preparation) {
     return (preparation && preparation.evidence || []).map((record) => ({
       id: record.id,
@@ -297,6 +383,39 @@
       sourceTier: record.sourceTier,
       title: record.title,
     }));
+  }
+
+  function bindCompanyNewsEvidence(preparation, output, identity = {}) {
+    const evidenceById = new Map((preparation && preparation.evidence || []).map((record) => [record.id, record]));
+    const used = new Set();
+    const news = [];
+    for (const item of (output && output.news || []).slice(0, 10)) {
+      const ids = citedEvidenceIds(item).filter((id) => evidenceById.has(id));
+      if (!ids.length) continue;
+      const primary = evidenceById.get(ids[0]);
+      ids.forEach((id) => used.add(id));
+      news.push({
+        title: primary.title,
+        summary: String(item.summary || '').trim(),
+        source: primary.publisher,
+        sourceUrl: primary.sourceUrl,
+        timestamp: primary.publishedAt,
+        impact: ['positive', 'negative', 'neutral'].includes(item.impact) ? item.impact : 'neutral',
+        impactReason: String(item.impactReason || '').trim(),
+        evidenceIds: ids,
+      });
+    }
+    const overallSentiment = String(output && output.overallSentiment || '').toLowerCase();
+    return {
+      ticker: String(identity.ticker || '').toUpperCase(),
+      companyName: String(identity.companyName || ''),
+      overallSentiment: ['positive', 'negative', 'neutral', 'mixed'].includes(overallSentiment)
+        ? overallSentiment
+        : 'neutral',
+      summary: String(output && output.summary || '').trim(),
+      news,
+      evidenceIds: [...used],
+    };
   }
 
   function policyMetadata(preparation, status, options = {}) {
@@ -315,7 +434,7 @@
       evidenceIds: citedIds,
       availableEvidenceIds: preparation.evidenceIds || [],
       dataAsOf: preparation.dataAsOf || null,
-      verifier: preparation.policy.requiresVerifier ? 'deterministic-evidence-and-citation-check' : 'schema-check',
+      verifier: preparation.policy.verifier,
       disclaimer: preparation.policy.disclaimer,
       unknowns: Array.isArray(options.unknowns) ? options.unknowns : [],
       blockers: Array.isArray(options.blockers) ? options.blockers : assessment.blockers || [],
@@ -339,12 +458,82 @@
     };
   }
 
+  function buildSectorBaseline(summary) {
+    return {
+      marketSentiment: 'Unrated',
+      sentimentScore: null,
+      marketSummary: summary || 'No evidence-bounded sector view is available for this refresh.',
+      keyThemes: [],
+      topInvestPicks: [],
+      industries: SECTOR_DEFINITIONS.map((sector) => ({
+        name: sector.name,
+        icon: '',
+        etf: sector.etf,
+        investRank: null,
+        optionsRank: null,
+        investScore: null,
+        optionsScore: null,
+        analysis: 'Insufficient qualifying evidence for a current sector-specific interpretation.',
+        topPicks: [],
+        upsides: [],
+        downsides: [],
+        optionsStrategy: 'Withheld - verified options-chain inputs are not connected.',
+        optionsBias: 'Avoid',
+        impliedVolatility: 'Unknown',
+        optionsTimeframe: 'N/A',
+        evidenceIds: [],
+      })),
+    };
+  }
+
   function cloneJson(value) {
     return JSON.parse(JSON.stringify(value || {}));
   }
 
-  function constrainTaskOutput(taskId, output) {
+  function constrainSectorOutput(output) {
     const constrained = cloneJson(output);
+    const baseline = buildSectorBaseline();
+    const supplied = new Map((constrained.industries || []).map((item) => [String(item && item.name || '').toLowerCase(), item]));
+    const marketSentiment = ['Bullish', 'Bearish', 'Neutral', 'Mixed'].includes(constrained.marketSentiment)
+      ? constrained.marketSentiment
+      : 'Unrated';
+    const industries = baseline.industries.map((fallback) => {
+      const item = supplied.get(fallback.name.toLowerCase());
+      if (!item) return fallback;
+      return {
+        name: fallback.name,
+        icon: typeof item.icon === 'string' ? item.icon.slice(0, 8) : '',
+        etf: fallback.etf,
+        investRank: null,
+        optionsRank: null,
+        investScore: null,
+        optionsScore: null,
+        analysis: String(item.analysis || fallback.analysis),
+        topPicks: [],
+        upsides: Array.isArray(item.upsides) ? item.upsides.slice(0, 3).map(String) : [],
+        downsides: Array.isArray(item.downsides) ? item.downsides.slice(0, 3).map(String) : [],
+        optionsStrategy: fallback.optionsStrategy,
+        optionsBias: 'Avoid',
+        impliedVolatility: 'Unknown',
+        optionsTimeframe: 'N/A',
+        evidenceIds: citedEvidenceIds(item),
+      };
+    });
+    return {
+      marketSentiment,
+      sentimentScore: null,
+      marketSummary: String(constrained.marketSummary || baseline.marketSummary),
+      keyThemes: Array.isArray(constrained.keyThemes) ? constrained.keyThemes.slice(0, 5).map(String) : [],
+      topInvestPicks: [],
+      industries,
+      evidenceIds: citedEvidenceIds(constrained),
+    };
+  }
+
+  function constrainTaskOutput(taskId, output) {
+    const constrained = taskId === 'intel.sector-analysis'
+      ? constrainSectorOutput(output)
+      : cloneJson(output);
     if (taskId === 'intel.deep-dive') {
       constrained.investment = { ...(constrained.investment || {}),
         rating: 'Not Rated',
@@ -388,9 +577,50 @@
     };
   }
 
+  function attachDeterministicPolicy(preparation, output, options = {}) {
+    const constrained = constrainTaskOutput(preparation.taskId, output);
+    return {
+      ...constrained,
+      evidenceIds: [],
+      abstained: false,
+      evidence: [],
+      policy: policyMetadata(preparation, 'deterministic', {
+        reason: options.reason || '',
+        unknowns: options.unknowns || [],
+      }),
+    };
+  }
+
+  function evaluateAlertCandidate(item, options = {}) {
+    const records = Array.isArray(item && item.evidence) ? item.evidence : [];
+    const evidenceText = records.map((record) => String(record && record.title || '')).join(' ');
+    const breakingSignal = BREAKING_ALERT_PATTERN.test(evidenceText);
+    const preparation = prepareTask('intel.alert-prioritization', records, {
+      now: options.now,
+      inputs: { breakingSignal },
+    });
+    const eligible = preparation.canGenerate;
+    const reason = eligible
+      ? 'Recent breaking-language evidence is corroborated across distinct source domains.'
+      : (breakingSignal
+        ? 'Breaking-language evidence did not meet recency, trust, and source-diversity requirements.'
+        : 'No deterministic breaking-event signal was present in the bound source headlines.');
+    return {
+      eligible,
+      priority: eligible ? 'high' : 'normal',
+      policy: policyMetadata(preparation, eligible ? 'eligible' : 'withheld', {
+        reason,
+        blockers: preparation.assessment.blockers,
+        unknowns: eligible ? [] : ['Alert eligibility is withheld until all deterministic checks pass.'],
+        citedEvidenceIds: eligible ? preparation.evidenceIds : [],
+      }),
+    };
+  }
+
   const api = {
     AI_TASK_POLICY_SCHEMA_VERSION,
     TASK_POLICIES,
+    SECTOR_DEFINITIONS,
     HEAVY_PROVIDER_NAMES,
     SPEED_PROVIDER_NAMES,
     getTaskPolicy,
@@ -398,12 +628,17 @@
     prepareTask,
     buildGroundingInstructions,
     validateGroundedOutput,
+    validateEvidenceBoundItems,
     citedEvidenceIds,
     publicEvidence,
+    bindCompanyNewsEvidence,
     policyMetadata,
     buildAbstention,
+    buildSectorBaseline,
     constrainTaskOutput,
     attachPolicy,
+    attachDeterministicPolicy,
+    evaluateAlertCandidate,
   };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

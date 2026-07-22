@@ -24,3 +24,10 @@
 - No new licensed or gated dataset was added for the AI evidence-policy checkpoint.
 - Supply-chain relationships, actionable investment picks, options-chain-dependent output, and country-risk scores are now explicitly withheld until a terms-compliant verified adapter is connected.
 - Existing public headline metadata may support contextual research, but it is not treated as an entitlement for issuer fundamentals, relationship graphs, official threat posture, or calibrated country scoring.
+
+## 2026-07-22 checkpoint note
+
+- No new dataset, feed, or entitlement was added for sector interpretation, company-news impact, candle commentary, or alert eligibility.
+- Sector ranks, investment picks, and options construction remain withheld because the project has no licensed research/ranking or options-chain input for those claims.
+- Company-news output is bound back to existing canonical headline records and links; candle commentary uses the existing OHLC engine; alert eligibility uses existing evidence metadata. These controls improve claim authority but do not broaden redistribution rights or source coverage.
+- Canonical event resolution, independent origin-type corroboration, and issuer-grade research remain adapter gaps rather than inferred entitlements.

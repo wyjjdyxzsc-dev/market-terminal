@@ -13,13 +13,14 @@ small Express backend that keeps every API key server-side.
 
 ---
 
-## Repository operational state (2026-07-16)
+## Repository operational state (2026-07-22)
 
 - Deploy by pushing to `main`. Do not run `wrangler deploy` manually for production; GitHub is wired to Cloudflare Workers and is the canonical deploy path for this repo.
 - `npm test` now runs unit coverage plus the local smoke suite. Start the local server first with `npm start`.
 - `npm run test:prod` hits the deployed Worker at `https://market-terminal.wyjjdyxzsc.workers.dev` and is the required post-deploy parity check.
 - High-risk AI routes use a shared evidence/task policy. Unsupported supply-chain edges, investment picks, country scores, trade levels, and options constructions are withheld rather than fabricated; full independent-verifier coverage remains open.
 - AI evidence-policy source checkpoint `5a10b79` is production verified: `24/24` unit tests, `28/28` local smoke contracts, and `31/31` production smoke contracts passed on 2026-07-16.
+- Checkpoint 5 locally extends that authority model to sector analysis, company-news impact, deterministic candle commentary, and corroboration-gated alerts. `29/29` unit tests and all 28 keyless-available smoke contracts pass; production verification is pending.
 - The latest external-agent checkpoint and evidence log lives in [docs/CODEX_HANDOFF_TO_CLAUDE_2026-07-13.md](/Users/krishivjain/Desktop/claude projects/market-terminal/docs/CODEX_HANDOFF_TO_CLAUDE_2026-07-13.md).
 
 ---
@@ -30,9 +31,9 @@ small Express backend that keeps every API key server-side.
 | ------------ | ---------------------------------------------------------------------------------------------- |
 | **TERMINAL** | Live quote, snapshot stats, hand-drawn canvas chart, company profile, and company news.        |
 | **NEWS**     | A live "market wire" — real headlines (Google News) structured by AI into categorized, ticker-tagged cards with a breaking section and category filters. |
-| **SECTORS**  | All 11 GICS sectors ranked for investing & options, an overall market-sentiment banner, and AI top-stock ideas. |
-| **WATCHLIST**| Add any company/ticker (or tap a ticker chip anywhere) to get its recent news with per-headline positive / negative impact. Saved in your browser. |
-| **ALERTS**   | Breaking market-moving headlines, optionally **pushed to your device** (installable PWA) even when the app is closed. |
+| **SECTORS**  | Evidence-bounded interpretation across 11 GICS sectors; unsupported ranks, picks, and options strategies are shown as unavailable. |
+| **WATCHLIST**| Add any company/ticker to see canonical source-linked news with cited impact interpretation or an explicit unrated fallback. Saved in your browser. |
+| **ALERTS**   | Corroboration-gated market-moving headlines, optionally **pushed to your device** when deterministic eligibility checks pass. |
 
 ---
 
@@ -42,8 +43,8 @@ small Express backend that keeps every API key server-side.
 - **Interactive chart** — drawn by hand on `<canvas>` (no chart library). Retina-crisp, gradient fill, gridlines, axis labels, prev-close baseline, and a **hover crosshair + tooltip**. Ranges: 1D · 5D · 1M · 6M · 1Y · 5Y.
 - **Resilient chart data** — uses Yahoo Finance, and **automatically falls back to Nasdaq** when Yahoo's API rate-limits your network (common on shared/CGNAT connections), so the chart always renders.
 - **Scrolling ticker tape** of mega-caps, color-coded, refreshed every 60s.
-- **AI news wire, sector analysis & watchlist sentiment** — grounded on *real, current* headlines pulled live from Google News, then structured by **Groq** (Llama 3.3 70B). Cached server-side (stale-while-revalidate) to stay fast and within free limits.
-- **Breaking-news push alerts** — high-priority items are delivered via Web Push to subscribed devices; installable as a PWA (works on Android/desktop Chrome and, after Add-to-Home-Screen, iOS).
+- **Evidence-bound news, sector analysis & watchlist interpretation** — grounded on current source-linked headlines and routed only through task-approved providers; unmet evidence/provider gates produce explicit withheld states. Cached server-side with stale-while-revalidate.
+- **Breaking-news push alerts** — only deterministic policy-eligible items can enter the high-priority delivery path; installable as a PWA (works on Android/desktop Chrome and, after Add-to-Home-Screen, iOS).
 - **Live clock + US market status** (OPEN / CLOSED / PRE-MKT / AFTER-HRS, America/New_York).
 - **Fully responsive**, keyboard-accessible, and respects `prefers-reduced-motion`.
 

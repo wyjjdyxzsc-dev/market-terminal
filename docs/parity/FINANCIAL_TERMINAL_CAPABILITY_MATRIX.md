@@ -18,6 +18,7 @@ Research date: 2026-07-13
   - production smoke suite `29/29` passed on 2026-07-15 (checkpoint 2)
   - map provenance checkpoint source commit `a25e6be` is production verified: `16/16` unit tests, `23/23` local smoke checks, and `29/29` production smoke checks passed on 2026-07-15
   - AI evidence-policy source commit `5a10b79` is production verified on 2026-07-16: `24/24` unit tests, `28/28` local smoke contracts, and `31/31` production smoke contracts passed
+  - checkpoint 5 is local verified on 2026-07-22: `29/29` unit tests, all 28 keyless-available smoke contracts, zero dependency vulnerabilities, Worker dry-run bundling, and interactive sector/watchlist/alert checks passed; production verification is pending
 
 ## Capability rows
 
@@ -77,6 +78,13 @@ Research date: 2026-07-13
 - Financial-output behavior: unverified supply-chain edges and investment picks are empty; deep dives are `Not Rated` with no fair value, target, entry, stop, or options construction; price-action explanations abstain rather than assigning an unsupported cause. Generic educational chat remains available to the speed tier, while current-market questions require a policy-approved heavy provider and qualifying evidence.
 - Evidence: eight new policy cases contributed to a `24/24` unit pass, the local API suite passed `28/28`, and source commit `5a10b79` passed `31/31` production contracts while serving `20260716a`. Deployed probes confirmed empty unsupported edges/picks/scores, `Not Rated` deep dive, cited situation output, and speed-tier generic chat. Interactive browser verification loaded a live quote, non-zero chart, all seven views, and no console warnings/errors; no screenshot artifact is claimed. This is a partial safety improvement, not professional-terminal research parity: claim-level verification, deterministic sector/company analysis, options-chain support, and independent model verification remain open.
 
+### 2026-07-22 checkpoint 5 local update
+
+- Sector/company authority: sector interpretation now requires cited, source-diverse evidence and an approved heavy provider; company-news output binds each interpreted item back to canonical title, publisher, URL, timestamp, and identity fields. Safe fallbacks retain source headlines but withhold impact ratings.
+- Non-actionable constraints: all sector ranks, scores, stock picks, implied-volatility claims, and options strategies are removed. Missing sector evidence renders `N/A`; deep-dive and supply-chain UI claims were also reconciled with their existing withheld behavior.
+- Deterministic technical analysis: `/api/intel/candles` now always uses the shared OHLC pattern engine and identifies that verifier in policy metadata instead of allowing a speed model to replace calculated output.
+- Evidence: `29/29` unit tests passed; the expanded 33-check suite passed all 28 contracts available in the keyless local environment; targeted probes returned 11 unranked sectors, zero picks, cited-or-abstained company news, and deterministic candles. Wrangler dry-run, zero-vulnerability audit, and interactive browser checks passed. This preserves `partial` assessments and makes no Bloomberg parity claim; production evidence is pending.
+
 ### FT-003 Real-time market monitors
 
 - Source product/domain: Bloomberg
@@ -113,7 +121,7 @@ Research date: 2026-07-13
 - Evaluation criteria: structured facts, estimates, evidence links, point-in-time handling
 - Provenance links: `https://professional.bloomberg.com/products/bloomberg-terminal/research/`
 - Licensing or trademark notes: analyst and estimates data may require licensed sources
-- Final evidence: checkpoint 4 production verifies policy metadata and safe deep-dive/supply-chain behavior in source commit `5a10b79`; status remains partial because issuer-grade research, options-chain data, and independent claim verification are absent
+- Final evidence: checkpoint 4 production verifies policy metadata and safe deep-dive/supply-chain behavior in source commit `5a10b79`; checkpoint 5 locally verifies canonical company-news binding and non-actionable sector constraints. Status remains partial because issuer-grade research, options-chain data, independent claim verification, and checkpoint 5 production evidence are absent.
 
 ### FT-005 Fixed income and credit
 
@@ -227,7 +235,7 @@ Research date: 2026-07-13
 - Evaluation criteria: source links, clustering, search, citations, correction handling
 - Provenance links: `https://professional.bloomberg.com/products/bloomberg-terminal/news/`, `https://professional.bloomberg.com/products/bloomberg-terminal/research/`
 - Licensing or trademark notes: do not reproduce licensed full text
-- Final evidence: pending
+- Final evidence: checkpoint 5 locally verifies canonical company-news links and deterministic corroboration-gated alert eligibility; document search, correction workflows, licensed research, and production evidence remain pending
 
 ### FT-011 Charts and visualization
 
@@ -246,7 +254,7 @@ Research date: 2026-07-13
 - Evaluation criteria: overlays, multi-series, exports, indicator correctness
 - Provenance links: `https://professional.bloomberg.com/products/bloomberg-terminal/`
 - Licensing or trademark notes: original chart UI required
-- Final evidence: pending
+- Final evidence: checkpoint 5 locally verifies that candle commentary is generated only by the shared deterministic OHLC engine; broad indicator reference coverage, multi-security charting, export workflows, and production evidence remain pending
 
 ### FT-012 Portfolio, performance, attribution, and risk
 

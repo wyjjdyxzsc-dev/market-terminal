@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-07-22
+
+- Extended the shared AI task-policy registry to sector analysis and company-news impact, requiring fresh source-diverse evidence, approved heavy providers, bounded citations, and structured abstention.
+- Removed unsupported sector ranks, numeric scores, stock picks, and options construction; company-news facts now bind back to canonical source records and uncited model items are dropped.
+- Replaced model candle commentary with the shared deterministic OHLC-pattern engine and added explicit deterministic policy metadata.
+- Replaced model-proposed alert priority with a deterministic breaking-language, recency, trust, and source-diversity gate. Alert state is policy-schema-versioned and downstream delivery accepts only eligible records.
+- Updated sector, watchlist, and alert UI states to expose safe unavailable states, canonical source links, and corroboration counts.
+- Updated the vulnerable transitive `body-parser` release; `npm audit --omit=dev` reports zero vulnerabilities.
+- Expanded local verification to `29/29` unit tests and a 33-contract smoke suite; all 28 contracts available without local provider keys passed. Syntax checks, Wrangler dry-run bundling, targeted probes, and interactive browser checks also passed.
+- Bumped all seven frontend cache references to `20260722a`. Production deployment and verification are pending and are not claimed by this source entry.
+
 ## 2026-07-16
 
 - Added `shared/ai-task-policy-core.js`, a shared Express/Worker registry for AI task risk, provider allowlists, evidence freshness/diversity requirements, deterministic citation validation, output constraints, and structured abstention metadata.

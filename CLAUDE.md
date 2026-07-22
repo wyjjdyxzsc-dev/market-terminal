@@ -84,7 +84,7 @@ Deploys to `https://market-terminal.wyjjdyxzsc.workers.dev`
 - **RJD Monte Carlo** (Module 4 upgrade): `[MC]` fan on chart now defaults to Rough Jump-Diffusion (H=0.45, λ=2) with GBM/RJD switcher pill.
 - **Mobile layout** (Module 5): osc bar wraps on narrow screens, buttons resize at ≤860px/≤480px, canvas min-height fixed, shock table hides columns on small screens.
 
-**Test suite**: `tests/smoke.js` — run `npm test` (requires local server running) or `npm run test:prod` (hits the deployed worker — run after deploys to catch server.js/worker.js drift). The suite has 31 checks including POST `/api/intel/chat`; optional keyed/network routes are skipped locally when unavailable.
+**Test suite**: `tests/smoke.js` — run `npm test` (requires local server running) or `npm run test:prod` (hits the deployed worker — run after deploys to catch server.js/worker.js drift). The suite has 33 checks including POST `/api/intel/chat`, sector/company/candle policy contracts, and alert-state authority; optional keyed/network routes are skipped locally when unavailable.
 
 **Resilience/UX (2026-07-05)**:
 - Terminal auto-loads last viewed symbol (localStorage `mt:lastSymbol`, default AAPL)
@@ -103,6 +103,11 @@ Deploys to `https://market-terminal.wyjjdyxzsc.workers.dev`
 - Supply-chain relationships, investment picks, and country risk scores are withheld until verified input adapters exist. Deep-dive, situation, price-action, and current-market chat outputs must pass their evidence/citation gate; deep-dive trade levels, valuation, and options construction remain disabled.
 - Generic educational chat uses the speed tier; current-market and high-risk tasks require policy-approved heavy providers and abstain when unavailable.
 - Source commit `5a10b79` is production verified: `24/24` unit tests, `28/28` local smoke contracts, `31/31` production smoke contracts, targeted policy-envelope probes, and an interactive browser pass completed. Full independent claim-level verification and remaining AI-task coverage are still open.
+
+**AI authority extension (2026-07-22 checkpoint, local verified)**:
+- Schema `2026-07-22a` adds sector analysis and company-news evidence gates plus deterministic authority for candle commentary and alert eligibility.
+- Sector ranks/picks/options are withheld, company items bind to canonical evidence, candle output comes only from the OHLC engine, and model-proposed alert priority is ignored unless the deterministic corroboration gate marks it eligible.
+- Local evidence: `29/29` unit tests, all 28 keyless-available smoke contracts, zero dependency vulnerabilities, Wrangler dry-run bundling, targeted probes, and an interactive browser pass. Production verification is pending.
 
 **Branches**: All work on `main` (no feature branches yet).
 

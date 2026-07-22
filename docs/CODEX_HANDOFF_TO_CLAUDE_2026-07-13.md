@@ -2,7 +2,7 @@ This work was performed by OpenAI Codex without Claude’s involvement. This doc
 
 # Status
 
-- Handoff status: checkpoint 4 production verified
+- Handoff status: checkpoint 5 local verified; source deployment and production verification pending
 - Research date: 2026-07-13
 - Deployment URL: `https://market-terminal.wyjjdyxzsc.workers.dev`
 
@@ -424,10 +424,34 @@ This work was performed by OpenAI Codex without Claude’s involvement. This doc
   - screenshot capture timed out, so no screenshot artifact is claimed
 - Scope limit: this is a material partial remediation, not full AI-accuracy completion. The deterministic evidence/citation check is not an independent claim-level model verifier. Sector analysis, company-news impact, candle commentary, alert prioritization, remaining prompt inventory, provider/model-version metadata, enforced token/cost budgets, and measured evaluation metrics remain open.
 
+# 2026-07-22 checkpoint 5: remaining analysis and alert authority
+
+- Policy schema `2026-07-22a` adds four shared tasks in Express and the Worker:
+  - sector analysis requires fresh, trusted, source-diverse evidence plus a heavy-tier response whose overall and per-sector citations stay inside the backend allowlist
+  - company-news impact requires a heavy-tier cited interpretation; the backend replaces model identity/source/time fields with canonical evidence records and drops uncited items
+  - candle commentary is exclusively produced by the deterministic OHLC pattern engine; a provider can no longer replace the calculated pattern, level, trend, or momentum output
+  - breaking-alert eligibility is exclusively deterministic and requires source-bound breaking language, evidence no older than three hours, two distinct source domains, and at least one trusted source
+- Sector constraints always remove ranks, scores, stock picks, implied-volatility labels, and options construction. Unsupported sectors remain visible as `N/A` with an explicit insufficient-evidence explanation.
+- Company-news fallback preserves canonical source headlines and links while marking impact `not rated` when the evidence or approved heavy provider is insufficient.
+- Model-supplied `priority: high` is ignored. News items become high priority only after `intel.alert-prioritization` returns `eligible`; persisted Worker alert state is policy-schema-versioned so legacy AI-prioritized alerts are not served.
+- Affected news, sector, company, candle, and alert cache/state keys include the policy schema version.
+- Frontend sector, watchlist, deep-dive, supply-chain, and alert claims now describe the evidence-gated behavior. Sector ranks/scores render `N/A`, company evidence links are clickable, and eligible alert cards disclose corroborating-source count.
+- Dependency hardening upgraded the compatible `body-parser` lockfile entry after `npm audit` identified GHSA-v422-hmwv-36x6.
+- Local verification completed on 2026-07-22:
+  - `npm run test:unit` passed `29/29`
+  - expanded smoke coverage contains 33 checks; the keyless local run passed all 28 available contracts with only documented key/network skips
+  - targeted probes returned sector and company abstentions at schema `2026-07-22a`, 11 unranked sectors, zero sector picks, deterministic candles, zero uncorroborated alerts, and no AI-elevated news items
+  - `npm audit --omit=dev` reported zero known vulnerabilities after the lockfile update
+  - Wrangler `4.113.0` bundled the Worker and 14 assets successfully with `deploy --dry-run` at 345.24 KiB raw / 86.75 KiB gzip; no manual deployment was performed
+  - all seven frontend references use cache version `20260722a`
+  - an interactive local browser pass rendered the sector withheld state, `N/A` scores across all 11 sectors, an AAPL watchlist fallback with canonical source links, the corroboration-gated alerts state, and no console warnings/errors
+- Production status: pending the checkpoint source commit, `git push origin main`, managed Cloudflare deployment, production smoke suite, targeted deployed probes, and production browser verification. Do not describe checkpoint 5 as production verified until those steps are recorded.
+- Scope limit: this closes the four named policy-inventory gaps but does not provide an independent claim-level verifier, provider/model-version telemetry, cost budgets, golden AI evaluation metrics, issuer-grade sector datasets, or professional terminal parity.
+
 # Unresolved risks and technical debt
 
 - The repository still has very large `server.js` and `worker.js` monoliths.
-- Seven high-risk/current-market workflows now use a shared task policy, but independent claim-level verification, complete AI-task coverage, and measured evaluation metrics are still not implemented.
+- Eleven analytical/current-market workflows now use shared policy authority, but independent claim-level verification, remaining prompt coverage, and measured evaluation metrics are still not implemented.
 - Quant coverage now exists only for the new candlestick fallback engine, not the broader 40-indicator surface.
 - Map source snapshots are not universally supplied by upstreams. The new UI differentiates a provided snapshot from response-served time, but per-feature citations and direct upstream timestamps remain future data-source work.
 
@@ -441,6 +465,7 @@ This work was performed by OpenAI Codex without Claude’s involvement. This doc
   - `55e014c` — `Replace social scraper with market sentiment composite`
   - `a25e6be` — `Add map provenance contracts`
   - `5a10b79` — `Gate high-risk AI outputs with evidence policies`
+  - `c062cf2` — `Record AI policy production verification`
 - Push/deploy:
   - `git push origin main` completed for all listed checkpoint commits, including `5a10b79`
   - production deployment verified on `https://market-terminal.wyjjdyxzsc.workers.dev`
@@ -448,5 +473,5 @@ This work was performed by OpenAI Codex without Claude’s involvement. This doc
 # Recommended next step for Claude
 
 - Next recommended step:
-  - extend the registry to sector/company/candle/alert tasks and add an independent claim-level verifier with golden evaluation fixtures
+  - add an independent claim-level verifier, provider/model-version telemetry, enforced token/cost budgets, and golden evaluation fixtures
   - continue quant reference coverage and modular decomposition without weakening current abstention contracts

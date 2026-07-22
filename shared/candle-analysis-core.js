@@ -258,20 +258,20 @@
     const nearestSupport = keyLevels.support[0];
     if (signal === 'Strong Buy' || signal === 'Buy') {
       if (nearestResistance != null) {
-        return `Bias stays constructive while price holds above ${nearestSupport != null ? `$${nearestSupport}` : 'recent support'}; a clean break above $${nearestResistance} would confirm continuation.`;
+        return `The observed pattern remains constructive above ${nearestSupport != null ? `$${nearestSupport}` : 'recent support'}; a close above $${nearestResistance} would confirm continuation.`;
       }
-      return 'Bias stays constructive, but wait for a close that confirms buyers are still in control before adding risk.';
+      return 'The observed pattern is constructive, but no continuation is confirmed without another supportive close.';
     }
     if (signal === 'Strong Sell' || signal === 'Sell') {
       if (nearestSupport != null) {
-        return `Treat $${nearestSupport} as the first breakdown trigger; failure there keeps downside pressure in play toward lower support.`;
+        return `A close below $${nearestSupport} would confirm that the observed downside pattern remains active.`;
       }
-      return 'Respect the bearish structure and wait for price to reclaim resistance before leaning long.';
+      return 'The observed pattern is bearish; a reclaim of resistance would invalidate that technical description.';
     }
     if (nearestSupport != null && nearestResistance != null) {
       return `Neutral setup for now; watch the ${Number.isFinite(currentPrice) ? `current range between $${nearestSupport} and $${nearestResistance}` : 'nearest support/resistance band'} for the next directional break.`;
     }
-    return 'Neutral setup for now; wait for a decisive break in either direction before taking a directional view.';
+    return 'The observed setup is neutral until the price series records a decisive break in either direction.';
   }
 
   function inferSummary(patterns, trend, momentum, signal, meta = {}) {

@@ -23,7 +23,7 @@ let pass = 0, fail = 0;
 const hasPolicy = (data, taskId) =>
   data && data.policy && data.policy.taskId === taskId &&
   typeof data.policy.schemaVersion === 'string' &&
-  (data.policy.status === 'grounded' || data.policy.status === 'abstained') &&
+  (data.policy.status === 'grounded' || data.policy.status === 'abstained' || data.policy.status === 'deterministic') &&
   Array.isArray(data.evidenceIds) && Array.isArray(data.policy.availableEvidenceIds);
 
 async function check(label, url, opts = {}) {
@@ -115,13 +115,16 @@ async function checkHtml(label, url) {
     { skipError: true, validate: d => Array.isArray(d.headlines) || Array.isArray(d) || d.error });
 
   await check('GET /api/intel/news', `${BASE}/api/intel/news`,
-    { skipError: true, validate: d => Array.isArray(d.items) || Array.isArray(d.news) || d.marketSentiment || d.error });
+    { skipError: true, validate: d => (Array.isArray(d.items) && d.items.every(item => item.priority !== 'high' || (item.alertPolicy?.taskId === 'intel.alert-prioritization' && item.alertPolicy?.status === 'eligible' && item.sourceCount >= 2))) || d.error });
 
   await check('GET /api/intel/analysis', `${BASE}/api/intel/analysis`,
-    { skipError: true, validate: d => Array.isArray(d.industries) || d.error });
+    { skipError: true, validate: d => hasPolicy(d, 'intel.sector-analysis') && Array.isArray(d.industries) && d.industries.length === 11 && Array.isArray(d.topInvestPicks) && d.topInvestPicks.length === 0 && d.industries.every(item => item.investRank == null && item.optionsRank == null && item.investScore == null && item.optionsScore == null && item.optionsBias === 'Avoid') });
+
+  await check('GET /api/intel/company?q=AAPL', `${BASE}/api/intel/company?q=AAPL`,
+    { skipError: true, validate: d => hasPolicy(d, 'intel.company-news-impact') && Array.isArray(d.news) && d.news.every(item => Array.isArray(item.evidenceIds) && item.evidenceIds.length > 0 && typeof item.sourceUrl === 'string') });
 
   await check('GET /api/intel/candles?symbol=AAPL&range=1D', `${BASE}/api/intel/candles?symbol=AAPL&range=1D`,
-    { skipError: true, validate: d => Array.isArray(d.patterns) && typeof d.overallSignal === 'string' });
+    { skipError: true, validate: d => hasPolicy(d, 'intel.candle-commentary') && d.policy.status === 'deterministic' && d.dataMode === 'deterministic' && Array.isArray(d.patterns) && typeof d.overallSignal === 'string' });
 
   await check('GET /api/intel/priceaction?symbol=AAPL', `${BASE}/api/intel/priceaction?symbol=AAPL`,
     { skipError: true, validate: d => hasPolicy(d, 'intel.price-action') && typeof d.direction === 'string' });
@@ -179,6 +182,9 @@ async function checkHtml(label, url) {
   // Push (vapid key — always returns even without keys)
   await check('GET /api/vapid-public-key', `${BASE}/api/vapid-public-key`,
     { validate: d => 'enabled' in d });
+
+  await check('GET /api/intel/alerts', `${BASE}/api/intel/alerts`,
+    { validate: d => typeof d.policySchemaVersion === 'string' && Array.isArray(d.alerts) && d.alerts.every(item => item.alertPolicy?.taskId === 'intel.alert-prioritization' && item.alertPolicy?.status === 'eligible') });
 
   // Deep-dive — uses ?q= param
   await check('GET /api/intel/deepdive?q=AAPL', `${BASE}/api/intel/deepdive?q=AAPL`,

@@ -185,11 +185,14 @@
     if (!analysisData) return;
     const banner = $('#sentimentBanner');
     const s = analysisData.marketSentiment || 'Neutral';
+    const score = analysisData.sentimentScore != null && Number.isFinite(Number(analysisData.sentimentScore))
+      ? `<b>${esc(analysisData.sentimentScore)}</b>/10`
+      : '<b>N/A</b>';
     banner.className = 'sentiment-banner ' + s.toLowerCase();
     banner.innerHTML = `
       <div class="sent-top">
         <span class="sent-label">${esc(s)}</span>
-        <span class="sent-score"><b>${esc(analysisData.sentimentScore)}</b>/10</span>
+        <span class="sent-score">${score}</span>
       </div>
       <div class="sent-summary">${esc(analysisData.marketSummary)}</div>
       <div class="themes">${(analysisData.keyThemes || []).map((t) => `<span class="theme">${esc(t)}</span>`).join('')}</div>`;
@@ -224,16 +227,18 @@
   function industryCard(ind, i) {
     const rank = sortMode === 'invest' ? ind.investRank : ind.optionsRank;
     const score = sortMode === 'invest' ? ind.investScore : ind.optionsScore;
+    const rankLabel = rank != null && Number.isFinite(Number(rank)) ? rank : 'N/A';
+    const scoreLabel = score != null && Number.isFinite(Number(score)) ? score : 'N/A';
     return `
       <article class="card" data-i="${i}">
         <div class="card-head">
-          <div class="rank-badge">${esc(rank)}</div>
+          <div class="rank-badge">${esc(rankLabel)}</div>
           <span class="ind-icon">${esc(ind.icon || '📊')}</span>
           <div style="flex:1">
             <div class="ind-name">${esc(ind.name)}</div>
             <div class="ind-etf">${esc(ind.etf)}</div>
           </div>
-          <span class="score-pill">${sortMode === 'invest' ? 'Invest' : 'Options'} ${esc(score)}</span>
+          <span class="score-pill">${sortMode === 'invest' ? 'Invest' : 'Options'} ${esc(scoreLabel)}</span>
         </div>
         <div class="card-detail">
           <div class="detail-inner">
@@ -293,7 +298,7 @@
       if (data.error) throw new Error(data.message);
       analysisData = data;
       window._intelAnalysisData = analysisData;
-      $('#analysisStatus').textContent = '';
+      $('#analysisStatus').innerHTML = policyNotice(data);
       $('#sentimentBanner').classList.remove('hidden');
       renderSentiment();
       renderTopPicks();
@@ -311,6 +316,11 @@
     const cat = esc(a.category || 'macro');
     const time = a.timestamp
       ? new Date(a.timestamp).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
+    const sourceUrl = safeHttpUrl(a.sourceUrl || '');
+    const source = sourceUrl
+      ? `<a href="${esc(sourceUrl)}" target="_blank" rel="noopener noreferrer">${esc(a.source || 'Source')}</a>`
+      : `<span>${esc(a.source || '')}</span>`;
+    const sourceCount = Number(a.sourceCount || 0);
     return `
       <article class="card alert-card" data-i="${i}">
         <div class="card-head">
@@ -321,7 +331,8 @@
         </div>
         <div class="card-meta">
           <span class="tag cat-${cat}">${cat.replace('-', ' ')}</span>
-          <span>${esc(a.source || '')}</span>
+          ${source}
+          ${sourceCount >= 2 ? `<span class="tag">${sourceCount} sources corroborated</span>` : ''}
           ${time ? `<span>· ${time}</span>` : ''}
         </div>
         ${watchBtn(a)}
@@ -492,6 +503,10 @@
     const glyph = impact === 'positive' ? '▲' : impact === 'negative' ? '▼' : '–';
     const time = n.timestamp
       ? new Date(n.timestamp).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
+    const sourceUrl = safeHttpUrl(n.sourceUrl || '');
+    const source = sourceUrl
+      ? `<a href="${esc(sourceUrl)}" target="_blank" rel="noopener noreferrer">${esc(n.source || 'Source')}</a>`
+      : esc(n.source || '');
     return `
       <div class="cnews">
         <div class="impact-dot impact-${impact}">${glyph}</div>
@@ -499,7 +514,7 @@
           <div class="cnews-title">${esc(n.title)}</div>
           <div class="cnews-summary">${esc(n.summary)}</div>
           ${n.impactReason ? `<div class="cnews-reason impact-${impact}">${glyph} ${esc(n.impactReason)}</div>` : ''}
-          <div class="cnews-meta">${esc(n.source || '')}${time ? ' · ' + time : ''}</div>
+          <div class="cnews-meta">${source}${time ? ' · ' + time : ''}</div>
         </div>
       </div>`;
   }
@@ -513,12 +528,15 @@
     } else if (data && data.errorMsg) {
       body = `<div class="company-loading">Couldn't load: ${esc(data.errorMsg)}</div>`;
     } else if (!data.news || !data.news.length) {
-      body = `<div class="company-loading">No recent news found.</div>`;
+      body = policyNotice(data) + `<div class="company-loading">No recent evidence-backed company news found.</div>`;
     } else {
-      body = (data.summary ? `<div class="company-summary">${esc(data.summary)}</div>` : '') +
+      body = policyNotice(data) +
+        (data.summary ? `<div class="company-summary">${esc(data.summary)}</div>` : '') +
         `<div class="company-news">${data.news.map(companyNewsItem).join('')}</div>`;
     }
-    const sent = data && data.overallSentiment ? data.overallSentiment.toLowerCase() : null;
+    const sent = data && data.overallSentiment
+      ? data.overallSentiment.toLowerCase().replace(/[^a-z]+/g, '-')
+      : null;
     const name = (data && data.companyName) || query;
     const ticker = data && data.ticker ? data.ticker : '';
     return `
@@ -831,7 +849,9 @@
     const asOf = policy.dataAsOf && !Number.isNaN(new Date(policy.dataAsOf).valueOf())
       ? new Date(policy.dataAsOf).toLocaleString()
       : '';
-    const title = policy.status === 'abstained' ? 'RESEARCH WITHHELD' : 'EVIDENCE-GATED RESEARCH';
+    const title = policy.status === 'abstained'
+      ? 'RESEARCH WITHHELD'
+      : (policy.status === 'deterministic' ? 'DETERMINISTIC ANALYSIS' : 'EVIDENCE-GATED RESEARCH');
     const count = Number(policy.evidenceCount || 0);
     return `<div class="policy-notice ${policy.status === 'abstained' ? 'is-abstained' : 'is-grounded'}">
       <div class="policy-notice-title">${title}</div>
