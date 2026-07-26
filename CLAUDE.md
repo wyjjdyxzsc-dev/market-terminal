@@ -104,10 +104,10 @@ Deploys to `https://market-terminal.wyjjdyxzsc.workers.dev`
 - Generic educational chat uses the speed tier; current-market and high-risk tasks require policy-approved heavy providers and abstain when unavailable.
 - Source commit `5a10b79` is production verified: `24/24` unit tests, `28/28` local smoke contracts, `31/31` production smoke contracts, targeted policy-envelope probes, and an interactive browser pass completed. Full independent claim-level verification and remaining AI-task coverage are still open.
 
-**AI authority extension (2026-07-22 checkpoint, local verified)**:
+**AI authority extension (2026-07-22 checkpoint, production verified)**:
 - Schema `2026-07-22a` adds sector analysis and company-news evidence gates plus deterministic authority for candle commentary and alert eligibility.
 - Sector ranks/picks/options are withheld, company items bind to canonical evidence, candle output comes only from the OHLC engine, and model-proposed alert priority is ignored unless the deterministic corroboration gate marks it eligible.
-- Local evidence: `29/29` unit tests, all 28 keyless-available smoke contracts, zero dependency vulnerabilities, Wrangler dry-run bundling, targeted probes, and an interactive browser pass. Production verification is pending.
+- Source commit `20c9252` is production verified: `29/29` unit tests, all 28 keyless-available local smoke contracts, `33/33` deployed contracts, zero dependency vulnerabilities, Wrangler dry-run bundling, targeted probes, and local/production browser passes.
 
 **Branches**: All work on `main` (no feature branches yet).
 

@@ -13,14 +13,14 @@ small Express backend that keeps every API key server-side.
 
 ---
 
-## Repository operational state (2026-07-22)
+## Repository operational state (2026-07-26)
 
 - Deploy by pushing to `main`. Do not run `wrangler deploy` manually for production; GitHub is wired to Cloudflare Workers and is the canonical deploy path for this repo.
 - `npm test` now runs unit coverage plus the local smoke suite. Start the local server first with `npm start`.
 - `npm run test:prod` hits the deployed Worker at `https://market-terminal.wyjjdyxzsc.workers.dev` and is the required post-deploy parity check.
 - High-risk AI routes use a shared evidence/task policy. Unsupported supply-chain edges, investment picks, country scores, trade levels, and options constructions are withheld rather than fabricated; full independent-verifier coverage remains open.
 - AI evidence-policy source checkpoint `5a10b79` is production verified: `24/24` unit tests, `28/28` local smoke contracts, and `31/31` production smoke contracts passed on 2026-07-16.
-- Checkpoint 5 locally extends that authority model to sector analysis, company-news impact, deterministic candle commentary, and corroboration-gated alerts. `29/29` unit tests and all 28 keyless-available smoke contracts pass; production verification is pending.
+- Checkpoint 5 source commit `20c9252` extends that authority model to sector analysis, company-news impact, deterministic candle commentary, and corroboration-gated alerts. It is production verified with `29/29` unit tests, all 28 keyless-available local smoke contracts, and `33/33` deployed contracts.
 - The latest external-agent checkpoint and evidence log lives in [docs/CODEX_HANDOFF_TO_CLAUDE_2026-07-13.md](/Users/krishivjain/Desktop/claude projects/market-terminal/docs/CODEX_HANDOFF_TO_CLAUDE_2026-07-13.md).
 
 ---

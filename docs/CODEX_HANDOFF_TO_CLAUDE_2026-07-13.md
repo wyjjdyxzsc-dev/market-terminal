@@ -2,7 +2,7 @@ This work was performed by OpenAI Codex without Claude’s involvement. This doc
 
 # Status
 
-- Handoff status: checkpoint 5 local verified; source deployment and production verification pending
+- Handoff status: checkpoint 5 source commit `20c9252` production verified; post-verification evidence deployment prepared
 - Research date: 2026-07-13
 - Deployment URL: `https://market-terminal.wyjjdyxzsc.workers.dev`
 
@@ -445,7 +445,13 @@ This work was performed by OpenAI Codex without Claude’s involvement. This doc
   - Wrangler `4.113.0` bundled the Worker and 14 assets successfully with `deploy --dry-run` at 345.24 KiB raw / 86.75 KiB gzip; no manual deployment was performed
   - all seven frontend references use cache version `20260722a`
   - an interactive local browser pass rendered the sector withheld state, `N/A` scores across all 11 sectors, an AAPL watchlist fallback with canonical source links, the corroboration-gated alerts state, and no console warnings/errors
-- Production status: pending the checkpoint source commit, `git push origin main`, managed Cloudflare deployment, production smoke suite, targeted deployed probes, and production browser verification. Do not describe checkpoint 5 as production verified until those steps are recorded.
+- Production verification for source commit `20c9252`:
+  - `git push origin HEAD:main` completed and the managed GitHub-to-Cloudflare deployment served all seven `20260722a` asset references
+  - `npm run test:prod` passed `33/33`; `/api/map/weather` was the explicitly allowed upstream `502` skip
+  - targeted deployed probes returned schema `2026-07-22a`; grounded heavy-tier sector output had 11 unranked sectors, zero picks, and no unspecified recommendation fields; lowercase `aapl` resolved to `AAPL` with canonical-or-withheld company evidence; candle output was deterministic; no ineligible alert entered the high-priority or persisted-alert paths
+  - interactive production-browser verification rendered all 11 `N/A` sector ranks/scores with evidence disclosure, the safe lowercase-AAPL watchlist fallback, and the guarded alert state; all seven source cache markers loaded and console/errors were empty
+  - browser behavior was reconfirmed on 2026-07-26 against fresh production data; no screenshot artifact is claimed
+- Post-verification evidence deployment: all seven frontend references are bumped to `20260726a` in this documentation checkpoint.
 - Scope limit: this closes the four named policy-inventory gaps but does not provide an independent claim-level verifier, provider/model-version telemetry, cost budgets, golden AI evaluation metrics, issuer-grade sector datasets, or professional terminal parity.
 
 # Unresolved risks and technical debt
@@ -466,9 +472,10 @@ This work was performed by OpenAI Codex without Claude’s involvement. This doc
   - `a25e6be` — `Add map provenance contracts`
   - `5a10b79` — `Gate high-risk AI outputs with evidence policies`
   - `c062cf2` — `Record AI policy production verification`
+  - `20c9252` — `Constrain remaining AI analysis and alerts`
 - Push/deploy:
-  - `git push origin main` completed for all listed checkpoint commits, including `5a10b79`
-  - production deployment verified on `https://market-terminal.wyjjdyxzsc.workers.dev`
+  - `git push origin main` completed for all listed source checkpoint commits, including `20c9252`
+  - source commit `20c9252` is production verified on `https://market-terminal.wyjjdyxzsc.workers.dev`
 
 # Recommended next step for Claude
 

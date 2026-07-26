@@ -17,7 +17,7 @@ Research date: 2026-07-13
   - production smoke suite `29/29` passed on 2026-07-15 (checkpoint 2)
   - map provenance checkpoint source commit `a25e6be` is production verified: `16/16` unit tests, `23/23` local smoke checks, and `29/29` production smoke checks passed on 2026-07-15
   - AI evidence-policy source commit `5a10b79` is production verified on 2026-07-16: `24/24` unit tests, `28/28` local smoke contracts, and `31/31` production smoke contracts passed
-  - checkpoint 5 is local verified on 2026-07-22: `29/29` unit tests, all 28 keyless-available smoke contracts, zero dependency vulnerabilities, Worker dry-run bundling, and interactive alert checks passed; production verification is pending
+  - checkpoint 5 source commit `20c9252` is production verified: `29/29` unit tests, all 28 keyless-available local smoke contracts, `33/33` production contracts, targeted alert probes, and interactive alert checks passed
 
 ## Capability rows
 
@@ -77,11 +77,12 @@ Research date: 2026-07-13
 - Shared contract: Express and Worker use the same AI policy schema (`2026-07-15a`), cache-key version, provider restrictions, evidence metadata, and abstention envelope. Frontend policy notices expose source count, as-of time, verifier type, source links, disclaimer, and withheld status.
 - Evidence: local policy fixtures passed as part of `24/24` unit tests, the expanded local contract suite passed `28/28`, and source commit `5a10b79` passed `31/31` production contracts. Deployed instability returned an explicit abstention with zero country markers; the situation brief cited five allowed evidence IDs. Interactive browser verification exercised all seven views with no console warnings/errors; no screenshot artifact is claimed. This does not establish country-dossier, canonical event, corroborated-alert, or World Monitor parity.
 
-### 2026-07-22 checkpoint 5 local update
+### 2026-07-22 checkpoint 5 production update
 
 - Alert authority: model-proposed priority is ignored. A deterministic policy can mark an item high priority only when source-bound headlines contain breaking-event language and meet the configured recency, trusted-source, and source-diversity gates.
 - State and UI safety: alert state is policy-schema-versioned, downstream delivery accepts only `eligible` records from `intel.alert-prioritization`, and the browser exposes source links/corroboration counts or a guarded empty state.
-- Evidence: eligible, single-source, and non-breaking fixtures passed within `29/29` unit tests; the keyless local smoke suite passed all 28 available contracts; targeted probes found no uncorroborated high-priority items; and the browser alert view had no console warnings/errors. This remains short of World Monitor parity because canonical event identity, independent origin-type classification, cross-feed deduplication, and production evidence are pending.
+- Evidence: eligible, single-source, and non-breaking fixtures passed within `29/29` unit tests; the keyless local smoke suite passed all 28 available contracts; targeted probes found no uncorroborated high-priority items; and the browser alert view had no console warnings/errors. This remains short of World Monitor parity because canonical event identity, independent origin-type classification, and cross-feed deduplication are pending.
+- Production evidence: source commit `20c9252` served schema `2026-07-22a`; the deployed suite passed `33/33`, targeted probes found no ineligible high-priority or persisted alerts, and the production browser rendered the guarded alert state with no console warnings/errors. Canonical event identity, independent origin-type classification, and cross-feed deduplication remain pending.
 
 ### WM-003 Country dossiers and instability scoring
 
@@ -119,7 +120,7 @@ Research date: 2026-07-13
 - Evaluation criteria: origin diversity, dedupe, threshold logic, safe delivery
 - Provenance links: `https://www.worldmonitor.app/`
 - Licensing or trademark notes: independent implementation only
-- Final evidence: checkpoint 5 locally verifies that only policy-eligible, recent, trusted, source-diverse breaking-language evidence can enter the high-priority path. Status remains missing against the target because event identity, origin-type independence, cross-feed deduplication, and production evidence are not established.
+- Final evidence: source commit `20c9252` production verifies that only policy-eligible, recent, trusted, source-diverse breaking-language evidence can enter the high-priority path. Status remains missing against the target because event identity, origin-type independence, and cross-feed deduplication are not established.
 
 ### WM-005 Scenario engine and route explorer
 

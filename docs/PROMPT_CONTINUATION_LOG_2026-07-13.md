@@ -80,6 +80,10 @@ This file is a portable handoff for continuing work on another account. It recor
 
 > continue
 
+### User prompt 17
+
+> continuwe
+
 ## Authoritative Prompt Sources
 
 - Full master prompt: [MARKET_TERMINAL_TOTAL_PLATFORM_CODEX_MASTER_PROMPT.md](/Users/krishivjain/Desktop/claude projects/market-terminal/MARKET_TERMINAL_TOTAL_PLATFORM_CODEX_MASTER_PROMPT.md)
@@ -126,7 +130,7 @@ The following production-oriented vertical slices were implemented and deployed:
 - Added evidence-policy UI notices to terminal, deep dive, report, situation, supply chain, map/globe, and chat surfaces.
 - Added eight AI-policy unit cases and expanded smoke coverage to 31 checks. Checkpoint 4 source commit `5a10b79` is production verified.
 - Extended shared task authority to sector analysis, company-news impact, candle commentary, and alert prioritization. Unsupported ranks/picks/options are withheld, company facts bind to canonical evidence, candle output is deterministic, and only deterministically eligible alerts can enter the high-priority path.
-- Expanded the unit suite to 29 cases and the smoke suite to 33 contracts. Checkpoint 5 is locally verified; source deployment and production verification remain pending.
+- Expanded the unit suite to 29 cases and the smoke suite to 33 contracts. Checkpoint 5 source commit `20c9252` is production verified.
 - Unit tests for API contracts, evidence helpers, and candle analysis.
 - Expanded smoke tests covering local and production endpoint contracts.
 
@@ -145,7 +149,7 @@ Local verification completed:
 - In-app browser verification showed the Market Terminal page, live ticker, AAPL quote panel, chart canvas, and graceful sentiment degradation. Browser console errors and warnings were empty during the check.
 - Checkpoint 4 local verification on 2026-07-16: clean dependency installation completed; dependency audit reported zero vulnerabilities; Wrangler `4.111.0` dry-run bundling passed without deployment; all modified modules passed syntax checks; `npm run test:unit` passed `24/24`; local smoke passed `28/28`; targeted policy probes confirmed schema `2026-07-15a`, explicit abstentions, empty unsupported relationships/picks/country scores, speed-tier generic chat, `Not Rated` deep-dive output with no valuation/trade/options fields, and seven `20260716a` asset references.
 - The Desktop-backed workspace had macOS dataless files. Source was hydrated and the exact working tree was mirrored to `/tmp/market-terminal-verify` for stable local runtime tests; no temporary runtime artifact is part of the source checkpoint.
-- Checkpoint 5 local verification on 2026-07-22: `npm run test:unit` passed `29/29`; all 28 smoke contracts available in the keyless local environment passed; syntax checks, `git diff --check`, zero-vulnerability dependency audit, Wrangler `4.113.0` dry-run bundling, targeted policy probes, and interactive sector/watchlist/alert browser checks passed. All seven asset references use `20260722a`; production evidence is pending.
+- Checkpoint 5 local verification on 2026-07-22: `npm run test:unit` passed `29/29`; all 28 smoke contracts available in the keyless local environment passed; syntax checks, `git diff --check`, zero-vulnerability dependency audit, Wrangler `4.113.0` dry-run bundling, targeted policy probes, and interactive sector/watchlist/alert browser checks passed. All seven source-deployment asset references use `20260722a`.
 - Checkpoint 5 work runs from detached temporary worktree `/tmp/market-terminal-checkpoint5-20260718` because the Desktop/iCloud checkout was nearly full and intermittently exposed dataless files. The original checkout and its unrelated untracked files remain untouched.
 
 Production verification completed:
@@ -168,6 +172,11 @@ Production verification completed:
   - targeted routes returned schema `2026-07-15a`, empty unsupported edges/picks/country scores, `Not Rated` deep dive, a five-citation grounded situation response, and grounded speed-tier generic chat
   - interactive browser verification loaded a live AAPL quote, a `718x495` chart, all seven top-level views, the supply-chain withheld state, and no console warnings/errors
   - screenshot capture timed out, so no screenshot artifact is claimed
+- Checkpoint 5 production verification:
+  - source commit `20c9252` reached production through the managed GitHub-to-Cloudflare path and served all seven `20260722a` asset markers
+  - `npm run test:prod` passed `33/33`; weather was the explicitly allowed upstream `502` skip
+  - targeted routes returned schema `2026-07-22a`, 11 unranked sectors, zero picks or unspecified recommendation fields, canonical-or-withheld lowercase-AAPL evidence, deterministic candles, and no ineligible high-priority or persisted alerts
+  - interactive production-browser verification rendered the constrained sector/watchlist/alert states with no console warnings/errors; fresh-data behavior was reconfirmed on 2026-07-26 and no screenshot artifact is claimed
 
 ## Checkpoints
 
@@ -179,8 +188,9 @@ Production verification completed:
 - `a25e6be` — `Add map provenance contracts`
 - `5a10b79` — `Gate high-risk AI outputs with evidence policies`
 - `c062cf2` — `Record AI policy production verification`
+- `20c9252` — `Constrain remaining AI analysis and alerts`
 
-All listed commits were pushed to `origin/main`. Checkpoint 4 source commit `5a10b79` is production verified; unrelated untracked files listed below remain preserved.
+All listed source commits were pushed to `origin/main`. Checkpoint 5 source commit `20c9252` is production verified; unrelated untracked files listed below remain preserved.
 
 ## Remaining Work
 
@@ -189,7 +199,6 @@ These items are intentionally not marked complete:
 - Expand quant-engine unit coverage beyond the candlestick fallback engine.
 - Add independent claim-level verification, provider/model-version telemetry, enforced token/cost budgets, and measured golden AI evaluation fixtures. The current deterministic citation check is not an independent verifier.
 - Continue modular decomposition of the large `server.js` and `worker.js` files.
-- Commit and deploy checkpoint 5 through `origin/main`, then run the complete production smoke suite, targeted deployed probes, and production browser verification before recording it as production verified.
 - Re-run the full production smoke suite after any subsequent deployment.
 - Update this log and the Claude handoff after every future checkpoint commit.
 

@@ -16,7 +16,7 @@ Research date: 2026-07-13
   - production smoke suite `29/29` passed on 2026-07-15 (checkpoint 2)
   - map provenance checkpoint source commit `a25e6be` is production verified: `16/16` unit tests, `23/23` local smoke checks, and `29/29` production smoke checks passed on 2026-07-15
   - AI evidence-policy source commit `5a10b79` is production verified on 2026-07-16: `24/24` unit tests, `28/28` local smoke contracts, and `31/31` production smoke contracts passed
-  - checkpoint 5 is local verified on 2026-07-22: `29/29` unit tests, all 28 keyless-available smoke contracts, zero dependency vulnerabilities, Worker dry-run bundling, and interactive alert checks passed; production verification is pending
+  - checkpoint 5 source commit `20c9252` is production verified: `29/29` unit tests, all 28 keyless-available local smoke contracts, `33/33` production contracts, targeted alert probes, and interactive alert checks passed
 
 ## Capability rows
 
@@ -74,12 +74,13 @@ Research date: 2026-07-13
 - Country-risk control: `/api/intel/instability` now emits no country scores or map markers until a verified country-risk adapter exists; the UI says the risk layer is withheld instead of presenting headline-generated scores as intelligence.
 - Evidence: AI-policy fixtures and route contracts passed locally (`24/24` unit, `28/28` smoke), then source commit `5a10b79` passed `31/31` production contracts. Deployed situation output was grounded with five allowed citations, while country risk correctly returned no unverified scores. Interactive browser verification switched all seven views and reported no console warnings/errors; no screenshot artifact is claimed. This does not add event-grade classification, official threat posture, conflict timelines, or War Monitor parity.
 
-### 2026-07-22 checkpoint 5 local update
+### 2026-07-22 checkpoint 5 production update
 
 - Alert authority: model-generated `priority: high` is ignored. A report is alert-eligible only when breaking language appears in bound source headlines and a deterministic gate finds two distinct source domains, one trusted source, and evidence no older than 180 minutes.
 - State isolation: the Worker persists alerts under the AI-policy schema version, preventing earlier model-prioritized state from appearing as newly compliant. Alert cards preserve evidence links and disclose corroborating-source count.
 - Evidence: alert fixtures cover eligible, single-source, and non-breaking cases within a `29/29` unit pass. The keyless local smoke suite passed all 28 available contracts, targeted probes found zero uncorroborated high-priority items/alerts, and the browser rendered the guarded empty-alert state without console warnings/errors.
-- Scope: this is a notification-safety control, not event-grade classification, conflict-thread correlation, severity scoring, official confirmation, or War Monitor parity. Production verification is pending.
+- Production evidence: source commit `20c9252` served schema `2026-07-22a`; the deployed suite passed `33/33`, targeted probes found no ineligible high-priority or persisted alerts, and the production browser rendered the guarded alert state with no console warnings/errors.
+- Scope: this is a notification-safety control, not event-grade classification, conflict-thread correlation, severity scoring, official confirmation, or War Monitor parity.
 
 ### WAR-003 Conflict threads and timelines
 
@@ -117,7 +118,7 @@ Research date: 2026-07-13
 - Evaluation criteria: thread following, severity thresholds, dedupe, auth
 - Provenance links: `https://war-monitor.com/`
 - Licensing or trademark notes: original alert workflow only
-- Final evidence: checkpoint 5 locally verifies deterministic recency/trust/source-diversity eligibility, schema-versioned state, and safe empty alert rendering; thread semantics, severity thresholds, authentication, and production evidence remain pending
+- Final evidence: source commit `20c9252` production verifies deterministic recency/trust/source-diversity eligibility, schema-versioned state, and safe empty alert rendering; thread semantics, severity thresholds, and authentication remain pending
 
 ### WAR-005 Voice intelligence briefing
 

@@ -31,3 +31,4 @@
 - Sector ranks, investment picks, and options construction remain withheld because the project has no licensed research/ranking or options-chain input for those claims.
 - Company-news output is bound back to existing canonical headline records and links; candle commentary uses the existing OHLC engine; alert eligibility uses existing evidence metadata. These controls improve claim authority but do not broaden redistribution rights or source coverage.
 - Canonical event resolution, independent origin-type corroboration, and issuer-grade research remain adapter gaps rather than inferred entitlements.
+- Source commit `20c9252` passed production verification without adding or implying any new entitlement; the checkpoint changes authority and disclosure behavior only.

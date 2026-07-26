@@ -9,7 +9,10 @@
 - Updated sector, watchlist, and alert UI states to expose safe unavailable states, canonical source links, and corroboration counts.
 - Updated the vulnerable transitive `body-parser` release; `npm audit --omit=dev` reports zero vulnerabilities.
 - Expanded local verification to `29/29` unit tests and a 33-contract smoke suite; all 28 contracts available without local provider keys passed. Syntax checks, Wrangler dry-run bundling, targeted probes, and interactive browser checks also passed.
-- Bumped all seven frontend cache references to `20260722a`. Production deployment and verification are pending and are not claimed by this source entry.
+- Bumped all seven frontend cache references to `20260722a` for the source deployment.
+- Deployed source checkpoint `20c9252`: production served all seven `20260722a` markers, the expanded suite passed `33/33` with only the allowed weather-provider skip, and targeted routes confirmed the constrained sector/company/candle/alert authority contracts.
+- Interactive production-browser verification rendered all 11 unranked sectors, the safe lowercase-AAPL fallback, and the guarded alert state with no console warnings/errors. Fresh-data behavior was reconfirmed on 2026-07-26; no screenshot artifact is claimed.
+- Bumped all frontend cache references to `20260726a` for the post-verification evidence deployment.
 
 ## 2026-07-16
 
