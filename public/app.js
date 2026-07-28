@@ -24,6 +24,18 @@ const state = {
   showMC: false,    // Monte Carlo forward fan
 };
 
+window.MarketTerminal = window.MarketTerminal || {};
+window.MarketTerminal.getSymbolContext = () => ({
+  symbol: state.symbol,
+  lastPrice: Number.isFinite(Number(state.quote?.c)) ? Number(state.quote.c) : null,
+});
+
+function notifySymbolContext() {
+  document.dispatchEvent(new CustomEvent('marketsymbolchange', {
+    detail: window.MarketTerminal.getSymbolContext(),
+  }));
+}
+
 // MC fan state — generated per symbol/range, drawn via RAF
 const _mc = { symbol: null, range: null, paths: null, rafId: null, model: 'RJD' };
 
@@ -204,6 +216,7 @@ async function loadSymbol(rawSymbol) {
   const symbol = String(rawSymbol || '').trim().toUpperCase();
   if (!symbol) return;
   state.symbol = symbol;
+  notifySymbolContext();
   $('symbolInput').value = symbol;
   setStatus(`Loading ${symbol}…`);
 
@@ -319,6 +332,7 @@ async function loadQuote(symbol) {
       return;
     }
     state.quote = q;
+    notifySymbolContext();
     // Persist only symbols that actually quoted, so a typo (or company name
     // typed as a ticker) is never restored on the next page load.
     try { localStorage.setItem('mt:lastSymbol', symbol); } catch { /* private mode */ }

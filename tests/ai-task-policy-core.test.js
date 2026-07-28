@@ -323,3 +323,14 @@ test('both runtimes build chat context on the backend and reject legacy coercive
     assert.match(source, /const normalizedQuery = query\.toUpperCase\(\)/);
   }
 });
+
+test('chat reads the active terminal symbol through the public context adapter', () => {
+  const appSource = fs.readFileSync(path.join(__dirname, '..', 'public', 'app.js'), 'utf8');
+  const intelSource = fs.readFileSync(path.join(__dirname, '..', 'public', 'intel.js'), 'utf8');
+
+  assert.match(appSource, /MarketTerminal\.getSymbolContext/);
+  assert.match(appSource, /marketsymbolchange/);
+  assert.match(intelSource, /readSymbolContext/);
+  assert.match(intelSource, /marketsymbolchange/);
+  assert.doesNotMatch(intelSource, /window\.state/);
+});

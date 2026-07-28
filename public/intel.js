@@ -2287,6 +2287,18 @@ function formatAiRuntimeSummary(policy) {
   let chatHistory = [];
   let isSending = false;
 
+  function readSymbolContext() {
+    try {
+      const context = window.MarketTerminal?.getSymbolContext?.() || {};
+      return {
+        symbol: typeof context.symbol === 'string' ? context.symbol : '',
+        lastPrice: Number.isFinite(Number(context.lastPrice)) ? Number(context.lastPrice) : null,
+      };
+    } catch {
+      return { symbol: '', lastPrice: null };
+    }
+  }
+
   // ── Open / close ──────────────────────────────────────────────────────
   function openPanel() {
     panel.hidden = false;
@@ -2305,14 +2317,14 @@ function formatAiRuntimeSummary(policy) {
 
   // ── Context label ─────────────────────────────────────────────────────
   function updateCtxLabel() {
-    const sym = window.state && window.state.symbol;
-    const price = window.state && window.state.lastPrice;
+    const { symbol: sym, lastPrice: price } = readSymbolContext();
     if (sym) {
-      ctxEl.textContent = price ? `${sym} · $${Number(price).toFixed(2)}` : sym;
+      ctxEl.textContent = price != null ? `${sym} · $${price.toFixed(2)}` : sym;
     } else {
       ctxEl.textContent = 'No symbol loaded';
     }
   }
+  document.addEventListener('marketsymbolchange', updateCtxLabel);
 
   // ── Render helpers ───────────────────────────────────────────────────
   function escHtml(s) {
@@ -2429,12 +2441,13 @@ function formatAiRuntimeSummary(policy) {
     chatHistory.push({ role: 'user', content: text });
     showTyping();
     updateCtxLabel();
+    const { symbol } = readSymbolContext();
 
     try {
       const resp = await fetch('/api/intel/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: chatHistory, symbol: window.state && window.state.symbol ? window.state.symbol : null }),
+        body: JSON.stringify({ messages: chatHistory, symbol: symbol || null }),
       });
       const data = await resp.json();
       removeTyping();
