@@ -19,7 +19,7 @@ Research date: 2026-07-13
   - map provenance checkpoint source commit `a25e6be` is production verified: `16/16` unit tests, `23/23` local smoke checks, and `29/29` production smoke checks passed on 2026-07-15
   - AI evidence-policy source commit `5a10b79` is production verified on 2026-07-16: `24/24` unit tests, `28/28` local smoke contracts, and `31/31` production smoke contracts passed
   - checkpoint 5 source commit `20c9252` is production verified: `29/29` unit tests, all 28 keyless-available local smoke contracts, `33/33` production contracts, zero dependency vulnerabilities, Worker dry-run bundling, targeted probes, and interactive sector/watchlist/alert checks passed
-  - checkpoint 6 is locally verified: `44/44` unit tests, the versioned 10-case offline AI safety evaluation, all 28 keyless-available smoke contracts, zero dependency vulnerabilities, Worker dry-run bundling, and interactive telemetry/chat checks passed; production evidence is pending
+  - checkpoint 6 source commit `919f1b9` is production verified: `45/45` unit tests, the versioned 10-case offline AI safety evaluation, all 28 keyless-available local contracts, `33/33` deployed contracts, zero dependency vulnerabilities, Worker dry-run bundling, targeted authority probes, and desktop/mobile telemetry/chat checks passed
 
 ## Capability rows
 
@@ -86,12 +86,12 @@ Research date: 2026-07-13
 - Deterministic technical analysis: `/api/intel/candles` now always uses the shared OHLC pattern engine and identifies that verifier in policy metadata instead of allowing a speed model to replace calculated output.
 - Evidence: `29/29` unit tests passed; the expanded suite passed all 28 contracts available in the keyless local environment and `33/33` deployed contracts for source commit `20c9252`. Production probes returned 11 unranked sectors, zero picks or unspecified recommendation fields, canonical-or-withheld lowercase-AAPL company evidence, and deterministic candles. Managed deployment served all seven `20260722a` references; the production browser rendered the constrained states with no console warnings/errors. This preserves `partial` assessments and makes no Bloomberg parity claim.
 
-### 2026-07-28 checkpoint 6 local update
+### 2026-07-28 checkpoint 6 production update
 
 - Provider lifecycle: a shared Express/Worker registry records current model IDs, context/output limits, pricing where documented, lifecycle status, runtime eligibility, and protected health state. Deprecated Groq, Gemini, DeepSeek, Cohere, Together, and AI21 defaults were replaced; unverified Nebius and obsolete OctoAI paths are disabled.
 - High-risk authority: generated current-market and high-risk tasks now run a bounded generator followed by a verifier from a different provider and canonical model family. A valid rejection is authoritative; no independent candidate, failed evidence/citation/schema validation, or exhausted call/token/cost/latency budget produces a structured abstention.
 - Disclosure and evaluation: safe response metadata exposes actual served models, provider calls, reported or estimated tokens, latency, estimated cost, cost units, and verifier outcome. The versioned offline fixture suite measures policy safety but is not a live-provider quality benchmark.
-- Local evidence: `44/44` unit tests, the 10-case evaluation thresholds, all 28 keyless-available API contracts, zero-vulnerability audit, Wrangler `4.114.0` dry-run bundling, and desktop/mobile browser checks passed. This improves the AI research safety architecture but does not change any capability row to implemented, add licensed financial data, or establish Bloomberg parity. Production verification is pending.
+- Evidence: `45/45` unit tests, the 10-case evaluation thresholds, all 28 keyless-available local API contracts, zero-vulnerability audit, and Wrangler `4.114.0` dry-run bundling passed. After an initial `29/33` production run exposed stale KV policy envelopes, schema-isolation commit `4ffe15a` fixed the defect; final source commit `919f1b9` passed `33/33`, targeted authority probes, and desktop/mobile browser checks with no warnings/errors. Live high-risk attempts abstained after their evidence or verifier gates, so no positive high-risk acceptance or factual-quality claim is made. This improves the AI research safety architecture but does not change any capability row to implemented, add licensed financial data, or establish Bloomberg parity.
 
 ### FT-003 Real-time market monitors
 

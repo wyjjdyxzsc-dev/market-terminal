@@ -109,10 +109,10 @@ Deploys to `https://market-terminal.wyjjdyxzsc.workers.dev`
 - Sector ranks/picks/options are withheld, company items bind to canonical evidence, candle output comes only from the OHLC engine, and model-proposed alert priority is ignored unless the deterministic corroboration gate marks it eligible.
 - Source commit `20c9252` is production verified: `29/29` unit tests, all 28 keyless-available local smoke contracts, `33/33` deployed contracts, zero dependency vulnerabilities, Wrangler dry-run bundling, targeted probes, and local/production browser passes.
 
-**AI provider verification (2026-07-28 checkpoint, local verified / production pending)**:
+**AI provider verification (2026-07-28 checkpoint, production verified)**:
 - Provider/verifier schema `2026-07-26a` and task-policy/cache schema `2026-07-28a` add a current-model provider registry, lifecycle/health state, bounded calls/tokens/latency/cost, actual runtime telemetry, and independent different-provider/different-model verification for every generated current-market/high-risk task. The policy/cache revision prevents incompatible pre-final envelopes from being reused.
 - `shared/ai-evaluation-core.js` and `tests/fixtures/ai-eval-2026-07-26a.json` provide 10 versioned offline safety cases. They are regression evidence, not a live-provider benchmark or proof of factual accuracy.
-- Local evidence: `44/44` unit tests, all evaluation thresholds, all 28 keyless-available smoke contracts, zero dependency vulnerabilities, Wrangler `4.114.0` dry-run bundling, targeted probes, and desktop/mobile browser checks passed. Do not call this production verified until managed deployment evidence is recorded.
+- Source commit `919f1b9` is production verified: `45/45` unit tests, all evaluation thresholds, all 28 keyless-available local smoke contracts, zero dependency vulnerabilities, Wrangler `4.114.0` dry-run bundling, `33/33` deployed contracts, targeted authority probes, and desktop/mobile browser checks passed. Available live high-risk verifier attempts failed closed, so no positive high-risk acceptance is claimed.
 
 **Branches**: All work on `main` (no feature branches yet).
 

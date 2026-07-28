@@ -40,4 +40,4 @@
 - Current official model documentation and runtime lifecycle decisions are recorded in `docs/AI_PROVIDER_CAPABILITY_AUDIT_2026-07-28.md`.
 - OpenRouter and Hugging Face are excluded from independent high-risk verification because their routing identity is brokered or variable. Nebius's legacy hosted Studio endpoint and OctoAI's obsolete endpoint are disabled.
 - Token, call, latency, estimated-cost, and conservative cost-unit budgets constrain service use. These are engineering guardrails, not a substitute for provider-specific terms, privacy, retention, regional, or regulated-use review.
-- Local tests verify the controls. No production entitlement or live-provider quality claim is made until the managed deployment and production probes complete.
+- Local tests and production source commit `919f1b9` verify the engineering controls. The deployed suite passed `33/33`, and targeted routes exposed bounded runtime metadata or abstained safely. No new production entitlement is implied, and because available high-risk verifier attempts failed closed, no positive live-provider quality claim is made.

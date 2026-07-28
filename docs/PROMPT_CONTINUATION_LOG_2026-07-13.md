@@ -88,6 +88,10 @@ This file is a portable handoff for continuing work on another account. It recor
 
 > continue
 
+### User prompt 19
+
+> continue
+
 ## Authoritative Prompt Sources
 
 - Full master prompt: [MARKET_TERMINAL_TOTAL_PLATFORM_CODEX_MASTER_PROMPT.md](/Users/krishivjain/Desktop/claude projects/market-terminal/MARKET_TERMINAL_TOTAL_PLATFORM_CODEX_MASTER_PROMPT.md)
@@ -138,6 +142,7 @@ The following production-oriented vertical slices were implemented and deployed:
 - Added a shared current-model provider registry, lifecycle/health metadata, bounded call/token/latency/cost policy, and independent different-provider/different-model verification for generated high-risk tasks.
 - Added safe runtime telemetry and a versioned 10-case offline AI policy evaluation. The evaluation is not represented as a live-provider quality benchmark.
 - Corrected educational/current-market chat classification and the duplicate false network-error bubble in the AI chat panel.
+- Exposed the normalized active terminal symbol to AI chat through a public context bridge and `marketsymbolchange` event; production browser evidence shows `AAPL` context instead of a stale/default fallback.
 - Unit tests for API contracts, evidence helpers, and candle analysis.
 - Expanded smoke tests covering local and production endpoint contracts.
 
@@ -158,8 +163,8 @@ Local verification completed:
 - The Desktop-backed workspace had macOS dataless files. Source was hydrated and the exact working tree was mirrored to `/tmp/market-terminal-verify` for stable local runtime tests; no temporary runtime artifact is part of the source checkpoint.
 - Checkpoint 5 local verification on 2026-07-22: `npm run test:unit` passed `29/29`; all 28 smoke contracts available in the keyless local environment passed; syntax checks, `git diff --check`, zero-vulnerability dependency audit, Wrangler `4.113.0` dry-run bundling, targeted policy probes, and interactive sector/watchlist/alert browser checks passed. All seven source-deployment asset references use `20260722a`.
 - Checkpoint 5 work runs from detached temporary worktree `/tmp/market-terminal-checkpoint5-20260718` because the Desktop/iCloud checkout was nearly full and intermittently exposed dataless files. The original checkout and its unrelated untracked files remain untouched.
-- Checkpoint 6 local verification on 2026-07-28: `npm run test:unit` passed `44/44`; `npm run test:ai-eval` passed all declared thresholds for 10 versioned fixtures; all 28 keyless-available smoke contracts passed; `npm audit --omit=dev` reported zero vulnerabilities; syntax checks passed; and Wrangler `4.114.0` dry-run bundled 14 assets at 399.10 KiB raw / 96.89 KiB gzip.
-- Checkpoint 6 browser evidence: desktop sector/deep-dive states and mobile sector layout remained safe; educational P/E chat resolved to `intel.chat`, rendered exactly one AI response and one policy note, and produced no console warnings/errors.
+- Checkpoint 6 local verification on 2026-07-28: `npm run test:unit` passed `45/45`; `npm run test:ai-eval` passed all declared thresholds for 10 versioned fixtures; all 28 keyless-available smoke contracts passed; `npm audit --omit=dev` reported zero vulnerabilities; syntax checks passed; and Wrangler `4.114.0` dry-run bundled 14 assets at 399.10 KiB raw / 96.89 KiB gzip.
+- Checkpoint 6 browser evidence: desktop sector/deep-dive states and mobile sector layout remained safe; educational P/E chat resolved to `intel.chat`, rendered exactly one AI response and one policy note, showed active context `AAPL`, and produced no console warnings/errors.
 - Checkpoint 6 work runs from detached worktree `/tmp/market-terminal-checkpoint6-20260726`. The original checkout and its unrelated untracked master-prompt/profile files remain preserved.
 
 Production verification completed:
@@ -187,6 +192,12 @@ Production verification completed:
   - `npm run test:prod` passed `33/33`; weather was the explicitly allowed upstream `502` skip
   - targeted routes returned schema `2026-07-22a`, 11 unranked sectors, zero picks or unspecified recommendation fields, canonical-or-withheld lowercase-AAPL evidence, deterministic candles, and no ineligible high-priority or persisted alerts
   - interactive production-browser verification rendered the constrained sector/watchlist/alert states with no console warnings/errors; fresh-data behavior was reconfirmed on 2026-07-26 and no screenshot artifact is claimed
+- Checkpoint 6 production verification:
+  - source commits `8a8b980`, `4ffe15a`, and `919f1b9` reached production through the managed GitHub-to-Cloudflare path
+  - the initial `8a8b980` run passed `29/33` because four stale in-progress KV policy envelopes remained compatible with the first schema; commit `4ffe15a` advanced policy/cache schema to `2026-07-28a`, and both the cold-namespace run and final `919f1b9` run passed `33/33`
+  - targeted routes exposed bounded runtime metadata and abstained safely when evidence, required inputs, or independent verification failed; deterministic candles used zero provider calls and generic educational chat completed through the speed tier
+  - no generated high-risk/current-market response was accepted during the probes, so no positive live-provider quality claim is made
+  - desktop/mobile production checks loaded all seven `20260728b` markers with no horizontal overflow or console warnings/errors; active AI chat context showed `AAPL`. Screenshot capture timed out, so no screenshot artifact is claimed
 
 ## Checkpoints
 
@@ -199,17 +210,20 @@ Production verification completed:
 - `5a10b79` — `Gate high-risk AI outputs with evidence policies`
 - `c062cf2` — `Record AI policy production verification`
 - `20c9252` — `Constrain remaining AI analysis and alerts`
+- `8a8b980` — `Verify high-risk AI outputs independently`
+- `4ffe15a` — `Isolate AI policy cache envelopes`
+- `919f1b9` — `Share active symbol with AI chat`
 
-All listed source commits were pushed to `origin/main`. Checkpoint 5 source commit `20c9252` is production verified; unrelated untracked files listed below remain preserved.
+All listed source commits were pushed to `origin/main`. Checkpoint 6 source commit `919f1b9` is production verified; unrelated untracked files listed below remain preserved.
 
 ## Remaining Work
 
 These items are intentionally not marked complete:
 
 - Expand quant-engine unit coverage beyond the candlestick fallback engine.
-- Finish checkpoint 6 managed deployment, production smoke/probes, production browser evidence, and evidence commit before treating the new AI controls as production verified.
 - Expand beyond offline safety fixtures with live-provider drift canaries, a human-labelled finance/OSINT claim corpus, calibration metrics, and persistent aggregate observability. A model verifier remains fallible and is not proof of truth.
 - Continue modular decomposition of the large `server.js` and `worker.js` files.
+- Add terms-compliant licensed/professional data adapters and event-grade intelligence inputs before changing any parity row that depends on them.
 - Re-run the full production smoke suite after any subsequent deployment.
 - Update this log and the Claude handoff after every future checkpoint commit.
 

@@ -59,8 +59,15 @@ This is an implementation audit of the model providers used by Market Terminal. 
 
 - `tests/fixtures/ai-eval-2026-07-26a.json` contains 10 versioned recorded policy cases, including deliberately invalid candidate output and verifier rejection cases.
 - `npm run test:ai-eval` measures schema pass rate, evidence precision, unsupported-claim rate, entity/ticker precision, timestamp accuracy, duplicate rate, abstention accuracy, verifier decisions, and latency/token/cost budget compliance.
-- The local checkpoint passed all declared thresholds. Candidate metrics intentionally remain below 1.0 where bad candidates are included; accepted-output evidence precision and unsupported-claim controls passed.
+- The checkpoint passed all declared thresholds across `45/45` unit tests and the 10-case offline evaluation. Candidate metrics intentionally remain below 1.0 where bad candidates are included; accepted-output evidence precision and unsupported-claim controls passed.
 - Unit tests cover provider lifecycle defaults, opaque-router exclusion, health state, different-provider/different-model verification, canonical model-family aliases, authoritative verifier rejection, complete verifier coverage of candidate-cited evidence IDs, explicit evaluation-budget observations, affordable-verifier fallback, and fail-closed budgets.
+
+## Production Evidence
+
+- Source commits `8a8b980`, `4ffe15a`, and `919f1b9` deployed through the managed GitHub-to-Cloudflare path. The first run against `8a8b980` passed `29/33` because four pre-final KV envelopes shared the in-progress policy namespace. Commit `4ffe15a` moved policy/cache schema to `2026-07-28a`; the cold-namespace run and final `919f1b9` run passed `33/33`, with only the allowed weather-provider `502` skip.
+- Targeted production probes observed bounded provider/runtime metadata. Sector and situation generation abstained after rejected verification, broad current-market chat abstained after verifier-stage failure, and other high-risk routes abstained before generation when evidence/input gates failed. Deterministic candles used zero model calls; generic educational chat completed through a speed-tier provider.
+- No generated high-risk/current-market response was accepted during these probes. The evidence demonstrates deployed fail-closed behavior, not positive live-provider factual quality or verifier accuracy.
+- Desktop and mobile production browser checks loaded all seven `20260728b` asset markers without horizontal overflow or console warnings/errors. Sector/deep-dive output remained withheld, educational chat rendered one answer and one policy note with its served runtime, and the active symbol context displayed `AAPL`.
 
 ## Limits
 

@@ -2,7 +2,7 @@ This work was performed by OpenAI Codex without Claude’s involvement. This doc
 
 # Status
 
-- Handoff status: checkpoint 6 implementation locally verified; managed production deployment and production evidence pending
+- Handoff status: checkpoint 6 source commit `919f1b9` production verified; residual evaluation/observability and broader platform parity work remains
 - Research dates: baseline 2026-07-13; AI-provider capability refresh 2026-07-28
 - Deployment URL: `https://market-terminal.wyjjdyxzsc.workers.dev`
 
@@ -488,9 +488,10 @@ This work was performed by OpenAI Codex without Claude’s involvement. This doc
 - Corrected two browser-visible chat defects.
   - A shared classifier keeps conceptual P/E/market-risk questions on the generic educational policy unless the query has explicit current/decision/instrument intent.
   - The AI chat IIFE now has access to the runtime formatter, and metadata-render errors cannot be mislabeled as network failures. The checked flow renders exactly one AI bubble and one policy note.
+  - The terminal now exposes its normalized active-symbol context to the intelligence panel; chat uses that public bridge instead of the nonexistent `window.state`, and emits/consumes a `marketsymbolchange` event.
 - Frontend policy disclosures identify generated/verified/rejected model paths and bounded runtime totals in chat, deep dive, situation, and price-action surfaces.
 - Current local evidence:
-  - `npm run test:unit` passed `44/44`
+  - `npm run test:unit` passed `45/45`
   - `npm run test:ai-eval` passed every declared threshold across 10 versioned cases
   - local smoke passed all 28 contracts available without optional keys
   - targeted generic chat returned task `intel.chat`, an explicit no-provider abstention, zero calls, and verifier `not-required`
@@ -498,8 +499,16 @@ This work was performed by OpenAI Codex without Claude’s involvement. This doc
   - `npm audit --omit=dev` found zero vulnerabilities
   - syntax checks passed for Express, Worker module mode, and the changed frontend/shared files
   - Wrangler `4.114.0` dry-run bundled 14 assets at 399.10 KiB raw / 96.89 KiB gzip; no manual deployment occurred
-  - desktop sectors/deep dive, mobile sectors, and educational chat were exercised in the in-app browser; chat had one response/one policy note and browser warnings/errors were empty
-- Production status: pending the source checkpoint push and managed GitHub-to-Cloudflare deployment. Do not convert this section to production-verified until asset markers, the full production smoke suite, targeted runtime probes, and an interactive production browser pass succeed.
+  - desktop sectors/deep dive, mobile sectors, and educational chat were exercised in the in-app browser; chat had one response/one policy note, showed active context `AAPL`, and browser warnings/errors were empty
+- Production verification:
+  - source commits `8a8b980`, `4ffe15a`, and `919f1b9` deployed through `main` using the managed GitHub-to-Cloudflare path
+  - the initial `8a8b980` production run passed `29/33`; four guarded routes returned stale in-progress KV policy envelopes. This was treated as a material defect, not an allowed skip
+  - commit `4ffe15a` advanced the policy/cache schema to `2026-07-28a`, isolating incompatible envelopes. The cold-namespace run and final `919f1b9` run passed `33/33`, with only the documented weather-provider `502` skip
+  - production probes found sector and situation generation abstaining after verifier rejection, broad current-market chat abstaining after verifier-stage failure, and company/price-action/deep-dive/report/instability/supply-chain routes abstaining before generation when evidence or required inputs were insufficient
+  - deterministic candles remained accepted with zero provider calls; generic educational chat completed through a speed-tier provider with bounded runtime disclosure
+  - no generated high-risk/current-market response was accepted during the probes. This verifies fail-closed deployment behavior, not positive live-provider quality
+  - desktop `1440x1000` and mobile `390x844` browser checks loaded all seven `20260728b` assets without horizontal overflow or console warnings/errors. Sectors and deep dive remained safely withheld; educational chat rendered one response and one policy note with actual runtime identity; active chat context showed `AAPL`
+  - mobile screenshot capture timed out, so no screenshot artifact is claimed
 - Detailed current-model evidence and limitations are in `docs/AI_PROVIDER_CAPABILITY_AUDIT_2026-07-28.md`.
 
 # Unresolved risks and technical debt
@@ -521,13 +530,16 @@ This work was performed by OpenAI Codex without Claude’s involvement. This doc
   - `5a10b79` — `Gate high-risk AI outputs with evidence policies`
   - `c062cf2` — `Record AI policy production verification`
   - `20c9252` — `Constrain remaining AI analysis and alerts`
+  - `8a8b980` — `Verify high-risk AI outputs independently`
+  - `4ffe15a` — `Isolate AI policy cache envelopes`
+  - `919f1b9` — `Share active symbol with AI chat`
 - Push/deploy:
-  - `git push origin main` completed for all listed source checkpoint commits, including `20c9252`
-  - source commit `20c9252` is production verified on `https://market-terminal.wyjjdyxzsc.workers.dev`
+  - `git push origin main` completed for all listed source checkpoint commits through `919f1b9`
+  - source commit `919f1b9` is production verified on `https://market-terminal.wyjjdyxzsc.workers.dev`
 
 # Recommended next step for Claude
 
 - Next recommended step:
-  - finish checkpoint 6 production verification before changing the source again
-  - then add live-provider drift canaries, a human-reviewed finance/OSINT claim corpus, calibration/quality metrics, and persistent aggregate observability
+  - add live-provider drift canaries, a human-reviewed finance/OSINT claim corpus, calibration/quality metrics, and persistent aggregate observability
   - continue quant reference coverage and modular decomposition without weakening the abstention or independent-verification contracts
+  - treat licensed/professional data and event-grade intelligence gaps as explicit adapters, not inferred or model-generated parity

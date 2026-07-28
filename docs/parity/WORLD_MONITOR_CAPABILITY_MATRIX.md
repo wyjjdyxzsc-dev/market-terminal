@@ -18,7 +18,7 @@ Research date: 2026-07-13
   - map provenance checkpoint source commit `a25e6be` is production verified: `16/16` unit tests, `23/23` local smoke checks, and `29/29` production smoke checks passed on 2026-07-15
   - AI evidence-policy source commit `5a10b79` is production verified on 2026-07-16: `24/24` unit tests, `28/28` local smoke contracts, and `31/31` production smoke contracts passed
   - checkpoint 5 source commit `20c9252` is production verified: `29/29` unit tests, all 28 keyless-available local smoke contracts, `33/33` production contracts, targeted alert probes, and interactive alert checks passed
-  - checkpoint 6 is locally verified: `44/44` unit tests, the versioned 10-case offline AI safety evaluation, all 28 keyless-available smoke contracts, Worker dry-run bundling, and interactive disclosure checks passed; production evidence is pending
+  - checkpoint 6 source commit `919f1b9` is production verified: `45/45` unit tests, the versioned 10-case offline AI safety evaluation, all 28 keyless-available local contracts, `33/33` deployed contracts, Worker dry-run bundling, targeted authority probes, and desktop/mobile disclosure checks passed
 
 ## Capability rows
 
@@ -85,11 +85,11 @@ Research date: 2026-07-13
 - Evidence: eligible, single-source, and non-breaking fixtures passed within `29/29` unit tests; the keyless local smoke suite passed all 28 available contracts; targeted probes found no uncorroborated high-priority items; and the browser alert view had no console warnings/errors. This remains short of World Monitor parity because canonical event identity, independent origin-type classification, and cross-feed deduplication are pending.
 - Production evidence: source commit `20c9252` served schema `2026-07-22a`; the deployed suite passed `33/33`, targeted probes found no ineligible high-priority or persisted alerts, and the production browser rendered the guarded alert state with no console warnings/errors. Canonical event identity, independent origin-type classification, and cross-feed deduplication remain pending.
 
-### 2026-07-28 checkpoint 6 local update
+### 2026-07-28 checkpoint 6 production update
 
 - Model-derived situation/current-market output now requires a bounded generator plus an independent different-provider/different-model verifier. The verifier checks claims and evidence IDs against the supplied evidence packet; a rejection or unavailable independent model produces an abstention.
 - Safe policy metadata discloses the served generator/verifier identities, token usage or estimates, calls, latency, estimated cost, cost units, and budget result. Opaque routers cannot independently verify high-risk content.
-- Local evidence passed `44/44` unit tests, the 10-case offline policy evaluation, all 28 keyless-available API contracts, Worker dry-run bundling, and browser checks with no warnings/errors. The fixtures are not live OSINT-quality evidence, and this checkpoint does not add canonical event identity, origin-type corroboration, country-risk inputs, or World Monitor parity. Production verification is pending.
+- Evidence passed `45/45` unit tests, the 10-case offline policy evaluation, all 28 keyless-available local API contracts, Worker dry-run bundling, and final `33/33` deployed contracts for source commit `919f1b9`. Production probes confirmed generated situation/current-market paths failed closed when evidence or verification was insufficient, while deterministic authority remained model-free; desktop/mobile disclosure checks had no warnings/errors. The initial `8a8b980` run exposed stale KV policy envelopes and passed `29/33`; schema-isolation commit `4ffe15a` fixed the defect before final verification. The fixtures are not live OSINT-quality evidence, no high-risk live acceptance is claimed, and this checkpoint does not add canonical event identity, origin-type corroboration, country-risk inputs, or World Monitor parity.
 
 ### WM-003 Country dossiers and instability scoring
 

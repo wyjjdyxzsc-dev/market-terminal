@@ -17,7 +17,7 @@ Research date: 2026-07-13
   - map provenance checkpoint source commit `a25e6be` is production verified: `16/16` unit tests, `23/23` local smoke checks, and `29/29` production smoke checks passed on 2026-07-15
   - AI evidence-policy source commit `5a10b79` is production verified on 2026-07-16: `24/24` unit tests, `28/28` local smoke contracts, and `31/31` production smoke contracts passed
   - checkpoint 5 source commit `20c9252` is production verified: `29/29` unit tests, all 28 keyless-available local smoke contracts, `33/33` production contracts, targeted alert probes, and interactive alert checks passed
-  - checkpoint 6 is locally verified: `44/44` unit tests, the versioned 10-case offline AI safety evaluation, all 28 keyless-available smoke contracts, Worker dry-run bundling, and interactive disclosure checks passed; production evidence is pending
+  - checkpoint 6 source commit `919f1b9` is production verified: `45/45` unit tests, the versioned 10-case offline AI safety evaluation, all 28 keyless-available local contracts, `33/33` deployed contracts, Worker dry-run bundling, targeted authority probes, and desktop/mobile disclosure checks passed
 
 ## Capability rows
 
@@ -83,11 +83,11 @@ Research date: 2026-07-13
 - Production evidence: source commit `20c9252` served schema `2026-07-22a`; the deployed suite passed `33/33`, targeted probes found no ineligible high-priority or persisted alerts, and the production browser rendered the guarded alert state with no console warnings/errors.
 - Scope: this is a notification-safety control, not event-grade classification, conflict-thread correlation, severity scoring, official confirmation, or War Monitor parity.
 
-### 2026-07-28 checkpoint 6 local update
+### 2026-07-28 checkpoint 6 production update
 
 - Any generated high-risk situation analysis must now survive a second claim/evidence check by a different provider and canonical model family. Missing independence, verifier rejection, invalid citations, or exhausted call/token/cost/latency budgets yields a structured abstention.
 - Provider and model lifecycle is centralized, actual served identities and usage are disclosed safely, and variable broker routers are barred from the independent-verifier role.
-- Local evidence passed `44/44` unit tests, the versioned 10-case offline policy evaluation, all 28 keyless-available API contracts, Worker dry-run bundling, and browser checks with no warnings/errors. This is a model-output guardrail, not official intelligence confirmation, event-grade classification, conflict correlation, severity scoring, or War Monitor parity. Production verification is pending.
+- Evidence passed `45/45` unit tests, the versioned 10-case offline policy evaluation, all 28 keyless-available local API contracts, Worker dry-run bundling, and final `33/33` deployed contracts for source commit `919f1b9`. Production situation/current-market probes failed closed when evidence or verification was insufficient; no generated high-risk response was accepted. Desktop/mobile disclosure checks had no warnings/errors. The initial `8a8b980` run exposed stale KV policy envelopes and passed `29/33`; schema-isolation commit `4ffe15a` fixed the defect before final verification. This is a production-verified model-output guardrail, not official intelligence confirmation, event-grade classification, conflict correlation, severity scoring, or War Monitor parity.
 
 ### WAR-003 Conflict threads and timelines
 
