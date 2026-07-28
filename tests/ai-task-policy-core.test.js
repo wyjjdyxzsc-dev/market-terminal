@@ -30,6 +30,7 @@ const EVIDENCE = [
 ];
 
 test('high-risk policies declare grounding, verifier, and abstention controls', () => {
+  assert.equal(policy.AI_TASK_POLICY_SCHEMA_VERSION, '2026-07-28a');
   const genericChat = policy.getTaskPolicy('intel.chat');
   const deepDive = policy.getTaskPolicy('intel.deep-dive');
   const supplyChain = policy.getTaskPolicy('intel.supply-chain');

@@ -6,7 +6,7 @@
   const verificationCore = globalThis.MarketTerminalAiVerification ||
     (typeof require === 'function' ? require('./ai-verification-core.js') : null);
 
-  const AI_TASK_POLICY_SCHEMA_VERSION = '2026-07-26a';
+  const AI_TASK_POLICY_SCHEMA_VERSION = '2026-07-28a';
   const CHAT_EDUCATIONAL_PATTERN =
     /^(?:please\s+)?(?:what\s+(?:is|are|does)|define|explain(?:\s+(?:how|what))?|how\s+(?:does|do|is|are)|meaning\s+of|teach\s+me)\b/i;
   const CHAT_TEMPORAL_PATTERN =

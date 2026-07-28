@@ -475,7 +475,7 @@ This work was performed by OpenAI Codex without Claude’s involvement. This doc
   - The first valid rejection is authoritative. If no independent verifier passes, the route abstains.
   - A passing verifier must enumerate every evidence ID cited anywhere in the candidate. Selection skips unaffordable candidates while continuing to a later independent provider that fits, and known-price/token projections are checked before each call.
   - A real wall-clock timeout race bounds clients that do not honor `AbortSignal`.
-- Updated policy schema `2026-07-26a`.
+- Updated policy/cache schema `2026-07-28a`; the revision isolates final runtime envelopes from stale KV entries created under the in-progress `2026-07-26a` policy namespace.
   - All generated current-market/high-risk tasks require independent verification.
   - Deterministic candles and deterministic alert eligibility remain zero-model tasks.
   - Safe policy metadata carries actual generator/verifier identities, usage, latency, cost, and budget result.
