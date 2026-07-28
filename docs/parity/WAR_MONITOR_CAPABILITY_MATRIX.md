@@ -17,6 +17,7 @@ Research date: 2026-07-13
   - map provenance checkpoint source commit `a25e6be` is production verified: `16/16` unit tests, `23/23` local smoke checks, and `29/29` production smoke checks passed on 2026-07-15
   - AI evidence-policy source commit `5a10b79` is production verified on 2026-07-16: `24/24` unit tests, `28/28` local smoke contracts, and `31/31` production smoke contracts passed
   - checkpoint 5 source commit `20c9252` is production verified: `29/29` unit tests, all 28 keyless-available local smoke contracts, `33/33` production contracts, targeted alert probes, and interactive alert checks passed
+  - checkpoint 6 is locally verified: `44/44` unit tests, the versioned 10-case offline AI safety evaluation, all 28 keyless-available smoke contracts, Worker dry-run bundling, and interactive disclosure checks passed; production evidence is pending
 
 ## Capability rows
 
@@ -81,6 +82,12 @@ Research date: 2026-07-13
 - Evidence: alert fixtures cover eligible, single-source, and non-breaking cases within a `29/29` unit pass. The keyless local smoke suite passed all 28 available contracts, targeted probes found zero uncorroborated high-priority items/alerts, and the browser rendered the guarded empty-alert state without console warnings/errors.
 - Production evidence: source commit `20c9252` served schema `2026-07-22a`; the deployed suite passed `33/33`, targeted probes found no ineligible high-priority or persisted alerts, and the production browser rendered the guarded alert state with no console warnings/errors.
 - Scope: this is a notification-safety control, not event-grade classification, conflict-thread correlation, severity scoring, official confirmation, or War Monitor parity.
+
+### 2026-07-28 checkpoint 6 local update
+
+- Any generated high-risk situation analysis must now survive a second claim/evidence check by a different provider and canonical model family. Missing independence, verifier rejection, invalid citations, or exhausted call/token/cost/latency budgets yields a structured abstention.
+- Provider and model lifecycle is centralized, actual served identities and usage are disclosed safely, and variable broker routers are barred from the independent-verifier role.
+- Local evidence passed `44/44` unit tests, the versioned 10-case offline policy evaluation, all 28 keyless-available API contracts, Worker dry-run bundling, and browser checks with no warnings/errors. This is a model-output guardrail, not official intelligence confirmation, event-grade classification, conflict correlation, severity scoring, or War Monitor parity. Production verification is pending.
 
 ### WAR-003 Conflict threads and timelines
 
@@ -182,7 +189,7 @@ Research date: 2026-07-13
 - Source product/domain: War Monitor
 - Feature/workflow: ingest global news and OSINT/Telegram-style sources
 - User outcome: see conflict signals faster than traditional roundups
-- Current-project equivalent: RSS and X syndication only
+- Current-project equivalent: RSS and mixed public feeds only; unauthenticated X syndication was removed
 - Status: partial
 - Data sources and authority tier: mixed
 - Refresh frequency and latency class: mixed

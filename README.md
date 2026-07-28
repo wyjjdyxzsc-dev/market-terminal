@@ -13,14 +13,17 @@ small Express backend that keeps every API key server-side.
 
 ---
 
-## Repository operational state (2026-07-26)
+## Repository operational state (2026-07-28)
 
 - Deploy by pushing to `main`. Do not run `wrangler deploy` manually for production; GitHub is wired to Cloudflare Workers and is the canonical deploy path for this repo.
 - `npm test` now runs unit coverage plus the local smoke suite. Start the local server first with `npm start`.
+- `npm run test:ai-eval` runs the versioned offline AI policy-safety fixtures; it is not a live-provider benchmark.
 - `npm run test:prod` hits the deployed Worker at `https://market-terminal.wyjjdyxzsc.workers.dev` and is the required post-deploy parity check.
-- High-risk AI routes use a shared evidence/task policy. Unsupported supply-chain edges, investment picks, country scores, trade levels, and options constructions are withheld rather than fabricated; full independent-verifier coverage remains open.
+- High-risk AI routes use a shared evidence/task policy. Unsupported supply-chain edges, investment picks, country scores, trade levels, and options constructions are withheld rather than fabricated.
 - AI evidence-policy source checkpoint `5a10b79` is production verified: `24/24` unit tests, `28/28` local smoke contracts, and `31/31` production smoke contracts passed on 2026-07-16.
 - Checkpoint 5 source commit `20c9252` extends that authority model to sector analysis, company-news impact, deterministic candle commentary, and corroboration-gated alerts. It is production verified with `29/29` unit tests, all 28 keyless-available local smoke contracts, and `33/33` deployed contracts.
+- Checkpoint 6 adds a current-model provider registry, independent different-provider/different-model verification for generated high-risk tasks, bounded calls/tokens/latency/cost, safe runtime telemetry, and offline safety evaluations. Local evidence passes `44/44` unit tests, the 10-case evaluation thresholds, all 28 keyless-available contracts, dependency audit, Worker dry-run, and browser checks; production verification is pending.
+- Current provider evidence and limitations are recorded in [docs/AI_PROVIDER_CAPABILITY_AUDIT_2026-07-28.md](/Users/krishivjain/Desktop/claude projects/market-terminal/docs/AI_PROVIDER_CAPABILITY_AUDIT_2026-07-28.md).
 - The latest external-agent checkpoint and evidence log lives in [docs/CODEX_HANDOFF_TO_CLAUDE_2026-07-13.md](/Users/krishivjain/Desktop/claude projects/market-terminal/docs/CODEX_HANDOFF_TO_CLAUDE_2026-07-13.md).
 
 ---
@@ -56,7 +59,7 @@ small Express backend that keeps every API key server-side.
 | -------- | ----------------------------------------------------------------------------------------------- |
 | Backend  | Node.js 18+ and Express. Serves the frontend **and** proxies every data API so your keys stay server-side and CORS is avoided. |
 | Frontend | Vanilla HTML + CSS + JS. No React, no Tailwind, no chart library.                                |
-| Data     | [Finnhub](https://finnhub.io) (quotes, profile, metrics, company news, search) · Yahoo Finance + Nasdaq (chart history, keyless) · Google News RSS + [Groq](https://groq.com) (AI news / sectors / watchlist). |
+| Data     | [Finnhub](https://finnhub.io) (quotes, profile, metrics, company news, search) · Yahoo Finance + Nasdaq (chart history, keyless) · source-linked RSS · a server-side registry of supported AI providers. |
 | Deps     | `express`, `dotenv`, `groq-sdk`, `rss-parser`, `web-push`.                                       |
 
 The browser only ever talks to this app's own `/api/*` routes — it never sees your keys and never makes a cross-origin request.
@@ -71,7 +74,7 @@ You need **Node.js 18 or newer** (this uses the built-in global `fetch`). Check 
 **1. Get the free API keys**
 
    - **Finnhub** (required) — sign up at <https://finnhub.io> and copy your API key.
-   - **Groq** (required for NEWS / SECTORS / WATCHLIST) — sign up at <https://console.groq.com/keys> (free, no credit card) and copy your key.
+   - **AI provider** (optional but required for generated research) — Groq is the simplest local default; other supported providers are listed in `.env.example`.
 
 **2. Add your keys**
 
@@ -117,6 +120,7 @@ You need **Node.js 18 or newer** (this uses the built-in global `fetch`). Check 
 
 ```bash
 npm test
+npm run test:ai-eval
 npm run test:prod
 ```
 
@@ -131,6 +135,8 @@ market-terminal/
 ├── .gitignore
 ├── README.md
 ├── server.js               # Express: serves /public + proxies all data sources
+├── worker.js               # Cloudflare production runtime
+├── shared/                 # API, evidence, policy, provider, verification, and evaluation cores
 ├── tools/gen-icons.js      # one-off PWA icon generator (pure Node, no deps)
 └── public/
     ├── index.html
@@ -153,10 +159,10 @@ market-terminal/
 | `GET /api/search?q=`                 | Symbol search (autocomplete)                                |
 | `GET /api/ticker`                    | Quotes for the ticker-tape basket                           |
 | `GET /api/chart?symbol=&range=`      | Chart history (Yahoo → Nasdaq fallback)                     |
-| `GET /api/intel/news`                | AI-structured market news feed (Groq)                       |
-| `GET /api/intel/analysis`            | 11-sector ranking + sentiment + top picks (Groq)            |
+| `GET /api/intel/news`                | Source-linked structured market news with degraded fallback |
+| `GET /api/intel/analysis`            | Evidence-gated interpretation for 11 sectors; unsupported ranks/picks are withheld |
 | `GET /api/sentiment/market`          | Deterministic benchmark-breadth and RSS-news sentiment, with evidence coverage |
-| `GET /api/intel/company?q=`          | Per-company news with positive/negative impact (Groq)       |
+| `GET /api/intel/company?q=`          | Canonical company news with cited impact interpretation or an unrated fallback |
 | `GET /api/intel/alerts`              | Recent breaking alerts                                      |
 | push: `vapid-public-key` · `subscribe` · `unsubscribe` · `test-push` | Web Push plumbing                 |
 
@@ -164,27 +170,26 @@ market-terminal/
 
 ## Notes & troubleshooting
 
-- **A tab says a key is missing** — TERMINAL needs `FINNHUB_API_KEY`; NEWS/SECTORS/WATCHLIST need `GROQ_API_KEY`. Make sure `.env` sits next to `server.js`, then restart.
+- **A tab says a key is missing** — TERMINAL needs a configured quote provider, normally `FINNHUB_API_KEY`; generated research needs an eligible AI provider. Make sure `.env` sits next to `server.js`, then restart.
 - **Rate limits** — Finnhub free tier ≈ 60 req/min; Groq has generous free limits but heavy use can briefly 429. The app caches AI results for 60 min and retries transient errors.
 - **Chart works but quotes don't (or vice-versa)** — the chart is keyless (Yahoo/Nasdaq) while quotes use Finnhub; if only the chart loads, your Finnhub key is missing/invalid.
 - **Alerts say "Blocked"** — notifications are blocked for the site in your browser/OS settings. Re-allow and reload. On iPhone, Add to Home Screen first.
 
 ---
 
-## Possible extensions
+## Remaining engineering work
 
-- Stream tick-by-tick prices over WebSockets (Finnhub trade stream).
-- Candlestick / OHLC chart mode and indicators (SMA, volume).
-- Wire the TERMINAL view's current symbol straight into the WATCHLIST and NEWS filters.
-- Crypto & FX symbols; a two-symbol compare mode normalized to % change.
-- Server-side response caching for quotes to further ease rate limits.
+- Add live-provider drift canaries, a human-reviewed finance/OSINT claim corpus, calibration metrics, and persistent aggregate AI observability.
+- Expand deterministic reference coverage across the full quant indicator/model surface.
+- Continue modular decomposition of the large Express and Worker runtime files.
+- Add licensed adapters where professional-grade fundamentals, relationships, options, portfolio, or event authority is required.
 
 ---
 
 ## Data disclaimer
 
-Market data is provided by **Finnhub**, **Yahoo Finance**, **Nasdaq**, **Google News**,
-and **Groq** for **educational and demonstration purposes only**. It may be delayed or
+Market data is provided by **Finnhub**, **Yahoo Finance**, **Nasdaq**, and public
+news sources, with optional synthesis from configured AI providers, for **educational and demonstration purposes only**. It may be delayed or
 inaccurate, the AI-generated summaries can be wrong, and **none of it is investment
 advice**. Not affiliated with, endorsed by, or connected to Bloomberg L.P. — the
 "terminal" styling is an homage.

@@ -1,18 +1,54 @@
 (() => {
   'use strict';
 
-  const AI_TASK_POLICY_SCHEMA_VERSION = '2026-07-22a';
+  const providerRegistry = globalThis.MarketTerminalAiProviderRegistry ||
+    (typeof require === 'function' ? require('./ai-provider-registry.js') : null);
+  const verificationCore = globalThis.MarketTerminalAiVerification ||
+    (typeof require === 'function' ? require('./ai-verification-core.js') : null);
+
+  const AI_TASK_POLICY_SCHEMA_VERSION = '2026-07-26a';
+  const CHAT_EDUCATIONAL_PATTERN =
+    /^(?:please\s+)?(?:what\s+(?:is|are|does)|define|explain(?:\s+(?:how|what))?|how\s+(?:does|do|is|are)|meaning\s+of|teach\s+me)\b/i;
+  const CHAT_TEMPORAL_PATTERN =
+    /\b(?:current(?:ly)?|today|now|latest|recent(?:ly)?|right\s+now|live|this\s+(?:week|month|quarter|year)|yesterday)\b/i;
+  const CHAT_MARKET_ACTION_PATTERN =
+    /\b(?:moving|moved|rising|rose|falling|fell|dropping|dropped|rallying|rallied|selling\s+off|sold\s+off|catalyst|headlines?|news|quote|trading\s+at)\b/i;
+  const CHAT_DECISION_PATTERN =
+    /\b(?:should\s+i|buy|sell|hold|invest(?:ment|ing)?|portfolio|outlook|forecast|price\s+target|target\s+price|upside|downside)\b/i;
+  const CHAT_INSTRUMENT_CONTEXT_PATTERN =
+    /\b(?:price|quote|earnings|guidance|valuation|market\s+cap|p\/?e|risk|news|headlines?|outlook|forecast)\b/i;
+
+  function escapeRegExp(value) {
+    return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  function isCurrentMarketQuestion(value, symbol = '') {
+    const text = String(value || '').trim();
+    if (!text) return false;
+
+    const normalizedSymbol = String(symbol || '').trim().toUpperCase();
+    const mentionsSymbol = normalizedSymbol
+      ? new RegExp(`(?:\\$|\\b)${escapeRegExp(normalizedSymbol)}\\b`, 'i').test(text)
+      : false;
+    const hasCashtag = /\$[A-Z]{1,6}\b/.test(text);
+
+    if (CHAT_TEMPORAL_PATTERN.test(text) || CHAT_MARKET_ACTION_PATTERN.test(text) ||
+        CHAT_DECISION_PATTERN.test(text) || hasCashtag) {
+      return true;
+    }
+    if (CHAT_EDUCATIONAL_PATTERN.test(text) && !mentionsSymbol) return false;
+    return mentionsSymbol && CHAT_INSTRUMENT_CONTEXT_PATTERN.test(text);
+  }
 
   // High-risk tasks are intentionally limited to the structured-analysis pool.
   // The backends enforce this list rather than silently falling back to a faster
   // provider when the approved pool is unavailable.
-  const HEAVY_PROVIDER_NAMES = Object.freeze([
-    'gemini', 'openrouter', 'deepseek', 'cohere', 'nebius', 'huggingface',
-    'github', 'cfai', 'ai21', 'octoai',
-  ]);
-  const SPEED_PROVIDER_NAMES = Object.freeze([
-    'groq', 'cerebras', 'sambanova', 'together', 'mistral',
-  ]);
+  const HEAVY_PROVIDER_NAMES = Object.freeze(
+    providerRegistry.listProviders({ tier: 'heavy' }).map((provider) => provider.name)
+  );
+  const SPEED_PROVIDER_NAMES = Object.freeze(
+    providerRegistry.listProviders({ tier: 'speed' }).map((provider) => provider.name)
+  );
 
   const createPolicy = (id, riskClass, config) => Object.freeze({
     id,
@@ -31,12 +67,24 @@
     requiredSchema: config.requiredSchema || 'json-object',
     requiresCorroboration: Boolean(config.requiresCorroboration),
     requiresVerifier: Boolean(config.requiresVerifier),
-    verifier: config.verifier || (config.requiresVerifier
-      ? 'deterministic-evidence-and-citation-check'
-      : 'schema-check'),
+    requiresIndependentVerifier: Boolean(config.requiresIndependentVerifier),
+    verifier: config.verifier || (config.requiresIndependentVerifier
+      ? 'independent-provider-and-model-claim-check'
+      : (config.requiresVerifier ? 'deterministic-evidence-and-citation-check' : 'schema-check')),
     requireEvidenceIds: Boolean(config.requireEvidenceIds),
     mayAbstain: config.mayAbstain !== false,
-    maxLatencyMs: config.maxLatencyMs || 20_000,
+    maxInputTokens: config.maxInputTokens || (riskClass === 'high' ? 18_000 : 10_000),
+    maxOutputTokens: config.maxOutputTokens || (riskClass === 'high' ? 3_000 : 1_500),
+    maxProviderCalls: config.maxProviderCalls || (config.requiresIndependentVerifier ? 4 : 2),
+    maxTotalInputTokens: config.maxTotalInputTokens ||
+      (config.maxInputTokens || (riskClass === 'high' ? 18_000 : 10_000)) *
+      (config.maxProviderCalls || (config.requiresIndependentVerifier ? 4 : 2)),
+    maxTotalOutputTokens: config.maxTotalOutputTokens ||
+      (config.maxOutputTokens || (riskClass === 'high' ? 3_000 : 1_500)) *
+      (config.maxProviderCalls || (config.requiresIndependentVerifier ? 4 : 2)),
+    maxCostUnits: config.maxCostUnits || (config.requiresIndependentVerifier ? 8 : 3),
+    maxEstimatedCostUsd: config.maxEstimatedCostUsd == null ? 0.08 : config.maxEstimatedCostUsd,
+    maxLatencyMs: config.maxLatencyMs || (config.requiresIndependentVerifier ? 45_000 : 20_000),
     cacheTtlSeconds: config.cacheTtlSeconds || 0,
     disclaimer: config.disclaimer || 'Evidence-backed interpretation only; not advice.',
     label: config.label || id,
@@ -63,7 +111,10 @@
       minDistinctSources: 1,
       minTrustedSources: 1,
       requiresVerifier: true,
+      requiresIndependentVerifier: true,
       requireEvidenceIds: true,
+      maxOutputTokens: 1_200,
+      maxCostUnits: 7,
       cacheTtlSeconds: 0,
       label: 'current-market research response',
       disclaimer: 'Current market facts are limited to the cited terminal evidence; interpretation is not investment advice.',
@@ -77,7 +128,10 @@
       minTrustedSources: 1,
       requiredInputs: ['quote'],
       requiresVerifier: true,
+      requiresIndependentVerifier: true,
       requireEvidenceIds: true,
+      maxOutputTokens: 1_200,
+      maxCostUnits: 7,
       cacheTtlSeconds: 600,
       label: 'price-action explanation',
       disclaimer: 'The available evidence may not explain a price move; no causal claim is made without a citation.',
@@ -91,7 +145,12 @@
       minTrustedSources: 1,
       requiresCorroboration: true,
       requiresVerifier: true,
+      requiresIndependentVerifier: true,
       requireEvidenceIds: true,
+      maxInputTokens: 20_000,
+      maxOutputTokens: 3_500,
+      maxCostUnits: 9,
+      maxEstimatedCostUsd: 0.12,
       cacheTtlSeconds: 900,
       label: 'sector evidence brief',
       disclaimer: 'Sector rankings, stock picks, scores, and options strategies are withheld without dedicated verified datasets.',
@@ -104,7 +163,10 @@
       minDistinctSources: 1,
       minTrustedSources: 1,
       requiresVerifier: true,
+      requiresIndependentVerifier: true,
       requireEvidenceIds: true,
+      maxOutputTokens: 2_000,
+      maxCostUnits: 8,
       cacheTtlSeconds: 900,
       label: 'company-news impact interpretation',
       disclaimer: 'News impact labels are cited interpretations, not forecasts or recommendations.',
@@ -151,7 +213,12 @@
       requiredInputs: ['quote', 'fundamentalData'],
       requiresCorroboration: true,
       requiresVerifier: true,
+      requiresIndependentVerifier: true,
       requireEvidenceIds: true,
+      maxInputTokens: 22_000,
+      maxOutputTokens: 4_000,
+      maxCostUnits: 10,
+      maxEstimatedCostUsd: 0.15,
       cacheTtlSeconds: 900,
       label: 'company deep dive',
       disclaimer: 'No price target, entry, stop, fair value, or options trade is issued without dedicated verified data.',
@@ -166,6 +233,7 @@
       requiredInputs: ['verifiedMarketData'],
       requiresCorroboration: true,
       requiresVerifier: true,
+      requiresIndependentVerifier: true,
       requireEvidenceIds: true,
       cacheTtlSeconds: 900,
       label: 'investment report',
@@ -180,6 +248,7 @@
       minTrustedSources: 1,
       requiredInputs: ['verifiedRelationships'],
       requiresVerifier: true,
+      requiresIndependentVerifier: true,
       requireEvidenceIds: true,
       cacheTtlSeconds: 900,
       label: 'supply-chain map',
@@ -194,7 +263,12 @@
       minTrustedSources: 1,
       requiresCorroboration: true,
       requiresVerifier: true,
+      requiresIndependentVerifier: true,
       requireEvidenceIds: true,
+      maxInputTokens: 20_000,
+      maxOutputTokens: 3_000,
+      maxCostUnits: 9,
+      maxEstimatedCostUsd: 0.12,
       cacheTtlSeconds: 900,
       label: 'situation brief',
       disclaimer: 'This is a cited public-news interpretation, not an official threat assessment.',
@@ -208,6 +282,7 @@
       minTrustedSources: 1,
       requiredInputs: ['verifiedCountryRiskData'],
       requiresVerifier: true,
+      requiresIndependentVerifier: true,
       requireEvidenceIds: true,
       cacheTtlSeconds: 900,
       label: 'country instability score',
@@ -406,7 +481,7 @@
       });
     }
     const overallSentiment = String(output && output.overallSentiment || '').toLowerCase();
-    return {
+    const bound = {
       ticker: String(identity.ticker || '').toUpperCase(),
       companyName: String(identity.companyName || ''),
       overallSentiment: ['positive', 'negative', 'neutral', 'mixed'].includes(overallSentiment)
@@ -416,6 +491,7 @@
       news,
       evidenceIds: [...used],
     };
+    return verificationCore.inheritRuntimeMetadata(output, bound);
   }
 
   function policyMetadata(preparation, status, options = {}) {
@@ -435,6 +511,8 @@
       availableEvidenceIds: preparation.evidenceIds || [],
       dataAsOf: preparation.dataAsOf || null,
       verifier: preparation.policy.verifier,
+      requiresIndependentVerifier: preparation.policy.requiresIndependentVerifier,
+      runtime: publicRuntimeMetadata(options.runtime, status, preparation.policy),
       disclaimer: preparation.policy.disclaimer,
       unknowns: Array.isArray(options.unknowns) ? options.unknowns : [],
       blockers: Array.isArray(options.blockers) ? options.blockers : assessment.blockers || [],
@@ -442,7 +520,87 @@
     };
   }
 
-  function buildAbstention(preparation, reason) {
+  function publicRuntimeMetadata(runtime, status, taskPolicy) {
+    if (!runtime || typeof runtime !== 'object') {
+      return {
+        schemaVersion: verificationCore.AI_VERIFICATION_SCHEMA_VERSION,
+        mode: taskPolicy.providerTier === 'deterministic'
+          ? 'deterministic'
+          : (taskPolicy.requiresIndependentVerifier ? 'independent-verification' : 'single-generation'),
+        status: status === 'deterministic' ? 'deterministic' : 'not-run',
+        generator: null,
+        verifier: {
+          status: taskPolicy.providerTier === 'deterministic'
+            ? 'deterministic'
+            : (taskPolicy.requiresIndependentVerifier ? 'not-run' : 'not-required'),
+          provider: null,
+          requestedModel: null,
+          servedModel: null,
+        },
+        totals: {
+          providerCalls: 0,
+          inputTokens: 0,
+          outputTokens: 0,
+          totalTokens: 0,
+          estimatedCostUsd: 0,
+          costUnits: 0,
+          latencyMs: 0,
+          withinBudget: true,
+        },
+      };
+    }
+    const safeCall = (call) => call ? {
+      status: call.status,
+      provider: call.provider || null,
+      tier: call.tier,
+      requestedModel: call.requestedModel || null,
+      servedModel: call.servedModel || null,
+      latencyMs: Number(call.latencyMs) || 0,
+      usage: call.usage ? {
+        inputTokens: Number(call.usage.inputTokens) || 0,
+        outputTokens: Number(call.usage.outputTokens) || 0,
+        totalTokens: Number(call.usage.totalTokens) || 0,
+        estimated: Boolean(call.usage.estimated),
+      } : undefined,
+      estimatedCostUsd: call.estimatedCostUsd == null ? null : Number(call.estimatedCostUsd),
+      costUnits: Number(call.costUnits) || 0,
+      evidenceIds: Array.isArray(call.evidenceIds) ? call.evidenceIds.map(String) : undefined,
+      unsupportedClaimCount: Number(call.unsupportedClaimCount) || 0,
+      reason: call.reason ? String(call.reason).slice(0, 240) : undefined,
+    } : null;
+    return {
+      schemaVersion: String(runtime.schemaVersion || verificationCore.AI_VERIFICATION_SCHEMA_VERSION),
+      mode: String(runtime.mode || ''),
+      status: String(runtime.status || status || ''),
+      generator: safeCall(runtime.generator),
+      verifier: safeCall(runtime.verifier),
+      totals: {
+        providerCalls: Number(runtime.totals?.providerCalls) || 0,
+        inputTokens: Number(runtime.totals?.inputTokens) || 0,
+        outputTokens: Number(runtime.totals?.outputTokens) || 0,
+        totalTokens: Number(runtime.totals?.totalTokens) || 0,
+        estimatedCostUsd: runtime.totals?.estimatedCostUsd == null
+          ? null
+          : Number(runtime.totals.estimatedCostUsd),
+        costUnits: Number(runtime.totals?.costUnits) || 0,
+        latencyMs: Number(runtime.totals?.latencyMs) || 0,
+        withinBudget: runtime.totals?.withinBudget !== false,
+      },
+      budget: runtime.budget ? {
+        maxInputTokens: Number(runtime.budget.maxInputTokens) || 0,
+        maxOutputTokens: Number(runtime.budget.maxOutputTokens) || 0,
+        maxProviderCalls: Number(runtime.budget.maxProviderCalls) || 0,
+        maxCostUnits: Number(runtime.budget.maxCostUnits) || 0,
+        maxEstimatedCostUsd: runtime.budget.maxEstimatedCostUsd == null
+          ? null
+          : Number(runtime.budget.maxEstimatedCostUsd),
+        maxLatencyMs: Number(runtime.budget.maxLatencyMs) || 0,
+      } : undefined,
+      failureCode: runtime.failureCode ? String(runtime.failureCode).slice(0, 80) : '',
+    };
+  }
+
+  function buildAbstention(preparation, reason, options = {}) {
     const blockers = preparation.assessment && preparation.assessment.blockers || [];
     return {
       abstained: true,
@@ -454,6 +612,7 @@
         reason: reason || `Insufficient verified inputs for ${preparation.policy.label}.`,
         blockers,
         unknowns: ['The available terminal evidence does not support a calibrated answer for this task.'],
+        runtime: options.runtime,
       }),
     };
   }
@@ -562,6 +721,15 @@
   }
 
   function attachPolicy(preparation, output, options = {}) {
+    const runtime = options.runtime || verificationCore.getRuntimeMetadata(output);
+    if (preparation.policy.requiresIndependentVerifier &&
+        (!runtime || runtime.status !== 'verified' || runtime.verifier?.status !== 'passed')) {
+      return buildAbstention(
+        preparation,
+        'Independent provider and model verification did not complete.',
+        { runtime }
+      );
+    }
     const constrained = constrainTaskOutput(preparation.taskId, output);
     const citations = citedEvidenceIds(constrained);
     return {
@@ -573,6 +741,7 @@
       policy: policyMetadata(preparation, 'grounded', {
         unknowns: options.unknowns || [],
         citedEvidenceIds: citations,
+        runtime,
       }),
     };
   }
@@ -587,6 +756,18 @@
       policy: policyMetadata(preparation, 'deterministic', {
         reason: options.reason || '',
         unknowns: options.unknowns || [],
+        runtime: {
+          schemaVersion: verificationCore.AI_VERIFICATION_SCHEMA_VERSION,
+          mode: 'deterministic',
+          status: 'deterministic',
+          generator: null,
+          verifier: {
+            status: 'deterministic',
+            provider: null,
+            requestedModel: null,
+            servedModel: preparation.policy.verifier,
+          },
+        },
       }),
     };
   }
@@ -639,6 +820,8 @@
     attachPolicy,
     attachDeterministicPolicy,
     evaluateAlertCandidate,
+    publicRuntimeMetadata,
+    isCurrentMarketQuestion,
   };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

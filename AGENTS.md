@@ -45,7 +45,7 @@ Deploys to `https://market-terminal.wyjjdyxzsc.workers.dev`
   - Env vars: SCREAMING_SNAKE (API keys), lowercase (internal config)
   - Functions: camelCase; async fns return { data, fresh } (KV SWR pattern)
 - **Chart data**: Always OHLC shape `{ t, c, o, h, l }` (ms, USD). 1D clipped to 9:30–16:00 ET.
-- **AI pool**: 12 providers split across Speed tier (Groq, Cerebras, SambaNova, Together, Mistral) and Heavy tier (Gemini, OpenRouter, DeepSeek, Cohere, Nebius, HuggingFace, GitHub Models). Batch AbortController racing — first valid JSON that passes validation wins, losers aborted immediately. Park rate-limited providers: 429 → 1 min, quota → 30 min. Batch width controlled by `AI_PARALLEL` (default 5).
+- **AI routing**: `shared/ai-provider-registry.js` is canonical. Lower-risk tasks may use a bounded first-valid race across speed/eligible medium providers. Generated current-market/high-risk tasks use a bounded generator followed by a different-provider/different-canonical-model verifier; failures and rejections abstain. OpenRouter/Hugging Face cannot independently verify high-risk output; legacy Nebius/OctoAI routes are disabled. Park rate-limited providers: 429 → 1 min, quota → 30 min.
 - **Quote pool**: 10 providers serial fallback (Finnhub×5, TwelveData, FMP, AlphaVantage, Polygon, Yahoo keyless). Round-robin Finnhub keys.
 
 ## Current State
@@ -84,7 +84,7 @@ Deploys to `https://market-terminal.wyjjdyxzsc.workers.dev`
 - **RJD Monte Carlo** (Module 4 upgrade): `[MC]` fan on chart now defaults to Rough Jump-Diffusion (H=0.45, λ=2) with GBM/RJD switcher pill.
 - **Mobile layout** (Module 5): osc bar wraps on narrow screens, buttons resize at ≤860px/≤480px, canvas min-height fixed, shock table hides columns on small screens.
 
-**Test suite**: `tests/smoke.js` — run `npm test` (requires local server running) or `npm run test:prod` (hits the deployed worker — run after deploys to catch server.js/worker.js drift). The suite has 33 checks including POST `/api/intel/chat`, sector/company/candle policy contracts, and alert-state authority; optional keyed/network routes are skipped locally when unavailable.
+**Test suite**: `tests/smoke.js` — run `npm test` (requires local server running) or `npm run test:prod` (hits the deployed worker — run after deploys to catch server.js/worker.js drift). The suite has 34 checks including the shell/version contract, POST `/api/intel/chat`, sector/company/candle policy contracts, and alert-state authority; optional keyed/network routes are skipped locally when unavailable. `npm run test:ai-eval` runs the versioned offline AI policy-safety fixtures.
 
 **Resilience/UX (2026-07-05)**:
 - Terminal auto-loads last viewed symbol (localStorage `mt:lastSymbol`, default AAPL)
@@ -102,12 +102,17 @@ Deploys to `https://market-terminal.wyjjdyxzsc.workers.dev`
 - `shared/ai-task-policy-core.js` defines task risk, approved provider tiers/names, evidence thresholds, citation validation, output constraints, and structured abstentions shared by Express and the Worker.
 - Supply-chain relationships, investment picks, and country risk scores are withheld until verified input adapters exist. Deep-dive, situation, price-action, and current-market chat outputs must pass their evidence/citation gate; deep-dive trade levels, valuation, and options construction remain disabled.
 - Generic educational chat uses the speed tier; current-market and high-risk tasks require policy-approved heavy providers and abstain when unavailable.
-- Source commit `5a10b79` is production verified: `24/24` unit tests, `28/28` local smoke contracts, `31/31` production smoke contracts, targeted policy-envelope probes, and an interactive browser pass completed. Full independent claim-level verification and remaining AI-task coverage are still open.
+- Source commit `5a10b79` is production verified: `24/24` unit tests, `28/28` local smoke contracts, `31/31` production smoke contracts, targeted policy-envelope probes, and an interactive browser pass completed. Independent verification was still open at that checkpoint and is superseded by the checkpoint 6 section below.
 
 **AI authority extension (2026-07-22 checkpoint, production verified)**:
 - Schema `2026-07-22a` adds sector analysis and company-news evidence gates plus deterministic authority for candle commentary and alert eligibility.
 - Sector ranks/picks/options are withheld, company items bind to canonical evidence, candle output comes only from the OHLC engine, and model-proposed alert priority is ignored unless the deterministic corroboration gate marks it eligible.
 - Source commit `20c9252` is production verified: `29/29` unit tests, all 28 keyless-available local smoke contracts, `33/33` deployed contracts, zero dependency vulnerabilities, Wrangler dry-run bundling, targeted probes, and local/production browser passes.
+
+**AI provider verification (2026-07-28 checkpoint, local verified / production pending)**:
+- Schema `2026-07-26a` adds a current-model provider registry, lifecycle/health state, bounded calls/tokens/latency/cost, actual runtime telemetry, and independent different-provider/different-model verification for every generated current-market/high-risk task.
+- `shared/ai-evaluation-core.js` and `tests/fixtures/ai-eval-2026-07-26a.json` provide 10 versioned offline safety cases. They are regression evidence, not a live-provider benchmark or proof of factual accuracy.
+- Local evidence: `44/44` unit tests, all evaluation thresholds, all 28 keyless-available smoke contracts, zero dependency vulnerabilities, Wrangler `4.114.0` dry-run bundling, targeted probes, and desktop/mobile browser checks passed. Do not call this production verified until managed deployment evidence is recorded.
 
 **Branches**: All work on `main` (no feature branches yet).
 
@@ -121,6 +126,9 @@ Deploys to `https://market-terminal.wyjjdyxzsc.workers.dev`
 | `public/quant.js` | Math lib (no DOM), IIFE export |
 | `public/intel.js` | Deep Dive UI + QUANT LAB |
 | `public/index.html` | Layout, cache-buster versioning |
+| `shared/ai-provider-registry.js` | Current provider/model lifecycle, eligibility, pricing, and health metadata |
+| `shared/ai-verification-core.js` | Bounded generation, independent verification, runtime usage/cost telemetry |
+| `shared/ai-evaluation-core.js` | Versioned offline AI safety metrics |
 | `.env` (git-ignored) | FINNHUB_API_KEY, GROQ_API_KEY, POLYGON_KEY, FIRMS_MAP_KEY, WINDY_KEY, VAPID_* |
 
 ## Env vars (all optional except noted)
@@ -131,7 +139,7 @@ Deploys to `https://market-terminal.wyjjdyxzsc.workers.dev`
 - `TWELVEDATA_KEY`, `FMP_KEY`, `ALPHAVANTAGE_KEY`, `POLYGON_KEY` (fallback)
 
 **AI** (≥1 required for news/analysis):
-- `GROQ_API_KEY` (**required**)
+- `GROQ_API_KEY` (recommended speed-tier default; any eligible configured provider can serve its permitted tasks)
 - `GEMINI_API_KEY`, `CEREBRAS_API_KEY`, `TOGETHER_API_KEY`, `OPENROUTER_API_KEY`, etc. (race pool)
 - `AI_PARALLEL=5` (default race width)
 
@@ -144,13 +152,13 @@ Deploys to `https://market-terminal.wyjjdyxzsc.workers.dev`
 
 **Dev**:
 - `PORT=3000` (local server)
-- `GROQ_MODEL` (default: `llama-3.3-70b-versatile`)
+- `GROQ_MODEL` (default: `openai/gpt-oss-120b`)
 - `ADMIN_API_TOKEN` (optional, enables authenticated admin/test-push routes)
 
 ## Logs & Debugging
 
 **Console**:
-- `[ai] {provider} WON` → AI race winner
+- `[ai] {provider} WON` → bounded lower-risk race winner
 - `[ai] {provider} error: {msg}` → provider error
 - `[news] headlines fetched: N` → news cache refresh
 - `🔔 pushed alert to N device(s)` → alert sent

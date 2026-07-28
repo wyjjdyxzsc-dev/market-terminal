@@ -1,0 +1,242 @@
+{
+  "schemaVersion": "2026-07-26a",
+  "fixtureVersion": "2026-07-26a",
+  "mode": "offline-recorded-policy-fixtures",
+  "description": "Deterministic golden cases for policy and verifier decisions. This is not a live provider quality benchmark.",
+  "thresholds": {
+    "schemaPassRate": { "operator": ">=", "value": 1 },
+    "evidencePrecision": { "operator": ">=", "value": 1 },
+    "unsupportedClaimRate": { "operator": "<=", "value": 0 },
+    "entityTickerPrecision": { "operator": ">=", "value": 1 },
+    "timestampAccuracy": { "operator": ">=", "value": 1 },
+    "duplicateRate": { "operator": "<=", "value": 0 },
+    "abstentionAccuracy": { "operator": ">=", "value": 1 },
+    "verifierRejectionAccuracy": { "operator": ">=", "value": 1 },
+    "latencyBudgetPassRate": { "operator": ">=", "value": 1 },
+    "tokenBudgetPassRate": { "operator": ">=", "value": 1 },
+    "costBudgetPassRate": { "operator": ">=", "value": 1 },
+    "decisionAccuracy": { "operator": ">=", "value": 1 }
+  },
+  "cases": [
+    {
+      "id": "grounded-pass",
+      "expected": { "decision": "accepted", "verifierDecision": "passed" },
+      "observed": {
+        "decision": "accepted",
+        "verifierDecision": "passed",
+        "schemaValid": true,
+        "allowedEvidenceIds": ["ev_sec", "ev_reuters"],
+        "citedEvidenceIds": ["ev_sec", "ev_reuters"],
+        "claims": [{ "supported": true }, { "supported": true }],
+        "entities": [{ "expected": "AAPL", "actual": "AAPL" }],
+        "timestamps": [{ "expected": "2026-07-26T10:00:00Z", "actual": "2026-07-26T10:00:00.000Z" }],
+        "recordCount": 2,
+        "duplicateCount": 0,
+        "latencyMs": 820,
+        "maxLatencyMs": 45000,
+        "totalTokens": 870,
+        "maxTotalTokens": 12000,
+        "costUnits": 4,
+        "maxCostUnits": 8
+      }
+    },
+    {
+      "id": "insufficient-evidence-abstention",
+      "expected": { "decision": "abstained", "verifierDecision": "not-run" },
+      "observed": {
+        "decision": "abstained",
+        "verifierDecision": "not-run",
+        "schemaValid": true,
+        "allowedEvidenceIds": [],
+        "citedEvidenceIds": [],
+        "claims": [],
+        "entities": [],
+        "timestamps": [],
+        "recordCount": 0,
+        "duplicateCount": 0,
+        "latencyMs": 1,
+        "maxLatencyMs": 45000,
+        "totalTokens": 0,
+        "maxTotalTokens": 12000,
+        "costUnits": 0,
+        "maxCostUnits": 8
+      }
+    },
+    {
+      "id": "unsupported-claim-rejected",
+      "expected": { "decision": "rejected", "verifierDecision": "rejected" },
+      "observed": {
+        "decision": "rejected",
+        "verifierDecision": "rejected",
+        "schemaValid": true,
+        "allowedEvidenceIds": ["ev_reuters"],
+        "citedEvidenceIds": ["ev_reuters"],
+        "claims": [{ "supported": false }],
+        "entities": [],
+        "timestamps": [],
+        "recordCount": 1,
+        "duplicateCount": 0,
+        "latencyMs": 910,
+        "maxLatencyMs": 45000,
+        "totalTokens": 740,
+        "maxTotalTokens": 12000,
+        "costUnits": 4,
+        "maxCostUnits": 8
+      }
+    },
+    {
+      "id": "citation-mismatch-rejected",
+      "expected": { "decision": "rejected", "verifierDecision": "rejected" },
+      "observed": {
+        "decision": "rejected",
+        "verifierDecision": "rejected",
+        "schemaValid": true,
+        "allowedEvidenceIds": ["ev_sec"],
+        "citedEvidenceIds": ["ev_fabricated"],
+        "claims": [{ "supported": false }],
+        "entities": [],
+        "timestamps": [],
+        "recordCount": 1,
+        "duplicateCount": 0,
+        "latencyMs": 700,
+        "maxLatencyMs": 45000,
+        "totalTokens": 520,
+        "maxTotalTokens": 12000,
+        "costUnits": 4,
+        "maxCostUnits": 8
+      }
+    },
+    {
+      "id": "prompt-injection-abstention",
+      "expected": { "decision": "abstained", "verifierDecision": "not-run" },
+      "observed": {
+        "decision": "abstained",
+        "verifierDecision": "not-run",
+        "schemaValid": true,
+        "allowedEvidenceIds": [],
+        "citedEvidenceIds": [],
+        "claims": [],
+        "entities": [],
+        "timestamps": [],
+        "recordCount": 0,
+        "duplicateCount": 0,
+        "latencyMs": 2,
+        "maxLatencyMs": 45000,
+        "totalTokens": 0,
+        "maxTotalTokens": 12000,
+        "costUnits": 0,
+        "maxCostUnits": 8
+      }
+    },
+    {
+      "id": "ticker-mismatch-rejected",
+      "expected": { "decision": "rejected", "verifierDecision": "rejected" },
+      "observed": {
+        "decision": "rejected",
+        "verifierDecision": "rejected",
+        "schemaValid": true,
+        "allowedEvidenceIds": ["ev_issuer"],
+        "citedEvidenceIds": ["ev_issuer"],
+        "claims": [{ "supported": false }],
+        "entities": [{ "expected": "MSFT", "actual": "META" }],
+        "timestamps": [],
+        "recordCount": 1,
+        "duplicateCount": 0,
+        "latencyMs": 740,
+        "maxLatencyMs": 45000,
+        "totalTokens": 610,
+        "maxTotalTokens": 12000,
+        "costUnits": 4,
+        "maxCostUnits": 8
+      }
+    },
+    {
+      "id": "stale-timestamp-rejected",
+      "expected": { "decision": "rejected", "verifierDecision": "rejected" },
+      "observed": {
+        "decision": "rejected",
+        "verifierDecision": "rejected",
+        "schemaValid": true,
+        "allowedEvidenceIds": ["ev_current"],
+        "citedEvidenceIds": ["ev_current"],
+        "claims": [{ "supported": false }],
+        "entities": [],
+        "timestamps": [{ "expected": "2026-07-26T09:00:00Z", "actual": "2025-07-26T09:00:00Z" }],
+        "recordCount": 1,
+        "duplicateCount": 0,
+        "latencyMs": 720,
+        "maxLatencyMs": 45000,
+        "totalTokens": 590,
+        "maxTotalTokens": 12000,
+        "costUnits": 4,
+        "maxCostUnits": 8
+      }
+    },
+    {
+      "id": "duplicate-record-rejected",
+      "expected": { "decision": "rejected", "verifierDecision": "rejected" },
+      "observed": {
+        "decision": "rejected",
+        "verifierDecision": "rejected",
+        "schemaValid": true,
+        "allowedEvidenceIds": ["ev_one"],
+        "citedEvidenceIds": ["ev_one"],
+        "claims": [{ "supported": false }],
+        "entities": [],
+        "timestamps": [],
+        "recordCount": 2,
+        "duplicateCount": 1,
+        "latencyMs": 680,
+        "maxLatencyMs": 45000,
+        "totalTokens": 560,
+        "maxTotalTokens": 12000,
+        "costUnits": 4,
+        "maxCostUnits": 8
+      }
+    },
+    {
+      "id": "schema-invalid-rejected",
+      "expected": { "decision": "rejected", "verifierDecision": "not-run" },
+      "observed": {
+        "decision": "rejected",
+        "verifierDecision": "not-run",
+        "schemaValid": false,
+        "allowedEvidenceIds": ["ev_one"],
+        "citedEvidenceIds": [],
+        "claims": [],
+        "entities": [],
+        "timestamps": [],
+        "recordCount": 0,
+        "duplicateCount": 0,
+        "latencyMs": 350,
+        "maxLatencyMs": 45000,
+        "totalTokens": 280,
+        "maxTotalTokens": 12000,
+        "costUnits": 1,
+        "maxCostUnits": 8
+      }
+    },
+    {
+      "id": "budget-overrun-abstention",
+      "expected": { "decision": "abstained", "verifierDecision": "not-run" },
+      "observed": {
+        "decision": "abstained",
+        "verifierDecision": "not-run",
+        "schemaValid": true,
+        "allowedEvidenceIds": [],
+        "citedEvidenceIds": [],
+        "claims": [],
+        "entities": [],
+        "timestamps": [],
+        "recordCount": 0,
+        "duplicateCount": 0,
+        "latencyMs": 5,
+        "maxLatencyMs": 45000,
+        "totalTokens": 0,
+        "maxTotalTokens": 12000,
+        "costUnits": 0,
+        "maxCostUnits": 8
+      }
+    }
+  ]
+}

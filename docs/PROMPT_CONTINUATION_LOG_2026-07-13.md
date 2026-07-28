@@ -84,10 +84,14 @@ This file is a portable handoff for continuing work on another account. It recor
 
 > continuwe
 
+### User prompt 18
+
+> continue
+
 ## Authoritative Prompt Sources
 
 - Full master prompt: [MARKET_TERMINAL_TOTAL_PLATFORM_CODEX_MASTER_PROMPT.md](/Users/krishivjain/Desktop/claude projects/market-terminal/MARKET_TERMINAL_TOTAL_PLATFORM_CODEX_MASTER_PROMPT.md)
-- Repository operating reference: [AGENTS.md](/Users/krishivjain/Desktop/claude projects/market-terminal/AGENTS.md). User prompt 11 superseded the previously supplied AGENTS instructions for the active session; the file remains a repository/handoff artifact, not an active instruction source for that session.
+- Repository operating reference: [AGENTS.md](/Users/krishivjain/Desktop/claude projects/market-terminal/AGENTS.md). User prompt 11 superseded an earlier instruction block; the active repository instruction block was refreshed on 2026-07-28 and the tracked file is maintained as the portable operating reference.
 - Claude project instructions: [CLAUDE.md](/Users/krishivjain/Desktop/claude projects/market-terminal/CLAUDE.md)
 - Project README and current-state reference: [README.md](/Users/krishivjain/Desktop/claude projects/market-terminal/README.md)
 - Original project prompt/reference: [prompt.md](/Users/krishivjain/Desktop/claude projects/market-terminal/prompt.md)
@@ -131,6 +135,9 @@ The following production-oriented vertical slices were implemented and deployed:
 - Added eight AI-policy unit cases and expanded smoke coverage to 31 checks. Checkpoint 4 source commit `5a10b79` is production verified.
 - Extended shared task authority to sector analysis, company-news impact, candle commentary, and alert prioritization. Unsupported ranks/picks/options are withheld, company facts bind to canonical evidence, candle output is deterministic, and only deterministically eligible alerts can enter the high-priority path.
 - Expanded the unit suite to 29 cases and the smoke suite to 33 contracts. Checkpoint 5 source commit `20c9252` is production verified.
+- Added a shared current-model provider registry, lifecycle/health metadata, bounded call/token/latency/cost policy, and independent different-provider/different-model verification for generated high-risk tasks.
+- Added safe runtime telemetry and a versioned 10-case offline AI policy evaluation. The evaluation is not represented as a live-provider quality benchmark.
+- Corrected educational/current-market chat classification and the duplicate false network-error bubble in the AI chat panel.
 - Unit tests for API contracts, evidence helpers, and candle analysis.
 - Expanded smoke tests covering local and production endpoint contracts.
 
@@ -151,6 +158,9 @@ Local verification completed:
 - The Desktop-backed workspace had macOS dataless files. Source was hydrated and the exact working tree was mirrored to `/tmp/market-terminal-verify` for stable local runtime tests; no temporary runtime artifact is part of the source checkpoint.
 - Checkpoint 5 local verification on 2026-07-22: `npm run test:unit` passed `29/29`; all 28 smoke contracts available in the keyless local environment passed; syntax checks, `git diff --check`, zero-vulnerability dependency audit, Wrangler `4.113.0` dry-run bundling, targeted policy probes, and interactive sector/watchlist/alert browser checks passed. All seven source-deployment asset references use `20260722a`.
 - Checkpoint 5 work runs from detached temporary worktree `/tmp/market-terminal-checkpoint5-20260718` because the Desktop/iCloud checkout was nearly full and intermittently exposed dataless files. The original checkout and its unrelated untracked files remain untouched.
+- Checkpoint 6 local verification on 2026-07-28: `npm run test:unit` passed `44/44`; `npm run test:ai-eval` passed all declared thresholds for 10 versioned fixtures; all 28 keyless-available smoke contracts passed; `npm audit --omit=dev` reported zero vulnerabilities; syntax checks passed; and Wrangler `4.114.0` dry-run bundled 14 assets at 399.10 KiB raw / 96.89 KiB gzip.
+- Checkpoint 6 browser evidence: desktop sector/deep-dive states and mobile sector layout remained safe; educational P/E chat resolved to `intel.chat`, rendered exactly one AI response and one policy note, and produced no console warnings/errors.
+- Checkpoint 6 work runs from detached worktree `/tmp/market-terminal-checkpoint6-20260726`. The original checkout and its unrelated untracked master-prompt/profile files remain preserved.
 
 Production verification completed:
 
@@ -197,7 +207,8 @@ All listed source commits were pushed to `origin/main`. Checkpoint 5 source comm
 These items are intentionally not marked complete:
 
 - Expand quant-engine unit coverage beyond the candlestick fallback engine.
-- Add independent claim-level verification, provider/model-version telemetry, enforced token/cost budgets, and measured golden AI evaluation fixtures. The current deterministic citation check is not an independent verifier.
+- Finish checkpoint 6 managed deployment, production smoke/probes, production browser evidence, and evidence commit before treating the new AI controls as production verified.
+- Expand beyond offline safety fixtures with live-provider drift canaries, a human-labelled finance/OSINT claim corpus, calibration metrics, and persistent aggregate observability. A model verifier remains fallible and is not proof of truth.
 - Continue modular decomposition of the large `server.js` and `worker.js` files.
 - Re-run the full production smoke suite after any subsequent deployment.
 - Update this log and the Claude handoff after every future checkpoint commit.

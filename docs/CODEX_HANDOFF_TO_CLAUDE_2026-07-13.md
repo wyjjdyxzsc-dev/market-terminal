@@ -2,8 +2,8 @@ This work was performed by OpenAI Codex without Claude’s involvement. This doc
 
 # Status
 
-- Handoff status: checkpoint 5 source commit `20c9252` production verified; post-verification evidence deployment prepared
-- Research date: 2026-07-13
+- Handoff status: checkpoint 6 implementation locally verified; managed production deployment and production evidence pending
+- Research dates: baseline 2026-07-13; AI-provider capability refresh 2026-07-28
 - Deployment URL: `https://market-terminal.wyjjdyxzsc.workers.dev`
 
 # Starting state
@@ -151,6 +151,10 @@ This work was performed by OpenAI Codex without Claude’s involvement. This doc
   - if 1D intraday OHLC is unavailable, it falls back to 5D daily candles
   - if the AI pool is unavailable, it returns a deterministic local pattern analysis
   - degraded responses explicitly disclose fallback behavior
+- `shared/ai-provider-registry.js` now owns model IDs, lifecycle status, task/runtime eligibility, context/output limits, conservative cost units, documented pricing, and provider health metadata for both runtimes.
+- High-risk and current-market generation now runs sequentially through `shared/ai-verification-core.js`: one bounded generator call, followed by a different-provider/different-canonical-model verifier. A valid verifier rejection is authoritative and missing independence fails closed.
+- Policy envelopes expose safe actual runtime metadata: requested/served models, reported token usage or estimates, calls, latency, estimated cost, cost units, verifier status, and budget status.
+- `shared/ai-evaluation-core.js` and `tests/fixtures/ai-eval-2026-07-26a.json` provide an offline policy-safety regression suite. They are not represented as live model-quality or factual-accuracy evidence.
 
 # Data-source additions and removals
 
@@ -454,10 +458,54 @@ This work was performed by OpenAI Codex without Claude’s involvement. This doc
 - Post-verification evidence deployment: all seven frontend references are bumped to `20260726a` in this documentation checkpoint.
 - Scope limit: this closes the four named policy-inventory gaps but does not provide an independent claim-level verifier, provider/model-version telemetry, cost budgets, golden AI evaluation metrics, issuer-grade sector datasets, or professional terminal parity.
 
+# 2026-07-28 checkpoint 6: provider lifecycle, budgets, telemetry, and independent verification
+
+- Added `shared/ai-provider-registry.js` with schema `2026-07-26a`.
+  - Current official defaults are recorded for five speed providers and eight active heavy/medium providers.
+  - Groq, Gemini, DeepSeek, Cohere, Together, and AI21 legacy defaults were migrated.
+  - OpenRouter and Hugging Face are not eligible as independent high-risk verifiers because serving identity is variable/brokered.
+  - The legacy Nebius hosted Studio and OctoAI paths are disabled.
+  - Protected health snapshots retain attempts, successes/failures, cooldowns, requested model, lifecycle note, and bounded failure reason.
+- Added `shared/ai-verification-core.js`.
+  - Each task receives explicit input/output/call/latency/cost-unit/estimated-USD budgets.
+  - Failed calls consume call and cost budgets.
+  - Provider usage is normalized when supplied; otherwise the response identifies a token estimate.
+  - High-risk tasks require a generator plus a verifier from another provider and canonical model family.
+  - Model canonicalization detects aliases such as Cloudflare and hosted GPT-OSS variants, so host diversity alone cannot satisfy model independence.
+  - The first valid rejection is authoritative. If no independent verifier passes, the route abstains.
+  - A passing verifier must enumerate every evidence ID cited anywhere in the candidate. Selection skips unaffordable candidates while continuing to a later independent provider that fits, and known-price/token projections are checked before each call.
+  - A real wall-clock timeout race bounds clients that do not honor `AbortSignal`.
+- Updated policy schema `2026-07-26a`.
+  - All generated current-market/high-risk tasks require independent verification.
+  - Deterministic candles and deterministic alert eligibility remain zero-model tasks.
+  - Safe policy metadata carries actual generator/verifier identities, usage, latency, cost, and budget result.
+  - `attachPolicy()` fails closed if a high-risk caller tries to attach output without verified runtime metadata.
+- Added `shared/ai-evaluation-core.js`, `tools/run-ai-eval.js`, and `tests/fixtures/ai-eval-2026-07-26a.json`.
+  - The 10 recorded cases measure schema handling, evidence precision, unsupported claims, entity/ticker identity, timestamp accuracy, duplicates, abstentions, verifier decisions/rejections, and token/cost/latency budgets.
+  - Missing or non-numeric budget observations fail the evaluation instead of being coerced to zero.
+  - The deliberately invalid candidates keep candidate metrics below perfect while accepted-output safety thresholds pass.
+  - This is an offline regression suite, not a live-provider benchmark, independent fact-check, or proof of financial accuracy.
+- Corrected two browser-visible chat defects.
+  - A shared classifier keeps conceptual P/E/market-risk questions on the generic educational policy unless the query has explicit current/decision/instrument intent.
+  - The AI chat IIFE now has access to the runtime formatter, and metadata-render errors cannot be mislabeled as network failures. The checked flow renders exactly one AI bubble and one policy note.
+- Frontend policy disclosures identify generated/verified/rejected model paths and bounded runtime totals in chat, deep dive, situation, and price-action surfaces.
+- Current local evidence:
+  - `npm run test:unit` passed `44/44`
+  - `npm run test:ai-eval` passed every declared threshold across 10 versioned cases
+  - local smoke passed all 28 contracts available without optional keys
+  - targeted generic chat returned task `intel.chat`, an explicit no-provider abstention, zero calls, and verifier `not-required`
+  - deterministic candles and guarded analysis routes retained their expected authority envelopes
+  - `npm audit --omit=dev` found zero vulnerabilities
+  - syntax checks passed for Express, Worker module mode, and the changed frontend/shared files
+  - Wrangler `4.114.0` dry-run bundled 14 assets at 399.10 KiB raw / 96.89 KiB gzip; no manual deployment occurred
+  - desktop sectors/deep dive, mobile sectors, and educational chat were exercised in the in-app browser; chat had one response/one policy note and browser warnings/errors were empty
+- Production status: pending the source checkpoint push and managed GitHub-to-Cloudflare deployment. Do not convert this section to production-verified until asset markers, the full production smoke suite, targeted runtime probes, and an interactive production browser pass succeed.
+- Detailed current-model evidence and limitations are in `docs/AI_PROVIDER_CAPABILITY_AUDIT_2026-07-28.md`.
+
 # Unresolved risks and technical debt
 
 - The repository still has very large `server.js` and `worker.js` monoliths.
-- Eleven analytical/current-market workflows now use shared policy authority, but independent claim-level verification, remaining prompt coverage, and measured evaluation metrics are still not implemented.
+- High-risk generated workflows now have an independent model check, but no model verifier proves truth. Live-provider drift canaries, a human-labelled finance/OSINT claim corpus, calibration measurement, and persistent aggregate observability are still missing.
 - Quant coverage now exists only for the new candlestick fallback engine, not the broader 40-indicator surface.
 - Map source snapshots are not universally supplied by upstreams. The new UI differentiates a provided snapshot from response-served time, but per-feature citations and direct upstream timestamps remain future data-source work.
 
@@ -480,5 +528,6 @@ This work was performed by OpenAI Codex without Claude’s involvement. This doc
 # Recommended next step for Claude
 
 - Next recommended step:
-  - add an independent claim-level verifier, provider/model-version telemetry, enforced token/cost budgets, and golden evaluation fixtures
-  - continue quant reference coverage and modular decomposition without weakening current abstention contracts
+  - finish checkpoint 6 production verification before changing the source again
+  - then add live-provider drift canaries, a human-reviewed finance/OSINT claim corpus, calibration/quality metrics, and persistent aggregate observability
+  - continue quant reference coverage and modular decomposition without weakening the abstention or independent-verification contracts

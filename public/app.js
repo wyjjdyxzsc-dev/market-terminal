@@ -358,6 +358,7 @@ async function loadPriceAction(symbol) {
   const sentEl = $('whySentiment');
   const catsEl = $('whyCatalysts');
   const headsEl = $('whyHeadlines');
+  const runtimeEl = $('whyRuntime');
   if (!panel) return;
 
   panel.hidden = false;
@@ -367,6 +368,7 @@ async function loadPriceAction(symbol) {
   sentEl.className = 'why-sentiment';
   clearChildren(catsEl);
   clearChildren(headsEl);
+  if (runtimeEl) runtimeEl.textContent = '';
 
   try {
     const d = await getJSON('/api/intel/priceaction?symbol=' + encodeURIComponent(symbol));
@@ -378,6 +380,17 @@ async function loadPriceAction(symbol) {
     sentEl.className = 'why-sentiment ' + (d.abstained ? 'neutral' : (d.sentiment || 'neutral'));
 
     textEl.textContent = [d.explanation || '', d.abstained && d.policy?.reason ? d.policy.reason : ''].filter(Boolean).join(' ');
+    if (runtimeEl && d.policy?.runtime) {
+      const runtime = d.policy.runtime;
+      const generator = runtime.generator;
+      const verifier = runtime.verifier;
+      const parts = [];
+      if (generator?.provider) parts.push(`${generator.provider}/${generator.servedModel || generator.requestedModel || 'model'}`);
+      if (verifier?.status === 'passed') parts.push(`verified by ${verifier.provider}/${verifier.servedModel || verifier.requestedModel || 'model'}`);
+      else if (d.policy.requiresIndependentVerifier) parts.push('independent verification incomplete');
+      if (runtime.totals?.providerCalls) parts.push(`${runtime.totals.totalTokens || 0} tokens`);
+      runtimeEl.textContent = parts.join(' · ');
+    }
 
     if (d.catalysts && d.catalysts.length) {
       const frag = document.createDocumentFragment();

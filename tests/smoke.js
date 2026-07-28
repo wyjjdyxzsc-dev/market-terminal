@@ -24,7 +24,15 @@ const hasPolicy = (data, taskId) =>
   data && data.policy && data.policy.taskId === taskId &&
   typeof data.policy.schemaVersion === 'string' &&
   (data.policy.status === 'grounded' || data.policy.status === 'abstained' || data.policy.status === 'deterministic') &&
-  Array.isArray(data.evidenceIds) && Array.isArray(data.policy.availableEvidenceIds);
+  Array.isArray(data.evidenceIds) && Array.isArray(data.policy.availableEvidenceIds) &&
+  data.policy.runtime && typeof data.policy.runtime.schemaVersion === 'string' &&
+  data.policy.runtime.totals && Number.isFinite(Number(data.policy.runtime.totals.providerCalls)) &&
+  data.policy.runtime.verifier && typeof data.policy.runtime.verifier.status === 'string' &&
+  (
+    data.policy.status !== 'grounded' ||
+    !data.policy.requiresIndependentVerifier ||
+    (data.policy.runtime.status === 'verified' && data.policy.runtime.verifier.status === 'passed')
+  );
 
 async function check(label, url, opts = {}) {
   const {
@@ -89,6 +97,11 @@ async function checkHtml(label, url) {
   if (res.status !== 200) { console.error(`  ✗ ${label} — HTTP ${res.status}`); fail++; return; }
   const t = await res.text();
   if (!t.includes('chartCanvas')) { console.error(`  ✗ ${label} — missing #chartCanvas`); fail++; return; }
+  const versions = [...t.matchAll(/\?v=([0-9]{8}[a-z])/g)].map((match) => match[1]);
+  if (versions.length !== 7 || new Set(versions).size !== 1) {
+    console.error(`  ✗ ${label} — expected seven synchronized asset versions`);
+    fail++; return;
+  }
   console.log(`  ✓ ${label}`);
   pass++;
 }

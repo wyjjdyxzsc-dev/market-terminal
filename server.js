@@ -32,6 +32,8 @@ const evidenceCore = require('./shared/evidence-core.js');
 const candleAnalysisCore = require('./shared/candle-analysis-core.js');
 const marketSentimentCore = require('./shared/market-sentiment-core.js');
 const mapProvenanceCore = require('./shared/map-provenance-core.js');
+const aiProviderRegistry = require('./shared/ai-provider-registry.js');
+const aiVerificationCore = require('./shared/ai-verification-core.js');
 const aiTaskPolicyCore = require('./shared/ai-task-policy-core.js');
 
 // Optional WebSocket for Finnhub live feed.  npm i ws  to enable.
@@ -69,6 +71,23 @@ const { buildDeterministicCandleAnalysis } = candleAnalysisCore;
 const { analyzeMarketSentiment } = marketSentimentCore;
 const { annotateMapPayload } = mapProvenanceCore;
 const {
+  AI_PROVIDER_REGISTRY_SCHEMA_VERSION,
+  resolveModel: resolveProviderModel,
+  isConfigured: isProviderConfigured,
+  isEligibleForTask,
+  listProviders,
+  createProviderHealthState,
+  recordProviderAttempt,
+  recordProviderSuccess,
+  recordProviderFailure,
+  recordProviderCooldown,
+  providerHealthSnapshot,
+} = aiProviderRegistry;
+const {
+  runVerifiedPipeline,
+  getRuntimeMetadata,
+} = aiVerificationCore;
+const {
   AI_TASK_POLICY_SCHEMA_VERSION,
   prepareTask,
   buildGroundingInstructions,
@@ -80,6 +99,7 @@ const {
   attachPolicy,
   attachDeterministicPolicy,
   evaluateAlertCandidate,
+  isCurrentMarketQuestion,
 } = aiTaskPolicyCore;
 
 const PORT         = process.env.PORT || 3000;
@@ -305,136 +325,42 @@ function isParked(name) {
 }
 
 function parkProvider(name, ms) {
-  _penaltyBox.set(name, Date.now() + ms);
+  const cooldownUntil = Date.now() + ms;
+  _penaltyBox.set(name, cooldownUntil);
+  if (typeof _providerHealth !== 'undefined') {
+    recordProviderCooldown(_providerHealth, name, cooldownUntil);
+  }
   console.warn(`[ai] ${name} parked for ${Math.round(ms / 1000)}s`);
 }
 
-// ── 3b: Provider definitions ───────────────────────────────────────────────
+// ── 3b: Shared provider registry ───────────────────────────────────────────
 
-// Speed tier: low-latency providers ideal for NLP / UI / sentiment tasks.
-const SPEED_PROVIDERS = [
-  {
-    name: 'groq',
-    envKey: 'GROQ_API_KEY',
-    url: 'https://api.groq.com/openai/v1/chat/completions',
-    modelEnv: 'GROQ_MODEL',
-    defaultModel: 'llama-3.3-70b-versatile',
-    format: 'openai',
-  },
-  {
-    name: 'cerebras',
-    envKey: 'CEREBRAS_API_KEY',
-    url: 'https://api.cerebras.ai/v1/chat/completions',
-    modelEnv: 'CEREBRAS_MODEL',
-    defaultModel: 'llama3.1-70b',
-    format: 'openai',
-  },
-  {
-    name: 'sambanova',
-    envKey: 'SAMBANOVA_API_KEY',
-    url: 'https://api.sambanova.ai/v1/chat/completions',
-    modelEnv: 'SAMBANOVA_MODEL',
-    defaultModel: 'Meta-Llama-3.3-70B-Instruct',
-    format: 'openai',
-  },
-  {
-    name: 'together',
-    envKey: 'TOGETHER_API_KEY',
-    url: 'https://api.together.xyz/v1/chat/completions',
-    modelEnv: 'TOGETHER_MODEL',
-    defaultModel: 'meta-llama/Llama-3.3-70B-Instruct-Turbo-Free',
-    format: 'openai',
-  },
-  {
-    name: 'mistral',
-    envKey: 'MISTRAL_API_KEY',
-    url: 'https://api.mistral.ai/v1/chat/completions',
-    modelEnv: 'MISTRAL_MODEL',
-    defaultModel: 'mistral-large-latest',
-    format: 'openai',
-  },
-];
-
-// Heavy tier: providers suited for math / logic / structured analysis.
-const HEAVY_PROVIDERS = [
-  {
-    name: 'gemini',
-    envKey: 'GEMINI_API_KEY',
-    modelEnv: 'GEMINI_MODEL',
-    defaultModel: 'gemini-2.0-flash',
-    format: 'gemini',
-  },
-  {
-    name: 'openrouter',
-    envKey: 'OPENROUTER_API_KEY',
-    url: 'https://openrouter.ai/api/v1/chat/completions',
-    modelEnv: 'OPENROUTER_MODEL',
-    defaultModel: 'meta-llama/llama-3.3-70b-instruct:free',
-    format: 'openai',
-    extraHeaders: {
-      'HTTP-Referer': 'https://market-terminal.wyjjdyxzsc.workers.dev',
-      'X-Title': 'Market Terminal',
-    },
-  },
-  {
-    name: 'deepseek',
-    envKey: 'DEEPSEEK_API_KEY',
-    url: 'https://api.deepseek.com/v1/chat/completions',
-    modelEnv: 'DEEPSEEK_MODEL',
-    defaultModel: 'deepseek-chat',
-    format: 'openai',
-  },
-  {
-    name: 'cohere',
-    envKey: 'COHERE_API_KEY',
-    url: 'https://api.cohere.com/v2/chat',
-    modelEnv: 'COHERE_MODEL',
-    defaultModel: 'command-r-plus',
-    format: 'cohere',
-  },
-  {
-    name: 'nebius',
-    envKey: 'NEBIUS_API_KEY',
-    url: 'https://api.studio.nebius.com/v1/chat/completions',
-    modelEnv: 'NEBIUS_MODEL',
-    defaultModel: 'meta-llama/Llama-3.3-70B-Instruct',
-    format: 'openai',
-  },
-  {
-    name: 'huggingface',
-    envKey: 'HF_API_KEY',
-    url: 'https://router.huggingface.co/v1/chat/completions',
-    modelEnv: 'HF_MODEL',
-    defaultModel: 'meta-llama/Llama-3.3-70B-Instruct',
-    format: 'openai',
-  },
-  {
-    name: 'github',
-    envKey: 'GITHUB_MODELS_TOKEN',
-    url: 'https://models.github.ai/inference/chat/completions',
-    modelEnv: 'GITHUB_MODEL',
-    defaultModel: 'openai/gpt-4o-mini',
-    format: 'openai',
-  },
-];
+const SPEED_PROVIDERS = listProviders({ runtime: 'node', tier: 'speed' });
+const HEAVY_PROVIDERS = listProviders({ runtime: 'node', tier: 'heavy' });
+const _providerHealth = createProviderHealthState();
 
 // ── 3c: Request builders & response extractors ────────────────────────────
 
 function _resolveModel(p) {
-  return (p.modelEnv && process.env[p.modelEnv]) || p.defaultModel;
+  return resolveProviderModel(p, process.env);
 }
 
-function _buildBody(p, sys, usr) {
+function _buildBody(p, sys, usr, maxOutputTokens = 2_000) {
   const model = _resolveModel(p);
+  const boundedOutputTokens = Math.max(1, Math.min(
+    Number(maxOutputTokens) || 2_000,
+    Number(p.maxOutputTokens) || 2_000
+  ));
   if (p.format === 'gemini') {
+    const generationConfig = {
+      maxOutputTokens: boundedOutputTokens,
+      responseMimeType: 'application/json',
+    };
+    if (p.supportsSamplingParameters !== false) generationConfig.temperature = 0.4;
     return JSON.stringify({
       systemInstruction: { parts: [{ text: sys }] },
       contents: [{ role: 'user', parts: [{ text: usr }] }],
-      generationConfig: {
-        temperature: 0.4,
-        maxOutputTokens: 8192,
-        responseMimeType: 'application/json',
-      },
+      generationConfig,
     });
   }
   if (p.format === 'cohere') {
@@ -445,70 +371,101 @@ function _buildBody(p, sys, usr) {
         { role: 'user',   content: usr },
       ],
       temperature: 0.4,
+      max_tokens: boundedOutputTokens,
     });
   }
-  // openai-compatible
-  return JSON.stringify({
+  const body = {
     model,
     messages: [
       { role: 'system', content: sys },
       { role: 'user',   content: usr },
     ],
     temperature: 0.4,
-    max_tokens: 8000,
-    response_format: { type: 'json_object' },
-  });
+  };
+  body[p.outputTokenParam || 'max_tokens'] = boundedOutputTokens;
+  if (p.supportsJsonMode !== false) body.response_format = { type: 'json_object' };
+  return JSON.stringify(body);
 }
 
-function _extractText(p, data) {
-  if (p.format === 'gemini')
-    return data?.candidates?.[0]?.content?.parts?.map(x => x.text).join('') || '';
-  if (p.format === 'cohere')
-    return data?.message?.content?.[0]?.text ?? data?.text ?? '';
-  return data?.choices?.[0]?.message?.content ?? '';  // openai-compatible
+function _extractProviderResponse(p, data, requestedModel) {
+  if (p.format === 'gemini') {
+    return {
+      text: data?.candidates?.[0]?.content?.parts?.map(x => x.text).join('') || '',
+      usage: data?.usageMetadata || null,
+      requestedModel,
+      servedModel: data?.modelVersion || requestedModel,
+    };
+  }
+  if (p.format === 'cohere') {
+    return {
+      text: data?.message?.content?.map((part) => part?.text || '').join('') || data?.text || '',
+      usage: data?.usage || null,
+      requestedModel,
+      servedModel: data?.model || requestedModel,
+    };
+  }
+  return {
+    text: data?.choices?.[0]?.message?.content ?? '',
+    usage: data?.usage || null,
+    requestedModel,
+    servedModel: data?.model || requestedModel,
+  };
 }
 
 // ── 3d: Single-provider caller ────────────────────────────────────────────
 
-async function _callProvider(p, sys, usr, signal) {
+async function _callProvider(p, sys, usr, signal, maxOutputTokens = 2_000) {
   const key = process.env[p.envKey];
   if (!key || isParked(p.name)) return null;
+  recordProviderAttempt(_providerHealth, p.name);
 
-  let url = p.url;
+  const requestedModel = _resolveModel(p);
+  let url = p.endpoint;
   if (p.format === 'gemini') {
-    const model = _resolveModel(p);
-    url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
+    url = `https://generativelanguage.googleapis.com/v1beta/models/${requestedModel}:generateContent?key=${key}`;
   }
 
   const headers = { 'Content-Type': 'application/json' };
   if (p.format !== 'gemini') headers['Authorization'] = `Bearer ${key}`;
   if (p.extraHeaders) Object.assign(headers, p.extraHeaders);
 
-  const res = await fetch(url, {
-    method: 'POST',
-    headers,
-    body: _buildBody(p, sys, usr),
-    signal,
-  });
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: _buildBody(p, sys, usr, maxOutputTokens),
+      signal,
+    });
 
-  if (res.status === 429 || res.status === 402) {
-    const ms = cooldownMs({ status: res.status, message: await res.text().catch(() => '') });
-    parkProvider(p.name, ms);
-    throw new Error(`${p.name} rate/quota limited (${res.status})`);
-  }
-  if (!res.ok) {
-    const body = await res.text().catch(() => '');
-    if (/quota|exceeded|billing|exhausted/i.test(body)) {
-      parkProvider(p.name, 30 * 60 * 1000);
-      throw new Error(`${p.name} quota exceeded`);
+    if (res.status === 429 || res.status === 402) {
+      const ms = cooldownMs({ status: res.status, message: await res.text().catch(() => '') });
+      parkProvider(p.name, ms);
+      const error = new Error(`${p.name} rate/quota limited (${res.status})`);
+      error.status = res.status;
+      throw error;
     }
-    throw new Error(`${p.name} responded ${res.status}`);
-  }
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      if (/quota|exceeded|billing|exhausted/i.test(body)) {
+        parkProvider(p.name, 30 * 60 * 1000);
+        throw new Error(`${p.name} quota exceeded`);
+      }
+      const error = new Error(`${p.name} responded ${res.status}`);
+      error.status = res.status;
+      throw error;
+    }
 
-  const data = await res.json();
-  const text = _extractText(p, data);
-  if (!text) throw new Error(`${p.name} returned empty content`);
-  return text;
+    const data = await res.json();
+    const result = _extractProviderResponse(p, data, requestedModel);
+    if (!result.text) throw new Error(`${p.name} returned empty content`);
+    recordProviderSuccess(_providerHealth, p.name);
+    return result;
+  } catch (error) {
+    if (error?.name !== 'AbortError') {
+      recordProviderFailure(_providerHealth, p.name, error?.message || error);
+    }
+    throw error;
+  }
 }
 
 // ── 3e: Batch racing engine ───────────────────────────────────────────────
@@ -529,7 +486,8 @@ function _raceBatch(batch, sys, usr, validate) {
     batch.forEach((p, i) => {
       Promise.resolve()
         .then(() => _callProvider(p, sys, usr, ctrls[i].signal))
-        .then(text => {
+        .then(response => {
+          const text = response?.text || '';
           if (!text) return miss();
           let data;
           try { data = extractJson(text); } catch {
@@ -564,25 +522,53 @@ function _raceBatch(batch, sys, usr, validate) {
  * validate : (parsedJson) => boolean  — reject empty/useless responses
  */
 async function raceProviders(taskType, sys, usr, validate = () => true, policy = null) {
+  const preparation = policy && policy.policy ? policy : null;
+  const taskPolicy = preparation ? preparation.policy : policy;
   const primary  = taskType === 'heavy' ? HEAVY_PROVIDERS : SPEED_PROVIDERS;
   const fallback = taskType === 'heavy' ? SPEED_PROVIDERS : HEAVY_PROVIDERS;
-  const permittedProviders = Array.isArray(policy?.permittedProviderNames) && policy.permittedProviderNames.length
-    ? new Set(policy.permittedProviderNames)
+  const permittedProviders = Array.isArray(taskPolicy?.permittedProviderNames) && taskPolicy.permittedProviderNames.length
+    ? new Set(taskPolicy.permittedProviderNames)
     : null;
   const allowed = (providers) => providers.filter((provider) =>
-    process.env[provider.envKey] && !isParked(provider.name) && (!permittedProviders || permittedProviders.has(provider.name))
-  );
+    isProviderConfigured(provider, process.env) &&
+    !isParked(provider.name) &&
+    (!permittedProviders || permittedProviders.has(provider.name)) &&
+    (!taskPolicy || isEligibleForTask(provider, {
+      runtime: 'node',
+      tier: taskPolicy.providerTier,
+      riskClass: taskPolicy.riskClass,
+    }))
+  ).map((provider) => ({ ...provider, requestedModel: _resolveModel(provider) }));
 
   let candidates = allowed(primary);
-  if (!candidates.length)
+  if (!taskPolicy && !candidates.length)
     candidates = allowed(fallback);
   if (!candidates.length)
     throw new Error(permittedProviders
       ? 'No policy-approved AI provider is available for this task.'
       : 'All AI providers are parked or unconfigured. Add at least one API key to .env.');
 
-  const width = Math.max(2, parseInt(process.env.AI_PARALLEL || '5', 10) || 5);
+  if (preparation) {
+    try {
+      return await runVerifiedPipeline({
+        preparation,
+        providers: candidates,
+        system: sys,
+        user: usr,
+        validate,
+        extractJson,
+        callProvider: _callProvider,
+        onProviderFailure: async (provider, error) => {
+          if (isRateLimited(error)) parkProvider(provider.name, cooldownMs(error));
+        },
+      });
+    } catch (error) {
+      preparation.runtime = error?.runtime || null;
+      throw error;
+    }
+  }
 
+  const width = Math.max(2, parseInt(process.env.AI_PARALLEL || '5', 10) || 5);
   for (let i = 0; i < candidates.length; i += width) {
     const result = await _raceBatch(candidates.slice(i, i + width), sys, usr, validate);
     if (result) return result.data;
@@ -1421,7 +1407,7 @@ function withGrounding(system, preparation) {
 function policyAbstention(preparation, reason, payload = {}) {
   return {
     ...payload,
-    ...buildAbstention(preparation, reason),
+    ...buildAbstention(preparation, reason, { runtime: preparation.runtime }),
     asOf: preparation.dataAsOf || new Date().toISOString(),
   };
 }
@@ -1523,12 +1509,12 @@ async function fetchAnalysis() {
     validateGroundedOutput(preparation, d) && validateEvidenceBoundItems(preparation, d.industries);
   try {
     const data = await raceProviders(preparation.policy.providerTier,
-      withGrounding(ANALYSIS_SYSTEM, preparation), userPrompt, validate, preparation.policy);
+      withGrounding(ANALYSIS_SYSTEM, preparation), userPrompt, validate, preparation);
     return attachPolicy(preparation, data, {
       unknowns: ['Sector ranks, stock picks, numeric scores, and options strategies require dedicated verified datasets.'],
     });
   } catch {
-    return fallback('No sector response passed the deterministic evidence and citation checks.');
+    return fallback('No response completed the task schema, evidence, and verification policy.');
   }
 }
 
@@ -1570,14 +1556,14 @@ async function fetchCompany(query) {
     validateGroundedOutput(preparation, d) && validateEvidenceBoundItems(preparation, d.news);
   try {
     const data = await raceProviders(preparation.policy.providerTier,
-      withGrounding(COMPANY_SYSTEM, preparation), userPrompt, validate, preparation.policy);
+      withGrounding(COMPANY_SYSTEM, preparation), userPrompt, validate, preparation);
     const bound = bindCompanyNewsEvidence(preparation, data, { ticker, companyName });
     if (!bound.news.length) return fallback('No company-news item remained after evidence binding.');
     return attachPolicy(preparation, bound, {
       unknowns: ['News-impact labels are interpretations and do not predict the stock price.'],
     });
   } catch {
-    return fallback('No company-news response passed the deterministic evidence and citation checks.');
+    return fallback('No response completed the task schema, evidence, and verification policy.');
   }
 }
 
@@ -1686,9 +1672,9 @@ async function fetchDeepDive(query) {
   const validate = d => d && d.investment && d.options && Array.isArray(d.bullCase) && validateGroundedOutput(preparation, d);
   let data;
   try {
-    data = await raceProviders(preparation.policy.providerTier, withGrounding(DEEPDIVE_SYSTEM, preparation), userPrompt, validate, preparation.policy);
+    data = await raceProviders(preparation.policy.providerTier, withGrounding(DEEPDIVE_SYSTEM, preparation), userPrompt, validate, preparation);
   } catch {
-    return fallback('No AI response passed the deterministic evidence and citation checks.');
+    return fallback('No response completed the task schema, evidence, and verification policy.');
   }
 
   const result = attachPolicy(preparation, data, {
@@ -1743,12 +1729,12 @@ async function fetchSituation() {
     `Produce the situational brief JSON now.`;
   const validate = d => d && Array.isArray(d.domains) && d.domains.length >= 3 && d.defcon != null && validateGroundedOutput(preparation, d);
   try {
-    const data = await raceProviders(preparation.policy.providerTier, withGrounding(SITUATION_SYSTEM, preparation), userPrompt, validate, preparation.policy);
+    const data = await raceProviders(preparation.policy.providerTier, withGrounding(SITUATION_SYSTEM, preparation), userPrompt, validate, preparation);
     return attachPolicy(preparation, data, {
       unknowns: ['Situation labels are a public-news interpretation, not an official threat assessment.'],
     });
   } catch {
-    return fallback('No AI response passed the deterministic evidence and citation checks.');
+    return fallback('No response completed the task schema, evidence, and verification policy.');
   }
 }
 
@@ -1870,7 +1856,7 @@ Return ONLY the JSON object. No markdown, no commentary.`;
       withGrounding(system, preparation),
       userPrompt,
       (data) => data && typeof data.explanation === 'string' && Array.isArray(data.catalysts) && ['bullish', 'bearish', 'neutral'].includes(data.sentiment) && validateGroundedOutput(preparation, data),
-      preparation.policy
+      preparation
     );
     return attachPolicy(preparation, {
       ...base,
@@ -1878,9 +1864,11 @@ Return ONLY the JSON object. No markdown, no commentary.`;
       catalysts: explanation.catalysts || [],
       sentiment: explanation.sentiment || 'neutral',
       evidenceIds: explanation.evidenceIds || [],
+    }, {
+      runtime: getRuntimeMetadata(explanation),
     });
   } catch {
-    return fallback('No AI response passed the deterministic evidence and citation checks.');
+    return fallback('No response completed the task schema, evidence, and verification policy.');
   }
 }
 
@@ -3545,7 +3533,7 @@ app.post('/api/intel/chat', aiChatRateLimit, async (req, res) => {
         published: headline.published || '',
       })),
     };
-    const currentMarketQuestion = /\b(current|today|now|latest|recent|price|quote|moving|moved|catalyst|headline|market|earnings|guidance|macro|sector|investment|risk)\b/i.test(latest);
+    const currentMarketQuestion = isCurrentMarketQuestion(latest, symbol);
     const preparation = prepareAiTask(currentMarketQuestion ? 'intel.chat-current' : 'intel.chat', trustedHeadlines);
     const fallback = (reason) => policyAbstention(preparation, reason, {
       reply: currentMarketQuestion
@@ -3562,14 +3550,16 @@ app.post('/api/intel/chat', aiChatRateLimit, async (req, res) => {
     const validate = (data) => data && typeof data.reply === 'string' && data.reply.length > 5 && validateGroundedOutput(preparation, data);
     let data;
     try {
-      data = await raceProviders(preparation.policy.providerTier, system, userPrompt, validate, preparation.policy);
+      data = await raceProviders(preparation.policy.providerTier, system, userPrompt, validate, preparation);
     } catch {
-      return res.json(fallback('No AI response passed the deterministic evidence and citation checks.'));
+      return res.json(fallback('No response completed the task schema, evidence, and verification policy.'));
     }
     res.json(attachPolicy(preparation, {
       reply: data.reply,
       evidenceIds: data.evidenceIds || [],
       asOf: trustedContext.asOf,
+    }, {
+      runtime: getRuntimeMetadata(data),
     }));
   } catch (err) {
     console.error('chat error:', err.message);
@@ -3919,13 +3909,15 @@ app.post('/api/test-push', adminRateLimit, async (req, res) => {
 
 app.get('/api/ai-status', adminRateLimit, (req, res) => {
   if (!requireAdmin(req, res)) return;
-  const all = [...SPEED_PROVIDERS, ...HEAVY_PROVIDERS];
+  const all = listProviders({ runtime: 'node', includeInactive: true });
   res.json({
-    providers: all.map((provider) => ({
-      name: provider.name,
-      tier: SPEED_PROVIDERS.includes(provider) ? 'speed' : 'heavy',
-      configured: Boolean(process.env[provider.envKey]),
-      cooling: isParked(provider.name),
+    registrySchemaVersion: AI_PROVIDER_REGISTRY_SCHEMA_VERSION,
+    providers: all.map((provider) => providerHealthSnapshot(provider, _providerHealth, {
+      configured: Boolean(provider.envKey && process.env[provider.envKey]),
+      requestedModel: _resolveModel(provider),
+      cooldownUntil: _penaltyBox.has(provider.name)
+        ? new Date(_penaltyBox.get(provider.name)).toISOString()
+        : null,
     })),
   });
 });
@@ -3945,15 +3937,14 @@ app.get('/api/data-status', adminRateLimit, (req, res) => {
 
 app.get('/api/debug/providers', adminRateLimit, (req, res) => {
   if (!requireAdmin(req, res)) return;
-  const all = [...SPEED_PROVIDERS, ...HEAVY_PROVIDERS];
+  const all = listProviders({ runtime: 'node', includeInactive: true });
   res.json({
-    providers: all.map(p => ({
-      name:        p.name,
-      tier:        SPEED_PROVIDERS.includes(p) ? 'speed' : 'heavy',
-      configured:  Boolean(process.env[p.envKey]),
-      parked:      isParked(p.name),
-      parkedUntil: _penaltyBox.has(p.name)
-        ? new Date(_penaltyBox.get(p.name)).toISOString()
+    registrySchemaVersion: AI_PROVIDER_REGISTRY_SCHEMA_VERSION,
+    providers: all.map((provider) => providerHealthSnapshot(provider, _providerHealth, {
+      configured: Boolean(provider.envKey && process.env[provider.envKey]),
+      requestedModel: _resolveModel(provider),
+      cooldownUntil: _penaltyBox.has(provider.name)
+        ? new Date(_penaltyBox.get(provider.name)).toISOString()
         : null,
     })),
     wsCacheSize: _wsQuoteCache.size,

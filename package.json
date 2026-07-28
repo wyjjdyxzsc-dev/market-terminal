@@ -9,6 +9,7 @@
     "dev": "node --watch server.js",
     "test": "npm run test:unit && node tests/smoke.js",
     "test:unit": "node --test tests/*.test.js",
+    "test:ai-eval": "node tools/run-ai-eval.js",
     "test:prod": "node tests/smoke.js --base https://market-terminal.wyjjdyxzsc.workers.dev"
   },
   "engines": {

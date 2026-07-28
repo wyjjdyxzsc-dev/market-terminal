@@ -76,3 +76,11 @@ This file records how parity work is implemented without copying protected code,
 - Sector rankings, stock picks, options construction, model-authored alert priority, and uncited company-news facts are removed or withheld. This is an original authority-boundary design, not a reproduction of competitor prompts, ranking systems, alert logic, schemas, or user interfaces.
 - The alert gate checks project-normalized source evidence for recency, trust, source diversity, and bounded breaking-event language. It does not claim canonical event resolution or competitor-equivalent corroboration.
 - No new external code, proprietary prompt, protected asset, test, or licensed dataset was copied. Local verification passed `29/29` unit tests and all 28 smoke contracts available in the keyless environment; source commit `20c9252` then passed `33/33` production contracts and interactive browser verification. No new parity claim is made.
+
+## 2026-07-28 checkpoint 6
+
+- Implemented an original project-local provider lifecycle registry, bounded execution telemetry, and sequential generator/verifier pipeline. The verifier uses a different provider and canonical model family, and high-risk tasks abstain if independence, evidence, schema, or budget checks fail.
+- Public provider documentation informed only current model IDs, declared capabilities, lifecycle decisions, pricing inputs, and routing limitations. No provider prompt, proprietary benchmark, response, hidden policy, competitor code, protected UI, or third-party test was copied.
+- Added a versioned offline safety fixture set built from synthetic project-policy cases. It is explicitly not represented as a live model benchmark, factual-quality proof, or competitor evaluation.
+- No market-data entitlement or research authority was added. Existing unsupported rankings, picks, trade levels, relationship graphs, options output, and country scores remain withheld.
+- Local evidence passed `44/44` unit tests, the 10-case AI evaluation thresholds, all 28 smoke contracts available in the keyless environment, dependency audit, Worker dry-run bundling, and interactive browser checks. Production verification remains pending and no parity claim is made.

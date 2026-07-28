@@ -21,6 +21,8 @@ import './shared/evidence-core.js';
 import './shared/candle-analysis-core.js';
 import './shared/market-sentiment-core.js';
 import './shared/map-provenance-core.js';
+import './shared/ai-provider-registry.js';
+import './shared/ai-verification-core.js';
 import './shared/ai-task-policy-core.js';
 
 const FINNHUB_BASE = 'https://finnhub.io/api/v1';
@@ -53,6 +55,23 @@ const { buildDeterministicCandleAnalysis } = globalThis.MarketTerminalCandleAnal
 const { analyzeMarketSentiment } = globalThis.MarketTerminalMarketSentiment;
 const { annotateMapPayload } = globalThis.MarketTerminalMapProvenance;
 const {
+  AI_PROVIDER_REGISTRY_SCHEMA_VERSION,
+  resolveModel: resolveProviderModel,
+  isConfigured: isProviderConfigured,
+  isEligibleForTask,
+  listProviders,
+  createProviderHealthState,
+  recordProviderAttempt,
+  recordProviderSuccess,
+  recordProviderFailure,
+  recordProviderCooldown,
+  providerHealthSnapshot,
+} = globalThis.MarketTerminalAiProviderRegistry;
+const {
+  runVerifiedPipeline,
+  getRuntimeMetadata,
+} = globalThis.MarketTerminalAiVerification;
+const {
   AI_TASK_POLICY_SCHEMA_VERSION,
   prepareTask,
   buildGroundingInstructions,
@@ -64,6 +83,7 @@ const {
   attachPolicy,
   attachDeterministicPolicy,
   evaluateAlertCandidate,
+  isCurrentMarketQuestion,
 } = globalThis.MarketTerminalAiTaskPolicy;
 
 const CONTENT_SECURITY_POLICY = [
@@ -620,47 +640,65 @@ const headlineBlock = (headlines) => buildHeadlineBlock((headlines || []).map((h
 
 // ════════════════════════════════════════════════════════════════════════
 //  MULTI-PROVIDER AI POOL
-//  Several free LLM providers pooled together. For each task we fire TWO at
-//  once (rotating which two, to spread load), take the first that returns
-//  valid JSON, and abort the loser to save its tokens. Any provider that hits
-//  a rate/quota limit is parked in a KV cooldown and skipped until it recovers,
-//  so one exhausted free tier never takes the app down. A provider is "active"
-//  only when its key is present — add a key (secret) and it joins the pool
-//  automatically; no code change needed.
+//  Low-risk synthesis retains bounded batch racing. Policy-governed analysis
+//  uses sequential generation plus a different-provider/different-model
+//  verifier, with explicit latency, token, call-count, and cost-unit budgets.
 // ════════════════════════════════════════════════════════════════════════
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const _providerHealth = createProviderHealthState();
 
-// One OpenAI-compatible chat call (Groq, Cerebras, Together, OpenRouter, Mistral…).
-async function openaiCompatCall({ url, key, model, extraHeaders }, system, user, signal) {
-  const res = await fetch(url, {
+function boundedOutputTokens(provider, requested) {
+  return Math.max(1, Math.min(
+    Number(requested) || 2_000,
+    Number(provider.maxOutputTokens) || 2_000
+  ));
+}
+
+async function openaiCompatCall(provider, env, system, user, signal, maxOutputTokens) {
+  const model = resolveProviderModel(provider, env);
+  const body = {
+    model,
+    messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
+    temperature: 0.4,
+  };
+  body[provider.outputTokenParam || 'max_tokens'] = boundedOutputTokens(provider, maxOutputTokens);
+  if (provider.supportsJsonMode !== false) body.response_format = { type: 'json_object' };
+  const res = await fetch(provider.endpoint, {
     method: 'POST',
     signal,
-    headers: { Authorization: `Bearer ${key}`, 'content-type': 'application/json', ...(extraHeaders || {}) },
-    body: JSON.stringify({
-      model,
-      messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
-      temperature: 0.4,
-      max_tokens: 8000,
-      response_format: { type: 'json_object' },
-    }),
+    headers: {
+      Authorization: `Bearer ${env[provider.envKey]}`,
+      'content-type': 'application/json',
+      ...(provider.extraHeaders || {}),
+    },
+    body: JSON.stringify(body),
   });
   if (!res.ok) {
     const body = await res.text().catch(() => '');
-    const err = new Error(`${model} ${res.status}: ${body.slice(0, 160)}`);
+    const err = new Error(`${provider.name} ${res.status}: ${body.slice(0, 160)}`);
     err.status = res.status;
     throw err;
   }
   const data = await res.json();
   const text = data.choices?.[0]?.message?.content;
-  if (!text) throw new Error('Empty response.');
-  return text;
+  if (!text) throw new Error(`Empty response from ${provider.name}.`);
+  return {
+    text,
+    usage: data.usage || null,
+    requestedModel: model,
+    servedModel: data.model || model,
+  };
 }
 
-// Google Gemini (different API shape; native JSON mode).
-async function geminiCall(env, system, user, signal) {
-  const model = env.GEMINI_MODEL || 'gemini-2.0-flash';
+async function geminiCall(provider, env, system, user, signal, maxOutputTokens) {
+  const model = resolveProviderModel(provider, env);
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${env.GEMINI_API_KEY}`;
+  const generationConfig = {
+    maxOutputTokens: boundedOutputTokens(provider, maxOutputTokens),
+    responseMimeType: 'application/json',
+  };
+  if (provider.supportsSamplingParameters !== false) generationConfig.temperature = 0.4;
   const res = await fetch(url, {
     method: 'POST',
     signal,
@@ -668,7 +706,7 @@ async function geminiCall(env, system, user, signal) {
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: system }] },
       contents: [{ role: 'user', parts: [{ text: user }] }],
-      generationConfig: { temperature: 0.4, maxOutputTokens: 8192, responseMimeType: 'application/json' },
+      generationConfig,
     }),
   });
   if (!res.ok) {
@@ -680,61 +718,96 @@ async function geminiCall(env, system, user, signal) {
   const data = await res.json();
   const text = data.candidates?.[0]?.content?.parts?.map((p) => p.text).join('') || '';
   if (!text) throw new Error('Empty response from Gemini.');
-  return text;
+  return {
+    text,
+    usage: data.usageMetadata || null,
+    requestedModel: model,
+    servedModel: data.modelVersion || model,
+  };
 }
 
-// Cloudflare Workers AI — runs on this account, no key, always available.
-async function cfAICall(env, system, user, _signal) {
-  const out = await env.AI.run('@cf/meta/llama-3.3-70b-instruct-fp8-fast', {
+async function cohereCall(provider, env, system, user, signal, maxOutputTokens) {
+  const model = resolveProviderModel(provider, env);
+  const res = await fetch(provider.endpoint, {
+    method: 'POST',
+    signal,
+    headers: {
+      Authorization: `Bearer ${env[provider.envKey]}`,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({
+      model,
+      messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
+      temperature: 0.4,
+      max_tokens: boundedOutputTokens(provider, maxOutputTokens),
+    }),
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    const error = new Error(`cohere ${res.status}: ${body.slice(0, 160)}`);
+    error.status = res.status;
+    throw error;
+  }
+  const data = await res.json();
+  const text = data.message?.content?.map((part) => part?.text || '').join('') || data.text || '';
+  if (!text) throw new Error('Empty response from Cohere.');
+  return {
+    text,
+    usage: data.usage || null,
+    requestedModel: model,
+    servedModel: data.model || model,
+  };
+}
+
+async function cfAICall(provider, env, system, user, _signal, maxOutputTokens) {
+  const model = resolveProviderModel(provider, env);
+  const out = await env.AI.run(model, {
     messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
-    max_tokens: 8000,
+    max_tokens: boundedOutputTokens(provider, maxOutputTokens),
     temperature: 0.4,
   });
   const text = typeof out === 'string' ? out : out.response;
   if (!text) throw new Error('Empty response from Workers AI.');
-  return text;
+  return {
+    text,
+    usage: typeof out === 'object' ? out.usage || null : null,
+    requestedModel: model,
+    servedModel: typeof out === 'object' && out.model ? out.model : model,
+  };
 }
 
-const PROVIDER_TIERS = Object.freeze({
-  groq: 'speed', cerebras: 'speed', sambanova: 'speed', together: 'speed', mistral: 'speed',
-  gemini: 'heavy', openrouter: 'heavy', deepseek: 'heavy', cohere: 'heavy', nebius: 'heavy',
-  huggingface: 'heavy', github: 'heavy', cfai: 'heavy', ai21: 'heavy', octoai: 'heavy',
-});
+async function callProvider(provider, env, system, user, signal, maxOutputTokens = 2_000) {
+  recordProviderAttempt(_providerHealth, provider.name);
+  try {
+    let result;
+    if (provider.format === 'gemini') {
+      result = await geminiCall(provider, env, system, user, signal, maxOutputTokens);
+    } else if (provider.format === 'cohere') {
+      result = await cohereCall(provider, env, system, user, signal, maxOutputTokens);
+    } else if (provider.format === 'cfai') {
+      result = await cfAICall(provider, env, system, user, signal, maxOutputTokens);
+    } else {
+      result = await openaiCompatCall(provider, env, system, user, signal, maxOutputTokens);
+    }
+    recordProviderSuccess(_providerHealth, provider.name);
+    return result;
+  } catch (error) {
+    if (error?.name !== 'AbortError') {
+      recordProviderFailure(_providerHealth, provider.name, error?.message || error);
+    }
+    throw error;
+  }
+}
 
-// The pool. Order is the default priority; rotation spreads real load across it.
 function providerPool(env) {
-  const pool = [];
-  if (env.GROQ_API_KEY)
-    pool.push({ name: 'groq', call: (e, s, u, sig) => openaiCompatCall({ url: 'https://api.groq.com/openai/v1/chat/completions', key: e.GROQ_API_KEY, model: e.GROQ_MODEL || 'llama-3.3-70b-versatile' }, s, u, sig) });
-  if (env.GEMINI_API_KEY)
-    pool.push({ name: 'gemini', call: geminiCall });
-  if (env.CEREBRAS_API_KEY)
-    pool.push({ name: 'cerebras', call: (e, s, u, sig) => openaiCompatCall({ url: 'https://api.cerebras.ai/v1/chat/completions', key: e.CEREBRAS_API_KEY, model: e.CEREBRAS_MODEL || 'gpt-oss-120b' }, s, u, sig) });
-  if (env.TOGETHER_API_KEY)
-    pool.push({ name: 'together', call: (e, s, u, sig) => openaiCompatCall({ url: 'https://api.together.xyz/v1/chat/completions', key: e.TOGETHER_API_KEY, model: e.TOGETHER_MODEL || 'meta-llama/Llama-3.3-70B-Instruct-Turbo-Free' }, s, u, sig) });
-  if (env.OPENROUTER_API_KEY)
-    pool.push({ name: 'openrouter', call: (e, s, u, sig) => openaiCompatCall({ url: 'https://openrouter.ai/api/v1/chat/completions', key: e.OPENROUTER_API_KEY, model: e.OPENROUTER_MODEL || 'meta-llama/llama-3.3-70b-instruct:free', extraHeaders: { 'HTTP-Referer': 'https://market-terminal.workers.dev', 'X-Title': 'Market Terminal' } }, s, u, sig) });
-  if (env.MISTRAL_API_KEY)
-    pool.push({ name: 'mistral', call: (e, s, u, sig) => openaiCompatCall({ url: 'https://api.mistral.ai/v1/chat/completions', key: e.MISTRAL_API_KEY, model: e.MISTRAL_MODEL || 'mistral-large-latest' }, s, u, sig) });
-  if (env.SAMBANOVA_API_KEY)
-    pool.push({ name: 'sambanova', call: (e, s, u, sig) => openaiCompatCall({ url: 'https://api.sambanova.ai/v1/chat/completions', key: e.SAMBANOVA_API_KEY, model: e.SAMBANOVA_MODEL || 'Meta-Llama-3.3-70B-Instruct' }, s, u, sig) });
-  if (env.NEBIUS_API_KEY)
-    pool.push({ name: 'nebius', call: (e, s, u, sig) => openaiCompatCall({ url: 'https://api.studio.nebius.com/v1/chat/completions', key: e.NEBIUS_API_KEY, model: e.NEBIUS_MODEL || 'meta-llama/Llama-3.3-70B-Instruct' }, s, u, sig) });
-  if (env.HF_API_KEY)
-    pool.push({ name: 'huggingface', call: (e, s, u, sig) => openaiCompatCall({ url: 'https://router.huggingface.co/v1/chat/completions', key: e.HF_API_KEY, model: e.HF_MODEL || 'meta-llama/Llama-3.3-70B-Instruct' }, s, u, sig) });
-  if (env.GITHUB_MODELS_TOKEN)
-    pool.push({ name: 'github', call: (e, s, u, sig) => openaiCompatCall({ url: 'https://models.github.ai/inference/chat/completions', key: e.GITHUB_MODELS_TOKEN, model: e.GITHUB_MODEL || 'openai/gpt-4o-mini' }, s, u, sig) });
-  if (env.AI)
-    pool.push({ name: 'cfai', call: cfAICall });
-  if (env.DEEPSEEK_API_KEY)
-    pool.push({ name: 'deepseek', call: deepseekCall });
-  if (env.COHERE_API_KEY)
-    pool.push({ name: 'cohere', call: cohereCall });
-  if (env.AI21_API_KEY)
-    pool.push({ name: 'ai21', call: ai21Call });
-  if (env.OCTOAI_API_KEY)
-    pool.push({ name: 'octoai', call: octoadiCall });
-  return pool.map((provider) => ({ ...provider, tier: PROVIDER_TIERS[provider.name] || 'heavy' }));
+  return listProviders({ runtime: 'worker' })
+    .filter((provider) => isProviderConfigured(provider, env))
+    .map((provider) => ({
+      ...provider,
+      requestedModel: resolveProviderModel(provider, env),
+      call: (e, s, u, signal, maxOutputTokens) =>
+        callProvider(provider, e, s, u, signal, maxOutputTokens),
+    }));
 }
 
 // How many AI providers to race simultaneously per task (override with AI_PARALLEL).
@@ -754,7 +827,9 @@ async function readCooldowns(env) {
 }
 async function parkProvider(env, name, ms) {
   const cd = await readCooldowns(env);
-  cd[name] = Date.now() + ms;
+  const cooldownUntil = Date.now() + ms;
+  cd[name] = cooldownUntil;
+  recordProviderCooldown(_providerHealth, name, cooldownUntil);
   await env.MT_KV.put('ai:cooldowns', JSON.stringify(cd)).catch(() => {});
 }
 
@@ -772,8 +847,9 @@ function raceBatch(env, batch, system, user, validate) {
     const miss = () => { if (!settled && --pending === 0) resolve(null); };
     batch.forEach((pv, i) => {
       Promise.resolve()
-        .then(() => pv.call(env, system, user, controllers[i].signal))
-        .then((text) => {
+        .then(() => pv.call(env, system, user, controllers[i].signal, 8_000))
+        .then((response) => {
+          const text = response?.text || '';
           let data;
           try { data = extractJson(text); } catch (e) { console.log(`[ai] ${pv.name} unparseable (len ${text && text.length})`); return miss(); }
           if (!validate(data)) { console.log(`[ai] ${pv.name} failed validation`); return miss(); }
@@ -797,22 +873,51 @@ function raceBatch(env, batch, system, user, validate) {
 // JSON. `validate(data)` decides whether a response is good enough to accept;
 // keeps falling through the pool until one passes.
 async function runAIJson(env, system, user, validate = () => true, options = {}) {
-  const permittedNames = Array.isArray(options.permittedProviderNames) && options.permittedProviderNames.length
-    ? new Set(options.permittedProviderNames)
+  const preparation = options && options.policy ? options : null;
+  const taskPolicy = preparation ? preparation.policy : options;
+  const permittedNames = Array.isArray(taskPolicy.permittedProviderNames) && taskPolicy.permittedProviderNames.length
+    ? new Set(taskPolicy.permittedProviderNames)
     : null;
   const pool = providerPool(env).filter((provider) =>
-    (!options.providerTier || provider.tier === options.providerTier) &&
+    (!taskPolicy.providerTier || provider.tier === taskPolicy.providerTier) &&
+    (!taskPolicy.riskClass || isEligibleForTask(provider, {
+      runtime: 'worker',
+      tier: taskPolicy.providerTier,
+      riskClass: taskPolicy.riskClass,
+    })) &&
     (!permittedNames || permittedNames.has(provider.name))
   );
   if (!pool.length) throw new Error('No AI providers configured. Add at least one AI key.');
   const cd = await readCooldowns(env);
   const now = Date.now();
   let active = pool.filter((p) => !(cd[p.name] && cd[p.name] > now));
-  if (!active.length) active = pool; // everyone is cooling down — try anyway
+  if (!active.length && !preparation) active = pool;
+  if (!active.length) throw new Error('All policy-approved AI providers are cooling down.');
 
   // Rotate the starting point so load spreads round-robin across the pool.
   const off = rrCounter++ % active.length;
   const ordered = active.slice(off).concat(active.slice(0, off));
+
+  if (preparation) {
+    try {
+      return await runVerifiedPipeline({
+        preparation,
+        providers: ordered,
+        system,
+        user,
+        validate,
+        extractJson,
+        callProvider: (provider, callSystem, callUser, signal, maxOutputTokens) =>
+          provider.call(env, callSystem, callUser, signal, maxOutputTokens),
+        onProviderFailure: async (provider, error) => {
+          if (isRateLimited(error)) await parkProvider(env, provider.name, cooldownMs(error));
+        },
+      });
+    } catch (error) {
+      preparation.runtime = error?.runtime || null;
+      throw error;
+    }
+  }
 
   const width = raceWidth(env);
   for (let i = 0; i < ordered.length; i += width) {
@@ -1035,53 +1140,6 @@ Return ONE JSON object:
 }
 Use real country centroids (approximate is fine). Return ONLY the JSON object. No markdown, no commentary.`;
 
-// ────────── More AI providers (DeepSeek, Cohere, AI21, OctoAI) ──────────
-async function deepseekCall(env, sys, usr) {
-  if (!env.DEEPSEEK_API_KEY) throw new Error('DeepSeek key not set');
-  const res = await fetchWithTimeout('https://api.deepseek.com/chat/completions', {
-    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${env.DEEPSEEK_API_KEY}` },
-    body: JSON.stringify({ model: 'deepseek-chat', messages: [{ role: 'system', content: sys }, { role: 'user', content: usr }], temperature: 0.7, max_tokens: 2000 }),
-  }, 25000);
-  const j = await res.json();
-  if (j.error) throw new Error('DeepSeek: ' + (j.error.message || JSON.stringify(j.error)));
-  const c = j.choices && j.choices[0];
-  if (!c) throw new Error('DeepSeek: no choice');
-  return { text: c.message.content || '', usage: j.usage };
-}
-async function cohereCall(env, sys, usr) {
-  if (!env.COHERE_API_KEY) throw new Error('Cohere key not set');
-  const res = await fetchWithTimeout('https://api.cohere.ai/v2/chat', {
-    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${env.COHERE_API_KEY}` },
-    body: JSON.stringify({ model: 'command-r-plus', messages: [{ role: 'user', content: usr }], temperature: 0.7 }),
-  }, 25000);
-  const j = await res.json();
-  if (j.error) throw new Error('Cohere: ' + (j.error.message || JSON.stringify(j.error)));
-  return { text: j.text || '', usage: { input_tokens: j.usage?.input_tokens || 0 } };
-}
-async function ai21Call(env, sys, usr) {
-  if (!env.AI21_API_KEY) throw new Error('AI21 key not set');
-  const res = await fetchWithTimeout('https://api.ai21.com/studio/v1/j2-ultra/complete', {
-    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${env.AI21_API_KEY}` },
-    body: JSON.stringify({ prompt: sys + '\n\n' + usr, temperature: 0.7, maxTokens: 2000 }),
-  }, 25000);
-  const j = await res.json();
-  if (j.error) throw new Error('AI21: ' + (j.error.message || JSON.stringify(j.error)));
-  const d = (j.completions && j.completions[0]) || {};
-  return { text: (d.data && d.data.text) || '', usage: d.finish_reason ? { output_tokens: 1 } : {} };
-}
-async function octoadiCall(env, sys, usr) {
-  if (!env.OCTOAI_API_KEY) throw new Error('OctoAI key not set');
-  const res = await fetchWithTimeout('https://text.octoai.run/v1/chat/completions', {
-    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${env.OCTOAI_API_KEY}` },
-    body: JSON.stringify({ model: 'meta-llama-3.1-70b-instruct', messages: [{ role: 'system', content: sys }, { role: 'user', content: usr }], temperature: 0.7, max_tokens: 2000 }),
-  }, 25000);
-  const j = await res.json();
-  if (j.error) throw new Error('OctoAI: ' + (j.error.message || JSON.stringify(j.error)));
-  const c = j.choices && j.choices[0];
-  if (!c) throw new Error('OctoAI: no choice');
-  return { text: c.message.content || '', usage: j.usage };
-}
-
 const SITUATION_SYSTEM = `You are the watch officer of a global situation room. From REAL, current world headlines pulled
 live moments ago, synthesize a cross-domain situational brief — correlate signals across domains and
 flag where they CONVERGE (e.g. a conflict driving an energy spike driving an inflation read).
@@ -1189,7 +1247,7 @@ function withGrounding(system, preparation) {
 function policyAbstention(preparation, reason, payload = {}) {
   return {
     ...payload,
-    ...buildAbstention(preparation, reason),
+    ...buildAbstention(preparation, reason, { runtime: preparation.runtime }),
     asOf: preparation.dataAsOf || new Date().toISOString(),
   };
 }
@@ -1320,13 +1378,13 @@ async function fetchSituation(env) {
       withGrounding(SITUATION_SYSTEM, preparation),
       userPrompt,
       (d) => d && Array.isArray(d.domains) && d.domains.length >= 3 && d.defcon != null && validateGroundedOutput(preparation, d),
-      preparation.policy
+      preparation
     );
     return attachPolicy(preparation, data, {
       unknowns: ['Situation labels are a public-news interpretation, not an official threat assessment.'],
     });
   } catch {
-    return fallback('No AI response passed the deterministic evidence and citation checks.');
+    return fallback('No response completed the task schema, evidence, and verification policy.');
   }
 }
 
@@ -1356,12 +1414,12 @@ async function fetchAnalysis(env) {
   const validate = (d) => d && Array.isArray(d.industries) && d.industries.length > 0 &&
     validateGroundedOutput(preparation, d) && validateEvidenceBoundItems(preparation, d.industries);
   try {
-    const data = await runAIJson(env, withGrounding(ANALYSIS_SYSTEM, preparation), userPrompt, validate, preparation.policy);
+    const data = await runAIJson(env, withGrounding(ANALYSIS_SYSTEM, preparation), userPrompt, validate, preparation);
     return attachPolicy(preparation, data, {
       unknowns: ['Sector ranks, stock picks, numeric scores, and options strategies require dedicated verified datasets.'],
     });
   } catch {
-    return fallback('No sector response passed the deterministic evidence and citation checks.');
+    return fallback('No response completed the task schema, evidence, and verification policy.');
   }
 }
 
@@ -1402,14 +1460,14 @@ async function fetchCompany(env, query) {
   const validate = (d) => d && Array.isArray(d.news) && d.news.length > 0 &&
     validateGroundedOutput(preparation, d) && validateEvidenceBoundItems(preparation, d.news);
   try {
-    const data = await runAIJson(env, withGrounding(COMPANY_SYSTEM, preparation), userPrompt, validate, preparation.policy);
+    const data = await runAIJson(env, withGrounding(COMPANY_SYSTEM, preparation), userPrompt, validate, preparation);
     const bound = bindCompanyNewsEvidence(preparation, data, { ticker, companyName });
     if (!bound.news.length) return fallback('No company-news item remained after evidence binding.');
     return attachPolicy(preparation, bound, {
       unknowns: ['News-impact labels are interpretations and do not predict the stock price.'],
     });
   } catch {
-    return fallback('No company-news response passed the deterministic evidence and citation checks.');
+    return fallback('No response completed the task schema, evidence, and verification policy.');
   }
 }
 
@@ -1527,10 +1585,10 @@ async function fetchDeepDive(env, query) {
       withGrounding(DEEPDIVE_SYSTEM, preparation),
       userPrompt,
       validate,
-      preparation.policy
+      preparation
     );
   } catch {
-    return fallback('No AI response passed the deterministic evidence and citation checks.');
+    return fallback('No response completed the task schema, evidence, and verification policy.');
   }
 
   const result = attachPolicy(preparation, data, {
@@ -3231,7 +3289,7 @@ async function handleApi(request, env, ctx, url) {
           published: headline.published || '',
         })),
       };
-      const currentMarketQuestion = /\b(current|today|now|latest|recent|price|quote|moving|moved|catalyst|headline|market|earnings|guidance|macro|sector|investment|risk)\b/i.test(latest);
+      const currentMarketQuestion = isCurrentMarketQuestion(latest, symbol);
       const preparation = prepareAiTask(currentMarketQuestion ? 'intel.chat-current' : 'intel.chat', trustedHeadlines);
       const fallback = (reason) => policyAbstention(preparation, reason, {
         reply: currentMarketQuestion
@@ -3251,14 +3309,16 @@ async function handleApi(request, env, ctx, url) {
       const validate = (data) => data && typeof data.reply === 'string' && data.reply.length > 5 && validateGroundedOutput(preparation, data);
       let data;
       try {
-        data = await runAIJson(env, system, userPrompt, validate, preparation.policy);
+        data = await runAIJson(env, system, userPrompt, validate, preparation);
       } catch {
-        return json(fallback('No AI response passed the deterministic evidence and citation checks.'));
+        return json(fallback('No response completed the task schema, evidence, and verification policy.'));
       }
       return json(attachPolicy(preparation, {
         reply: data.reply,
         evidenceIds: data.evidenceIds || [],
         asOf: trustedContext.asOf,
+      }, {
+        runtime: getRuntimeMetadata(data),
       }));
     } catch (err) { return json({ error: true, message: friendlyError(err) }, 500); }
   }
@@ -3268,16 +3328,19 @@ async function handleApi(request, env, ctx, url) {
     catch (err) { return json({ error: true, message: friendlyError(err) }, 500); }
   }
   if (p === '/api/ai-status') {
-    const pool = providerPool(env);
+    const providers = listProviders({ runtime: 'worker', includeInactive: true });
     const cd = await readCooldowns(env);
-    const now = Date.now();
     return json({
-      providers: pool.map((pv) => ({
-        name: pv.name,
-        cooling: Boolean(cd[pv.name] && cd[pv.name] > now),
-        cooldownSecs: cd[pv.name] && cd[pv.name] > now ? Math.round((cd[pv.name] - now) / 1000) : 0,
+      registrySchemaVersion: AI_PROVIDER_REGISTRY_SCHEMA_VERSION,
+      providers: providers.map((provider) => providerHealthSnapshot(provider, _providerHealth, {
+        configured: Boolean(
+          (provider.bindingKey && env[provider.bindingKey]) ||
+          (provider.envKey && env[provider.envKey])
+        ),
+        requestedModel: resolveProviderModel(provider, env),
+        cooldownUntil: cd[provider.name] ? new Date(cd[provider.name]).toISOString() : null,
       })),
-      active: pool.length,
+      active: providerPool(env).length,
     });
   }
   if (p === '/api/intel/alerts') {
@@ -4146,7 +4209,7 @@ Return ONLY the JSON object. No markdown, no commentary.`;
       withGrounding(system, preparation),
       userPrompt,
       (data) => data && typeof data.explanation === 'string' && Array.isArray(data.catalysts) && ['bullish', 'bearish', 'neutral'].includes(data.sentiment) && validateGroundedOutput(preparation, data),
-      preparation.policy
+      preparation
     );
     return attachPolicy(preparation, {
       ...base,
@@ -4154,9 +4217,11 @@ Return ONLY the JSON object. No markdown, no commentary.`;
       catalysts: explanation.catalysts || [],
       sentiment: explanation.sentiment || 'neutral',
       evidenceIds: explanation.evidenceIds || [],
+    }, {
+      runtime: getRuntimeMetadata(explanation),
     });
   } catch {
-    return fallback('No AI response passed the deterministic evidence and citation checks.');
+    return fallback('No response completed the task schema, evidence, and verification policy.');
   }
 }
 

@@ -24,7 +24,7 @@ crons = ["0 * * * *"]
 binding = "AI"
 
 [vars]
-GROQ_MODEL = "llama-3.3-70b-versatile"
+GROQ_MODEL = "openai/gpt-oss-120b"
 VAPID_SUBJECT = "mailto:krishivjain20000@gmail.com"
 
 # Secrets — set with `wrangler secret put`, never committed:

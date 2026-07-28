@@ -111,7 +111,7 @@
     "userOutcome": "Read fast summaries with sources and timestamps.",
     "projectEquivalent": "Briefing, situation room, and report tabs.",
     "status": "partial",
-    "dataSources": ["RSS", "X syndication", "public feeds"],
+    "dataSources": ["RSS", "public feeds"],
     "authorityTier": "mixed",
     "refreshFrequency": "15m",
     "latencyClass": "cached",

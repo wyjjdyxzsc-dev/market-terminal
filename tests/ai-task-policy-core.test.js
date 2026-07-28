@@ -37,11 +37,16 @@ test('high-risk policies declare grounding, verifier, and abstention controls', 
   assert.equal(genericChat.providerTier, 'speed');
   assert.equal(deepDive.riskClass, 'high');
   assert.equal(deepDive.requiresVerifier, true);
+  assert.equal(deepDive.requiresIndependentVerifier, true);
   assert.equal(deepDive.requireEvidenceIds, true);
   assert.equal(deepDive.mayAbstain, true);
   assert.ok(deepDive.permittedProviderTiers.includes('heavy'));
   assert.ok(deepDive.permittedProviderNames.includes('gemini'));
   assert.ok(deepDive.requiredInputs.includes('fundamentalData'));
+  assert.ok(deepDive.maxInputTokens > 0);
+  assert.ok(deepDive.maxOutputTokens > 0);
+  assert.ok(deepDive.maxProviderCalls >= 2);
+  assert.ok(deepDive.maxCostUnits > 0);
   assert.ok(supplyChain.requiredInputs.includes('verifiedRelationships'));
 });
 
@@ -233,7 +238,63 @@ test('generic chat can answer without pretending to cite current evidence', () =
   assert.deepEqual(response.policy.availableEvidenceIds, []);
 });
 
+test('chat intent keeps educational questions generic and gates live-market requests', () => {
+  assert.equal(policy.isCurrentMarketQuestion('What does a price-to-earnings ratio measure?', 'AAPL'), false);
+  assert.equal(policy.isCurrentMarketQuestion('Explain how earnings per share is calculated.', 'AAPL'), false);
+  assert.equal(policy.isCurrentMarketQuestion('Define market risk.', 'AAPL'), false);
+  assert.equal(policy.isCurrentMarketQuestion('Why is AAPL moving today?', 'AAPL'), true);
+  assert.equal(policy.isCurrentMarketQuestion('Show me the latest AAPL headlines.', 'AAPL'), true);
+  assert.equal(policy.isCurrentMarketQuestion('Should I buy AAPL?', 'AAPL'), true);
+  assert.equal(policy.isCurrentMarketQuestion('AAPL price', 'AAPL'), true);
+  assert.equal(policy.isCurrentMarketQuestion('What is $MSFT trading at?', 'AAPL'), true);
+});
+
 test('grounded responses distinguish cited evidence from the available allowlist', () => {
+  const preparation = policy.prepareTask('intel.deep-dive', EVIDENCE, {
+    now: NOW,
+    inputs: { quote: true, fundamentalData: true },
+  });
+  const runtime = {
+    schemaVersion: '2026-07-26a',
+    mode: 'independent-verification',
+    status: 'verified',
+    generator: {
+      provider: 'gemini',
+      requestedModel: 'gemini-3.6-flash',
+      servedModel: 'gemini-3.6-flash',
+      usage: { inputTokens: 100, outputTokens: 50, totalTokens: 150 },
+    },
+    verifier: {
+      status: 'passed',
+      provider: 'github',
+      requestedModel: 'openai/gpt-4.1',
+      servedModel: 'openai/gpt-4.1',
+      usage: { inputTokens: 120, outputTokens: 30, totalTokens: 150 },
+    },
+    totals: {
+      providerCalls: 2,
+      inputTokens: 220,
+      outputTokens: 80,
+      totalTokens: 300,
+      costUnits: 6,
+      latencyMs: 900,
+      withinBudget: true,
+    },
+  };
+  const response = policy.attachPolicy(preparation, {
+    evidenceIds: ['ev_sec'],
+    investment: {},
+    options: {},
+  }, { runtime });
+
+  assert.deepEqual(response.evidenceIds, ['ev_sec']);
+  assert.deepEqual(response.policy.evidenceIds, ['ev_sec']);
+  assert.deepEqual(response.policy.availableEvidenceIds, ['ev_reuters', 'ev_sec']);
+  assert.equal(response.policy.runtime.status, 'verified');
+  assert.equal(response.policy.runtime.verifier.status, 'passed');
+});
+
+test('high-risk attachment without independent runtime verification abstains', () => {
   const preparation = policy.prepareTask('intel.deep-dive', EVIDENCE, {
     now: NOW,
     inputs: { quote: true, fundamentalData: true },
@@ -244,9 +305,9 @@ test('grounded responses distinguish cited evidence from the available allowlist
     options: {},
   });
 
-  assert.deepEqual(response.evidenceIds, ['ev_sec']);
-  assert.deepEqual(response.policy.evidenceIds, ['ev_sec']);
-  assert.deepEqual(response.policy.availableEvidenceIds, ['ev_reuters', 'ev_sec']);
+  assert.equal(response.abstained, true);
+  assert.equal(response.policy.status, 'abstained');
+  assert.equal(response.policy.runtime.verifier.status, 'not-run');
 });
 
 test('both runtimes build chat context on the backend and reject legacy coercive instructions', () => {
