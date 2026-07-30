@@ -18,6 +18,7 @@
 
 import './shared/api-contract.js';
 import './shared/evidence-core.js';
+import './shared/company-evidence-core.js';
 import './shared/candle-analysis-core.js';
 import './shared/market-sentiment-core.js';
 import './shared/map-provenance-core.js';
@@ -50,6 +51,7 @@ const {
   buildHeadlineBlock,
   domainOf: evidenceDomainOf,
 } = globalThis.MarketTerminalEvidence;
+const { normalizeFinnhubCompanyNews } = globalThis.MarketTerminalCompanyEvidence;
 
 const { buildDeterministicCandleAnalysis } = globalThis.MarketTerminalCandleAnalysis;
 const { analyzeMarketSentiment } = globalThis.MarketTerminalMarketSentiment;
@@ -78,6 +80,7 @@ const {
   validateGroundedOutput,
   validateEvidenceBoundItems,
   buildAbstention,
+  describeAiFailure,
   buildSectorBaseline,
   bindCompanyNewsEvidence,
   attachPolicy,
@@ -622,12 +625,25 @@ async function fetchMarketSentiment(env) {
   });
 }
 
-// Per-company headlines — Bing News RSS search (allows datacenter IPs).
-async function fetchCompanyHeadlines(query, limit = 14) {
+// Per-company evidence combines searchable RSS with Finnhub's symbol feed.
+async function fetchCompanyHeadlines(env, query, limit = 14) {
   const q = encodeURIComponent(`${query} stock`);
+  const ticker = /^[A-Z.]{1,10}$/.test(String(query || '').trim().toUpperCase())
+    ? String(query).trim().toUpperCase()
+    : '';
   const lists = await Promise.all([
     fetchFeed(`https://www.bing.com/news/search?q=${q}&format=RSS&count=20&setlang=en-US&cc=us`, 20),
     fetchFeed(`https://news.search.yahoo.com/rss?p=${q}`, 14),
+    ticker
+      ? finnhub(env, '/company-news', {
+        symbol: ticker,
+        from: isoDaysAgo(30),
+        to: isoDaysAgo(0),
+      }).then((items) => normalizeFinnhubCompanyNews(items, {
+        ticker,
+        limit: Math.max(limit * 2, 16),
+      })).catch(() => [])
+      : Promise.resolve([]),
   ]);
   return mergeHeadlines(lists).slice(0, limit);
 }
@@ -819,15 +835,20 @@ const isRateLimited = (err) => {
   return status === 429 || /\b429\b|rate limit|quota|too many requests|exhausted|resource_exhausted/i.test(msg);
 };
 // Daily/quota limits park a provider longer than a brief per-minute throttle.
-const cooldownMs = (err) =>
-  /per day|daily|tpd|quota|exhausted|resource_exhausted/i.test(String((err && err.message) || '')) ? 30 * 60 * 1000 : 60 * 1000;
+const cooldownMs = (err) => {
+  const message = String((err && err.message) || '');
+  if (/per minute|\btpm\b|\brpm\b|tokens per minute|requests per minute/i.test(message)) return 60 * 1000;
+  return /per day|daily|\btpd\b|insufficient_quota|billing|quota exhausted|resource_exhausted/i.test(message)
+    ? 30 * 60 * 1000
+    : 60 * 1000;
+};
 
 async function readCooldowns(env) {
   try { return JSON.parse((await env.MT_KV.get('ai:cooldowns')) || '{}'); } catch { return {}; }
 }
 async function parkProvider(env, name, ms) {
   const cd = await readCooldowns(env);
-  const cooldownUntil = Date.now() + ms;
+  const cooldownUntil = Math.max(Number(cd[name]) || 0, Date.now() + ms);
   cd[name] = cooldownUntil;
   recordProviderCooldown(_providerHealth, name, cooldownUntil);
   await env.MT_KV.put('ai:cooldowns', JSON.stringify(cd)).catch(() => {});
@@ -847,7 +868,7 @@ function raceBatch(env, batch, system, user, validate) {
     const miss = () => { if (!settled && --pending === 0) resolve(null); };
     batch.forEach((pv, i) => {
       Promise.resolve()
-        .then(() => pv.call(env, system, user, controllers[i].signal, 8_000))
+        .then(() => pv.call(env, system, user, controllers[i].signal, 4_000))
         .then((response) => {
           const text = response?.text || '';
           let data;
@@ -902,7 +923,10 @@ async function runAIJson(env, system, user, validate = () => true, options = {})
     try {
       return await runVerifiedPipeline({
         preparation,
-        providers: ordered,
+        // Verified tasks favor the registry's deterministic reliability order.
+        // Round-robin rotation can make a weaker generator consume the budget
+        // before a known structured-output provider and its verifier run.
+        providers: active,
         system,
         user,
         validate,
@@ -1383,8 +1407,8 @@ async function fetchSituation(env) {
     return attachPolicy(preparation, data, {
       unknowns: ['Situation labels are a public-news interpretation, not an official threat assessment.'],
     });
-  } catch {
-    return fallback('No response completed the task schema, evidence, and verification policy.');
+  } catch (error) {
+    return fallback(describeAiFailure(error, preparation.policy));
   }
 }
 
@@ -1418,22 +1442,29 @@ async function fetchAnalysis(env) {
     return attachPolicy(preparation, data, {
       unknowns: ['Sector ranks, stock picks, numeric scores, and options strategies require dedicated verified datasets.'],
     });
-  } catch {
-    return fallback('No response completed the task schema, evidence, and verification policy.');
+  } catch (error) {
+    return fallback(describeAiFailure(error, preparation.policy));
   }
 }
 
 async function fetchCompany(env, query) {
-  const headlines = await fetchCompanyHeadlines(query);
   const normalizedQuery = query.toUpperCase();
-  let ticker = /^[A-Z.]{1,6}$/.test(normalizedQuery) ? normalizedQuery : '';
+  let ticker = /^[A-Z.]{1,6}$/.test(query) ? normalizedQuery : '';
   let companyName = query;
+  if (!ticker) {
+    try {
+      const search = await finnhub(env, '/search', { q: query });
+      const hit = (search.result || []).find((item) => item.symbol && !item.symbol.includes('.'));
+      if (hit) ticker = hit.symbol.toUpperCase();
+    } catch {}
+  }
   if (ticker) {
     try {
       const profile = await finnhub(env, '/stock/profile2', { symbol: ticker });
       if (profile && profile.name) companyName = profile.name;
     } catch {}
   }
+  const headlines = await fetchCompanyHeadlines(env, ticker || query);
   const preparation = prepareAiTask('intel.company-news-impact', headlines);
   const fallback = (reason) => policyAbstention(preparation, reason, {
     ticker,
@@ -1466,8 +1497,8 @@ async function fetchCompany(env, query) {
     return attachPolicy(preparation, bound, {
       unknowns: ['News-impact labels are interpretations and do not predict the stock price.'],
     });
-  } catch {
-    return fallback('No response completed the task schema, evidence, and verification policy.');
+  } catch (error) {
+    return fallback(describeAiFailure(error, preparation.policy));
   }
 }
 
@@ -1513,7 +1544,7 @@ async function fetchDeepDive(env, query) {
     finnhub(env, '/quote', { symbol: ticker }).catch(() => ({})),
     finnhub(env, '/stock/metric', { symbol: ticker, metric: 'all' }).catch(() => ({})),
     finnhub(env, '/stock/recommendation', { symbol: ticker }).catch(() => []),
-    fetchCompanyHeadlines(query || ticker, 16),
+    fetchCompanyHeadlines(env, ticker, 16),
   ]);
   profile = prof || {};
   const m = (metricData && metricData.metric) || {};
@@ -1587,8 +1618,8 @@ async function fetchDeepDive(env, query) {
       validate,
       preparation
     );
-  } catch {
-    return fallback('No response completed the task schema, evidence, and verification policy.');
+  } catch (error) {
+    return fallback(describeAiFailure(error, preparation.policy));
   }
 
   const result = attachPolicy(preparation, data, {
@@ -3275,7 +3306,7 @@ async function handleApi(request, env, ctx, url) {
       if (!latest) return json(buildError(400, 'empty_chat_message', 'The latest message is empty.'), 400);
       const symbol = typeof body.symbol === 'string' ? body.symbol.trim().toUpperCase().slice(0, 10) : '';
       const [trustedHeadlines, quote] = await Promise.all([
-        symbol ? fetchCompanyHeadlines(symbol, 6).catch(() => []) : fetchMarketHeadlines().catch(() => []),
+        symbol ? fetchCompanyHeadlines(env, symbol, 10).catch(() => []) : fetchMarketHeadlines().catch(() => []),
         symbol ? getQuoteCached(env, symbol).catch(() => null) : Promise.resolve(null),
       ]);
       const trustedContext = {
@@ -3310,8 +3341,8 @@ async function handleApi(request, env, ctx, url) {
       let data;
       try {
         data = await runAIJson(env, system, userPrompt, validate, preparation);
-      } catch {
-        return json(fallback('No response completed the task schema, evidence, and verification policy.'));
+      } catch (error) {
+        return json(fallback(describeAiFailure(error, preparation.policy)));
       }
       return json(attachPolicy(preparation, {
         reply: data.reply,
@@ -4154,23 +4185,18 @@ async function buildInfrastructureData(env) {
 async function fetchPriceAction(env, symbol) {
   const [quoteResult, newsResult] = await Promise.allSettled([
     getQuoteCached(env, symbol),
-    fetchIntelNews(env).catch(() => []),
+    fetchCompanyHeadlines(env, symbol, 8),
   ]);
 
   const quote = quoteResult.status === 'fulfilled' ? quoteResult.value : null;
-  const allNews = newsResult.status === 'fulfilled' ? newsResult.value : [];
-
-  const relevant = allNews.filter((item) => {
-    const text = `${item.title || ''} ${item.summary || ''}`.toLowerCase();
-    return text.includes(symbol.toLowerCase());
-  }).slice(0, 6);
+  const relevant = newsResult.status === 'fulfilled' ? newsResult.value.slice(0, 6) : [];
 
   const priceChange = quote && quote.d != null ? quote.d : 0;
   const pctChange = quote && quote.dp != null ? quote.dp : 0;
   const direction = Math.abs(pctChange) < 0.01 ? 'flat' : (pctChange >= 0 ? 'rising' : 'falling');
   const headlines = relevant.map((item) => ({
     title: item.title,
-    sourceUrl: item.sourceUrl || '',
+    sourceUrl: item.link || item.sourceUrl || '',
     source: item.source || '',
   }));
   const preparation = prepareTask('intel.price-action', policyEvidenceFor(relevant), {
@@ -4190,7 +4216,8 @@ Return ONE JSON object of the form:
 {
   "explanation": 2-3 sentence explanation of the price move,
   "catalysts": array of short strings naming specific catalysts (empty array if none identified),
-  "sentiment": "bullish" | "bearish" | "neutral"
+  "sentiment": "bullish" | "bearish" | "neutral",
+  "evidenceIds": array of allowed evidence IDs supporting the explanation
 }
 Return ONLY the JSON object. No markdown, no commentary.`;
 
@@ -4220,8 +4247,8 @@ Return ONLY the JSON object. No markdown, no commentary.`;
     }, {
       runtime: getRuntimeMetadata(explanation),
     });
-  } catch {
-    return fallback('No response completed the task schema, evidence, and verification policy.');
+  } catch (error) {
+    return fallback(describeAiFailure(error, preparation.policy));
   }
 }
 

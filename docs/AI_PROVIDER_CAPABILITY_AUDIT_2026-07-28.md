@@ -69,6 +69,15 @@ This is an implementation audit of the model providers used by Market Terminal. 
 - No generated high-risk/current-market response was accepted during these probes. The evidence demonstrates deployed fail-closed behavior, not positive live-provider factual quality or verifier accuracy.
 - Desktop and mobile production browser checks loaded all seven `20260728b` asset markers without horizontal overflow or console warnings/errors. Sector/deep-dive output remained withheld, educational chat rendered one answer and one policy note with its served runtime, and the active symbol context displayed `AAPL`.
 
+## 2026-07-30 Availability Repair
+
+- A live investigation found that the production AI pool was not globally offline: educational chat completed through Groq, while sector and situation routes had previously completed a Gemini/GitHub generator-verifier path. Company-focused routes were losing qualifying evidence behind Finnhub/Bing redirect hosts, and broad/current-market generation could spend its budget before the preferred independent pair completed.
+- Evidence, task-policy/cache, and verification schemas are now `2026-07-30a`. Company evidence combines RSS with normalized Finnhub company news, and known publisher labels can supply authority only when the URL is a recognized redirect host.
+- Verified generation reserves one independent verifier within call/cost limits before another generator attempt. Worker high-risk routing uses registry reliability order, and safe runtime metadata includes bounded failed-attempt records and failure codes.
+- Lower-risk races use a shared 4,000-token output ceiling. This was selected from observed behavior: 2,000 produced failed strict-JSON generation for the NEWS workload, while 8,000 exceeded the configured account's tokens-per-minute request ceiling. Per-minute capacity errors now receive the short cooldown instead of being mistaken for daily exhaustion.
+- Local evidence passed `50/50` unit tests, all 10 offline evaluation thresholds, `31/31` available API contracts, zero-vulnerability audit, Worker dry-run bundling, targeted route probes, and an interactive browser check. Local NEWS returned 12 source-linked enriched items; current-market/high-risk tasks accurately abstained because the local environment has only Groq and therefore cannot form an independent heavy-provider pair.
+- Production verification remains pending. These results do not prove live-provider factual quality or authorize enabling high-risk output with only one provider.
+
 ## Limits
 
 - The fixture suite is an offline safety regression suite, not a live-provider quality benchmark or proof of factual correctness.

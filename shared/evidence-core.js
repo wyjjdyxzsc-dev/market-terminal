@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const EVIDENCE_SCHEMA_VERSION = '2026-07-13';
+  const EVIDENCE_SCHEMA_VERSION = '2026-07-30a';
   const TRACKING_PARAMS = new Set([
     'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content',
     'utm_id', 'gclid', 'fbclid', 'mc_cid', 'mc_eid', 'ocid', 'cmpid',
@@ -22,6 +22,33 @@
 
   const AGGREGATOR_DOMAINS = new Set([
     'bing.com', 'news.search.yahoo.com', 'search.cnbc.com', 'google.com',
+  ]);
+
+  const REDIRECT_DOMAINS = new Set([
+    ...AGGREGATOR_DOMAINS,
+    'finnhub.io',
+  ]);
+
+  const PUBLISHER_DOMAIN_ALIASES = new Map([
+    ['reuters', 'reuters.com'],
+    ['associated press', 'apnews.com'],
+    ['ap', 'apnews.com'],
+    ['bbc', 'bbc.com'],
+    ['cnbc', 'cnbc.com'],
+    ['bloomberg', 'bloomberg.com'],
+    ['marketwatch', 'marketwatch.com'],
+    ['yahoo', 'finance.yahoo.com'],
+    ['yahoo finance', 'finance.yahoo.com'],
+    ['financial times', 'ft.com'],
+    ['ft', 'ft.com'],
+    ['the wall street journal', 'wsj.com'],
+    ['wall street journal', 'wsj.com'],
+    ['wsj', 'wsj.com'],
+    ['the new york times', 'nytimes.com'],
+    ['new york times', 'nytimes.com'],
+    ['the economist', 'economist.com'],
+    ['economist', 'economist.com'],
+    ['al jazeera', 'aljazeera.com'],
   ]);
 
   function stripTags(value) {
@@ -91,6 +118,16 @@
     return 'unknown';
   }
 
+  function attributedPublisherDomain(sourceUrl, publisher) {
+    const linkDomain = domainOf(sourceUrl);
+    const publisherKey = normalizeText(publisher).toLowerCase().replace(/\s+/g, ' ');
+    const attributedDomain = PUBLISHER_DOMAIN_ALIASES.get(publisherKey) || '';
+    if (!linkDomain) return attributedDomain;
+    return REDIRECT_DOMAINS.has(linkDomain) && attributedDomain
+      ? attributedDomain
+      : linkDomain;
+  }
+
   function classifySourceType(sourceUrl, publisher) {
     const domain = domainOf(sourceUrl);
     const label = String(publisher || '').toLowerCase();
@@ -116,7 +153,7 @@
     const title = normalizeText(raw && raw.title);
     const excerpt = normalizeText(raw && (raw.summary || raw.excerpt || raw.desc || ''));
     const publisher = normalizeText(raw && raw.source) || domainOf(sourceUrl);
-    const publisherDomain = domainOf(sourceUrl);
+    const publisherDomain = attributedPublisherDomain(sourceUrl, publisher);
     const publishedAt = normalizeTimestamp(raw && (raw.published || raw.pubDate || raw.publishedAt));
     const sourceTier = classifySourceTier(publisherDomain, publisher);
     const idSeed = [meta && meta.feedUrl, canonicalUrl, title, publishedAt || fetchedAt].filter(Boolean).join('|');

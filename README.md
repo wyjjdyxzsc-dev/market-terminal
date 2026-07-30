@@ -13,7 +13,7 @@ small Express backend that keeps every API key server-side.
 
 ---
 
-## Repository operational state (2026-07-28)
+## Repository operational state (2026-07-30)
 
 - Deploy by pushing to `main`. Do not run `wrangler deploy` manually for production; GitHub is wired to Cloudflare Workers and is the canonical deploy path for this repo.
 - `npm test` now runs unit coverage plus the local smoke suite. Start the local server first with `npm start`.
@@ -23,6 +23,7 @@ small Express backend that keeps every API key server-side.
 - AI evidence-policy source checkpoint `5a10b79` is production verified: `24/24` unit tests, `28/28` local smoke contracts, and `31/31` production smoke contracts passed on 2026-07-16.
 - Checkpoint 5 source commit `20c9252` extends that authority model to sector analysis, company-news impact, deterministic candle commentary, and corroboration-gated alerts. It is production verified with `29/29` unit tests, all 28 keyless-available local smoke contracts, and `33/33` deployed contracts.
 - Checkpoint 6 source commit `919f1b9` adds a current-model provider registry, independent different-provider/different-model verification for generated high-risk tasks, bounded calls/tokens/latency/cost, safe runtime telemetry, and offline safety evaluations. It is production verified with `45/45` unit tests, all 10-case evaluation thresholds, all 28 keyless-available local contracts, `33/33` deployed contracts, targeted authority probes, and desktop/mobile browser checks. Available live high-risk verifier attempts failed closed; no positive high-risk acceptance is claimed.
+- Checkpoint 7 candidate fixes company evidence attribution/ingestion, reserves verifier budget before generation, aligns lower-risk output limits, and exposes safe failure-attempt diagnostics. Local evidence is `50/50` unit tests, `31/31` available smoke contracts, all offline AI thresholds, zero dependency vulnerabilities, Worker dry-run bundling, and targeted/browser checks. Production verification is intentionally pending until the managed deployment completes.
 - Current provider evidence and limitations are recorded in [docs/AI_PROVIDER_CAPABILITY_AUDIT_2026-07-28.md](/Users/krishivjain/Desktop/claude projects/market-terminal/docs/AI_PROVIDER_CAPABILITY_AUDIT_2026-07-28.md).
 - The latest external-agent checkpoint and evidence log lives in [docs/CODEX_HANDOFF_TO_CLAUDE_2026-07-13.md](/Users/krishivjain/Desktop/claude projects/market-terminal/docs/CODEX_HANDOFF_TO_CLAUDE_2026-07-13.md).
 
@@ -74,7 +75,7 @@ You need **Node.js 18 or newer** (this uses the built-in global `fetch`). Check 
 **1. Get the free API keys**
 
    - **Finnhub** (required) — sign up at <https://finnhub.io> and copy your API key.
-   - **AI provider** (optional but required for generated research) — Groq is the simplest local default; other supported providers are listed in `.env.example`.
+   - **AI providers** (optional) — Groq is the simplest default for NEWS enrichment and generic educational chat. Generated current-market and high-risk research needs at least two eligible heavy providers from different model families; supported combinations are listed in `.env.example`.
 
 **2. Add your keys**
 
@@ -87,8 +88,15 @@ You need **Node.js 18 or newer** (this uses the built-in global `fetch`). Check 
    ```
    FINNHUB_API_KEY=your_finnhub_key
    GROQ_API_KEY=your_groq_key
+   GEMINI_API_KEY=
+   GITHUB_MODELS_TOKEN=
    PORT=3000
    ```
+
+   With only `GROQ_API_KEY`, NEWS and generic educational chat can run, while
+   current-market chat, sector analysis, company impact, price action, situation,
+   and deep-dive generation abstain because independent heavy-model verification
+   cannot be completed.
 
    *(Optional — for push ALERTS: run `npx web-push generate-vapid-keys` and paste the
    public/private keys into `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY`. Leave them blank
@@ -170,8 +178,8 @@ market-terminal/
 
 ## Notes & troubleshooting
 
-- **A tab says a key is missing** — TERMINAL needs a configured quote provider, normally `FINNHUB_API_KEY`; generated research needs an eligible AI provider. Make sure `.env` sits next to `server.js`, then restart.
-- **Rate limits** — Finnhub free tier ≈ 60 req/min; Groq has generous free limits but heavy use can briefly 429. The app caches AI results for 60 min and retries transient errors.
+- **A tab says a key is missing** — TERMINAL needs a configured quote provider, normally `FINNHUB_API_KEY`. NEWS and educational chat can use one speed provider such as Groq. Generated current-market/high-risk research requires two eligible heavy providers with independent model families. Make sure `.env` sits next to `server.js`, then restart.
+- **Rate limits** — provider limits vary by account. Per-minute throttles use a short cooldown; daily/quota exhaustion uses a longer cooldown. AI responses are cached under schema-specific task TTLs, and NEWS degrades to canonical raw headlines if enrichment is unavailable.
 - **Chart works but quotes don't (or vice-versa)** — the chart is keyless (Yahoo/Nasdaq) while quotes use Finnhub; if only the chart loads, your Finnhub key is missing/invalid.
 - **Alerts say "Blocked"** — notifications are blocked for the site in your browser/OS settings. Re-allow and reload. On iPhone, Add to Home Screen first.
 

@@ -41,3 +41,10 @@
 - OpenRouter and Hugging Face are excluded from independent high-risk verification because their routing identity is brokered or variable. Nebius's legacy hosted Studio endpoint and OctoAI's obsolete endpoint are disabled.
 - Token, call, latency, estimated-cost, and conservative cost-unit budgets constrain service use. These are engineering guardrails, not a substitute for provider-specific terms, privacy, retention, regional, or regulated-use review.
 - Local tests and production source commit `919f1b9` verify the engineering controls. The deployed suite passed `33/33`, and targeted routes exposed bounded runtime metadata or abstained safely. No new production entitlement is implied, and because available high-risk verifier attempts failed closed, no positive live-provider quality claim is made.
+
+## 2026-07-30 checkpoint 7 note
+
+- No new dataset or entitlement was added. Company AI routes now consume Finnhub company-news metadata that was already an existing configured source, alongside existing RSS metadata.
+- Redirect publisher attribution changes evidence classification only for recognized redirect hosts and known publisher labels; it does not grant redistribution rights, replace the original link, or authorize storing full article text.
+- Provider retry budgets, output ceilings, cooldowns, and failure diagnostics are service-usage controls. Current-market/high-risk generation still requires two eligible independent heavy providers and remains subject to each provider account's terms and limits.
+- Local verification passed, but production verification is pending. No new market-data, issuer-research, options, relationship, intelligence, or professional-terminal entitlement is claimed.

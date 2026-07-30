@@ -114,6 +114,11 @@ Deploys to `https://market-terminal.wyjjdyxzsc.workers.dev`
 - `shared/ai-evaluation-core.js` and `tests/fixtures/ai-eval-2026-07-26a.json` provide 10 versioned offline safety cases. They are regression evidence, not a live-provider benchmark or proof of factual accuracy.
 - Source commit `919f1b9` is production verified: `45/45` unit tests, all evaluation thresholds, all 28 keyless-available local smoke contracts, zero dependency vulnerabilities, Wrangler `4.114.0` dry-run bundling, `33/33` deployed contracts, targeted authority probes, and desktop/mobile browser checks passed. Available live high-risk verifier attempts failed closed, so no positive high-risk acceptance is claimed.
 
+**AI availability repair (2026-07-30 checkpoint candidate)**:
+- Evidence, task-policy/cache, and verification schemas are `2026-07-30a`. Redirected Finnhub/Bing publisher links retain a canonical publisher domain only for known redirect hosts, and company AI routes combine RSS with normalized Finnhub company news.
+- Verified generation reserves an independent verifier inside the remaining call/cost budget. Failure attempts and safe failure codes are exposed in policy metadata and the UI distinguishes missing providers, generation validation, verifier rejection/unavailability, and budget exhaustion.
+- Lower-risk provider races use a shared 4,000-token ceiling and distinguish per-minute throttles from daily/quota exhaustion. Local NEWS enrichment, `50/50` unit tests, the 10-case evaluation, `31/31` available smoke contracts, zero-vulnerability audit, Wrangler `4.115.0` dry run, and browser checks passed. Production verification is pending.
+
 **Branches**: All work on `main` (no feature branches yet).
 
 ## Key Files
@@ -129,6 +134,7 @@ Deploys to `https://market-terminal.wyjjdyxzsc.workers.dev`
 | `shared/ai-provider-registry.js` | Current provider/model lifecycle, eligibility, pricing, and health metadata |
 | `shared/ai-verification-core.js` | Bounded generation, independent verification, runtime usage/cost telemetry |
 | `shared/ai-evaluation-core.js` | Versioned offline AI safety metrics |
+| `shared/company-evidence-core.js` | Finnhub company-news normalization into policy evidence |
 | `.env` (git-ignored) | FINNHUB_API_KEY, GROQ_API_KEY, POLYGON_KEY, FIRMS_MAP_KEY, WINDY_KEY, VAPID_* |
 
 ## Env vars (all optional except noted)
@@ -138,9 +144,10 @@ Deploys to `https://market-terminal.wyjjdyxzsc.workers.dev`
 - `FINNHUB_API_KEY_2..5` (piggyback)
 - `TWELVEDATA_KEY`, `FMP_KEY`, `ALPHAVANTAGE_KEY`, `POLYGON_KEY` (fallback)
 
-**AI** (≥1 required for news/analysis):
-- `GROQ_API_KEY` (recommended speed-tier default; any eligible configured provider can serve its permitted tasks)
-- `GEMINI_API_KEY`, `CEREBRAS_API_KEY`, `TOGETHER_API_KEY`, `OPENROUTER_API_KEY`, etc. (race pool)
+**AI**:
+- `GROQ_API_KEY` (recommended speed-tier default for NEWS and generic educational chat)
+- Generated current-market/high-risk tasks require at least two eligible heavy providers serving different canonical model families, for example `GEMINI_API_KEY` plus `GITHUB_MODELS_TOKEN`.
+- Other speed/heavy keys are listed in `.env.example`; brokered `OPENROUTER_API_KEY` and `HF_API_KEY` cannot independently verify high-risk output.
 - `AI_PARALLEL=5` (default race width)
 
 **Map**:

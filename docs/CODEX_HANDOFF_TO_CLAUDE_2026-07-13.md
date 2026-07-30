@@ -511,6 +511,31 @@ This work was performed by OpenAI Codex without Claude’s involvement. This doc
   - mobile screenshot capture timed out, so no screenshot artifact is claimed
 - Detailed current-model evidence and limitations are in `docs/AI_PROVIDER_CAPABILITY_AUDIT_2026-07-28.md`.
 
+# 2026-07-30 checkpoint 7: AI availability and company-evidence repair
+
+- Live diagnosis separated three failure classes instead of treating AI as globally offline:
+  - generic educational chat and several evidence-rich high-risk routes could reach configured providers
+  - AAPL current-market/company/deep-dive requests failed their evidence gate because Finnhub/Bing redirect hosts hid the actual publisher domain and the AI evidence path did not consume Finnhub company news
+  - the local `.env` has Groq but no heavy providers, so generated current-market/high-risk tasks must abstain because they cannot form an independent generator/verifier pair
+- Added `shared/company-evidence-core.js` and wired it into Express and the Worker. Ticker-backed company requests combine Bing/Yahoo RSS with Finnhub company news, while company-name requests resolve a ticker before fetching evidence. Chat, company impact, deep dive, and price action now use this company-specific evidence path.
+- Evidence schema `2026-07-30a` attributes known publishers behind recognized Finnhub/news-aggregator redirect hosts. The alias cannot override an unrelated article domain, preventing a publisher label from upgrading an arbitrary URL.
+- Task-policy/cache and verification schemas moved to `2026-07-30a`, which isolates old company-route abstentions and identifies the new runtime semantics.
+- Verified tasks now preserve one independent verifier inside the remaining provider-call and cost budget before spending on another generator. Worker high-risk tasks retain deterministic reliability order instead of rotating a weak generator ahead of the known generator/verifier pair.
+- Runtime policy metadata exposes bounded failed-attempt records and safe failure codes. Backend reasons and frontend disclosure distinguish unavailable provider pairs, generation schema/evidence failure, verifier rejection, verifier unavailability, and budget exhaustion.
+- Price-action prompts now request the `evidenceIds` that validation already required. Price action also receives company-specific evidence instead of filtering a generic news pool for ticker text.
+- Lower-risk Express/Worker races now share a 4,000-output-token ceiling. This repaired local NEWS enrichment: 2,000 tokens produced invalid/truncated strict JSON, while 8,000 exceeded the account tokens-per-minute request ceiling. Per-minute limits now receive a short cooldown; explicit daily/quota exhaustion retains the longer cooldown.
+- Local verification:
+  - `50/50` unit tests passed, including redirect-bound publisher authority, hostile-domain non-upgrade, Finnhub normalization, verifier-budget reservation, and failure-reason cases
+  - all thresholds passed for the unchanged 10-case offline AI safety fixture suite
+  - local smoke passed `31/31` available contracts; fire, weather, and webcams remained documented optional key/network skips
+  - targeted NEWS returned 12 AI-enriched source-linked items with zero degraded fallbacks
+  - targeted AAPL current-market chat reached 10 trusted evidence records and returned the explicit two-heavy-provider requirement with zero model calls; company and deep-dive routes reached 14/16 evidence records and two distinct sources before correctly abstaining locally
+  - `npm audit --omit=dev` reported zero vulnerabilities
+  - Wrangler `4.115.0` dry-run bundled 14 assets at 407.58 KiB raw / 98.76 KiB gzip; no manual deployment occurred
+  - an in-app local browser check rendered one user message, one abstention response, the explicit provider-pair reason, available evidence links, and no console warnings/errors
+- All seven source-deployment references use `20260730a`.
+- Production verification is pending. No positive live high-risk acceptance, factual-quality improvement, new entitlement, or parity-row upgrade is claimed until the managed deployment and deployed probes pass.
+
 # Unresolved risks and technical debt
 
 - The repository still has very large `server.js` and `worker.js` monoliths.

@@ -92,6 +92,14 @@ This file is a portable handoff for continuing work on another account. It recor
 
 > continue
 
+### User prompt 20
+
+> y r the ai features not working
+
+### User prompt 21
+
+> continue
+
 ## Authoritative Prompt Sources
 
 - Full master prompt: [MARKET_TERMINAL_TOTAL_PLATFORM_CODEX_MASTER_PROMPT.md](/Users/krishivjain/Desktop/claude projects/market-terminal/MARKET_TERMINAL_TOTAL_PLATFORM_CODEX_MASTER_PROMPT.md)
@@ -143,6 +151,10 @@ The following production-oriented vertical slices were implemented and deployed:
 - Added safe runtime telemetry and a versioned 10-case offline AI policy evaluation. The evaluation is not represented as a live-provider quality benchmark.
 - Corrected educational/current-market chat classification and the duplicate false network-error bubble in the AI chat panel.
 - Exposed the normalized active terminal symbol to AI chat through a public context bridge and `marketsymbolchange` event; production browser evidence shows `AAPL` context instead of a stale/default fallback.
+- Added a shared Finnhub company-news evidence adapter and corrected publisher authority behind recognized redirect URLs without allowing labels to upgrade unrelated domains.
+- Routed company impact, deep dive, current-market chat, and price action through ticker-backed company evidence; added required price-action evidence IDs.
+- Reserved independent-verifier budget before generator retries, stabilized Worker high-risk provider order, and exposed safe failed-attempt diagnostics plus specific abstention reasons.
+- Reconciled lower-risk Express/Worker output ceilings and per-minute versus daily/quota cooldown behavior; local NEWS enrichment returned 12 source-linked non-degraded items.
 - Unit tests for API contracts, evidence helpers, and candle analysis.
 - Expanded smoke tests covering local and production endpoint contracts.
 
@@ -166,6 +178,8 @@ Local verification completed:
 - Checkpoint 6 local verification on 2026-07-28: `npm run test:unit` passed `45/45`; `npm run test:ai-eval` passed all declared thresholds for 10 versioned fixtures; all 28 keyless-available smoke contracts passed; `npm audit --omit=dev` reported zero vulnerabilities; syntax checks passed; and Wrangler `4.114.0` dry-run bundled 14 assets at 399.10 KiB raw / 96.89 KiB gzip.
 - Checkpoint 6 browser evidence: desktop sector/deep-dive states and mobile sector layout remained safe; educational P/E chat resolved to `intel.chat`, rendered exactly one AI response and one policy note, showed active context `AAPL`, and produced no console warnings/errors.
 - Checkpoint 6 work runs from detached worktree `/tmp/market-terminal-checkpoint6-20260726`. The original checkout and its unrelated untracked master-prompt/profile files remain preserved.
+- Checkpoint 7 local verification on 2026-07-30: schemas moved to `2026-07-30a`; `npm run test:unit` passed `50/50`; the 10-case offline evaluation passed all thresholds; local smoke passed `31/31` available contracts with only documented optional-route skips; targeted company evidence, NEWS enrichment, provider-reason, and browser checks passed; `npm audit --omit=dev` found zero vulnerabilities; and Wrangler `4.115.0` dry-run bundled 14 assets at 407.58 KiB raw / 98.76 KiB gzip.
+- The Desktop-backed `node_modules` tree initially exposed dataless/duplicated dependency files and stalled Express startup. A clean `npm ci` restored the ignored dependency tree; no source or user artifact was removed.
 
 Production verification completed:
 
@@ -214,7 +228,7 @@ Production verification completed:
 - `4ffe15a` — `Isolate AI policy cache envelopes`
 - `919f1b9` — `Share active symbol with AI chat`
 
-All listed source commits were pushed to `origin/main`. Checkpoint 6 source commit `919f1b9` is production verified; unrelated untracked files listed below remain preserved.
+All listed source commits were pushed to `origin/main`. Checkpoint 6 source commit `919f1b9` is production verified. Checkpoint 7 is locally verified and awaiting its source commit, managed deployment, and production evidence; unrelated untracked files listed below remain preserved.
 
 ## Remaining Work
 

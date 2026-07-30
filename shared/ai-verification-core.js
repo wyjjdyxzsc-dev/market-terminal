@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const AI_VERIFICATION_SCHEMA_VERSION = '2026-07-26a';
+  const AI_VERIFICATION_SCHEMA_VERSION = '2026-07-30a';
   const RUNTIME_METADATA = typeof Symbol === 'function'
     ? Symbol.for('market-terminal.ai-runtime')
     : '__marketTerminalAiRuntime';
@@ -161,6 +161,19 @@
         requestedModel: null,
         servedModel: null,
       },
+      attempts: calls.map((call) => ({
+        role: call.role,
+        provider: call.provider,
+        tier: call.tier,
+        requestedModel: call.requestedModel,
+        servedModel: call.servedModel,
+        latencyMs: call.latencyMs,
+        usage: call.usage,
+        estimatedCostUsd: call.estimatedCostUsd,
+        costUnits: call.costUnits,
+        failed: Boolean(call.failed),
+        failureCode: call.failureCode || '',
+      })),
       totals: totalsFor(calls, startedAt, budget),
       budget,
       failureCode,
@@ -329,6 +342,21 @@
     return true;
   }
 
+  function canReserveIndependentVerifier(generatorProvider, providers, calls, budget) {
+    const attemptedNames = new Set(calls.map((call) => call.provider));
+    attemptedNames.add(generatorProvider.name);
+    if (calls.length + 2 > budget.maxProviderCalls) return false;
+    const projectedUnits = calls.reduce((sum, call) => sum + call.costUnits, 0) +
+      finiteNumber(generatorProvider.costUnits, 1);
+
+    return providers.some((provider) =>
+      provider.independentVerifierEligible &&
+      !attemptedNames.has(provider.name) &&
+      projectedUnits + finiteNumber(provider.costUnits, 1) <= budget.maxCostUnits &&
+      modelsAreIndependent(generatorProvider, provider)
+    );
+  }
+
   async function callWithinDeadline(callProvider, provider, system, user, maxOutputTokens, deadline) {
     const remainingMs = deadline - Date.now();
     if (remainingMs <= 0) throw new AiPipelineError('latency_budget_exceeded', 'The AI latency budget was exhausted.');
@@ -401,6 +429,8 @@
     const generatorInput = `${system}\n${user}`;
     for (const provider of providers) {
       if (!canSpend(provider, calls, budget, generatorInput, budget.maxOutputTokens)) continue;
+      if (policy?.requiresIndependentVerifier &&
+          !canReserveIndependentVerifier(provider, providers, calls, budget)) continue;
       const callStartedAt = Date.now();
       const callsBefore = calls.length;
       try {
@@ -410,8 +440,19 @@
         const text = String(response?.text || '');
         const call = buildCallTelemetry(provider, response, `${system}\n${user}`, text, latencyMs, 'generator');
         calls.push(call);
-        const data = extractJson(text);
-        if (!validate(data)) throw new AiPipelineError('generator_validation_failed', `${provider.name} failed output validation.`);
+        let data;
+        try {
+          data = extractJson(text);
+        } catch {
+          call.failed = true;
+          call.failureCode = 'generator_parse_failed';
+          throw new AiPipelineError('generator_parse_failed', `${provider.name} returned unparseable output.`);
+        }
+        if (!validate(data)) {
+          call.failed = true;
+          call.failureCode = 'generator_validation_failed';
+          throw new AiPipelineError('generator_validation_failed', `${provider.name} failed output validation.`);
+        }
         generator = call;
         candidate = data;
         break;
@@ -561,6 +602,7 @@
     validateVerifierVerdict,
     canonicalModelIdentity,
     modelsAreIndependent,
+    canReserveIndependentVerifier,
     tagRuntimeMetadata,
     getRuntimeMetadata,
     inheritRuntimeMetadata,

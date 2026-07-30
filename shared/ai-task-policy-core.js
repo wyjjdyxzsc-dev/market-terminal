@@ -6,7 +6,7 @@
   const verificationCore = globalThis.MarketTerminalAiVerification ||
     (typeof require === 'function' ? require('./ai-verification-core.js') : null);
 
-  const AI_TASK_POLICY_SCHEMA_VERSION = '2026-07-28a';
+  const AI_TASK_POLICY_SCHEMA_VERSION = '2026-07-30a';
   const CHAT_EDUCATIONAL_PATTERN =
     /^(?:please\s+)?(?:what\s+(?:is|are|does)|define|explain(?:\s+(?:how|what))?|how\s+(?:does|do|is|are)|meaning\s+of|teach\s+me)\b/i;
   const CHAT_TEMPORAL_PATTERN =
@@ -537,6 +537,7 @@
           requestedModel: null,
           servedModel: null,
         },
+        attempts: [],
         totals: {
           providerCalls: 0,
           inputTokens: 0,
@@ -564,6 +565,8 @@
       } : undefined,
       estimatedCostUsd: call.estimatedCostUsd == null ? null : Number(call.estimatedCostUsd),
       costUnits: Number(call.costUnits) || 0,
+      failed: Boolean(call.failed),
+      failureCode: call.failureCode ? String(call.failureCode).slice(0, 80) : '',
       evidenceIds: Array.isArray(call.evidenceIds) ? call.evidenceIds.map(String) : undefined,
       unsupportedClaimCount: Number(call.unsupportedClaimCount) || 0,
       reason: call.reason ? String(call.reason).slice(0, 240) : undefined,
@@ -574,6 +577,9 @@
       status: String(runtime.status || status || ''),
       generator: safeCall(runtime.generator),
       verifier: safeCall(runtime.verifier),
+      attempts: Array.isArray(runtime.attempts)
+        ? runtime.attempts.slice(0, 8).map(safeCall).filter(Boolean)
+        : [],
       totals: {
         providerCalls: Number(runtime.totals?.providerCalls) || 0,
         inputTokens: Number(runtime.totals?.inputTokens) || 0,
@@ -615,6 +621,35 @@
         runtime: options.runtime,
       }),
     };
+  }
+
+  function describeAiFailure(error, taskPolicy = {}) {
+    const message = String(error && error.message || '');
+    const code = String(error && error.code || error && error.runtime && error.runtime.failureCode || '');
+    const attempts = Array.isArray(error && error.runtime && error.runtime.attempts)
+      ? error.runtime.attempts
+      : [];
+
+    if (/No AI providers configured|No policy-approved AI provider|policy-approved AI providers are cooling down/i.test(message)) {
+      return taskPolicy.requiresIndependentVerifier
+        ? 'At least two independent policy-approved heavy providers are not currently available, so generation was not attempted.'
+        : 'No policy-approved AI provider is currently available for this task.';
+    }
+    if (code === 'generation_failed') {
+      return attempts.length
+        ? 'Configured provider attempts completed, but no output passed the task schema and evidence checks.'
+        : 'No eligible provider pair could complete generation and independent verification within the task budget.';
+    }
+    if (code === 'verifier_rejected') {
+      return 'An independent provider rejected the generated answer because its claims or citations did not pass verification.';
+    }
+    if (code === 'verifier_unavailable') {
+      return 'A candidate answer was generated, but no independent provider and model completed verification.';
+    }
+    if (code === 'budget_exceeded' || /budget_exceeded$/.test(code)) {
+      return 'The AI task stopped after reaching its declared call, token, latency, or cost budget.';
+    }
+    return 'No response completed the task schema, evidence, and verification policy.';
   }
 
   function buildSectorBaseline(summary) {
@@ -815,6 +850,7 @@
     bindCompanyNewsEvidence,
     policyMetadata,
     buildAbstention,
+    describeAiFailure,
     buildSectorBaseline,
     constrainTaskOutput,
     attachPolicy,

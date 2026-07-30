@@ -20,6 +20,7 @@ Research date: 2026-07-13
   - AI evidence-policy source commit `5a10b79` is production verified on 2026-07-16: `24/24` unit tests, `28/28` local smoke contracts, and `31/31` production smoke contracts passed
   - checkpoint 5 source commit `20c9252` is production verified: `29/29` unit tests, all 28 keyless-available local smoke contracts, `33/33` production contracts, zero dependency vulnerabilities, Worker dry-run bundling, targeted probes, and interactive sector/watchlist/alert checks passed
   - checkpoint 6 source commit `919f1b9` is production verified: `45/45` unit tests, the versioned 10-case offline AI safety evaluation, all 28 keyless-available local contracts, `33/33` deployed contracts, zero dependency vulnerabilities, Worker dry-run bundling, targeted authority probes, and desktop/mobile telemetry/chat checks passed
+  - checkpoint 7 candidate is locally verified: `50/50` unit tests, all offline AI thresholds, `31/31` available contracts, zero dependency vulnerabilities, Worker dry-run bundling, targeted company/news/provider probes, and browser disclosure checks passed; production verification is pending
 
 ## Capability rows
 
@@ -92,6 +93,13 @@ Research date: 2026-07-13
 - High-risk authority: generated current-market and high-risk tasks now run a bounded generator followed by a verifier from a different provider and canonical model family. A valid rejection is authoritative; no independent candidate, failed evidence/citation/schema validation, or exhausted call/token/cost/latency budget produces a structured abstention.
 - Disclosure and evaluation: safe response metadata exposes actual served models, provider calls, reported or estimated tokens, latency, estimated cost, cost units, and verifier outcome. The versioned offline fixture suite measures policy safety but is not a live-provider quality benchmark.
 - Evidence: `45/45` unit tests, the 10-case evaluation thresholds, all 28 keyless-available local API contracts, zero-vulnerability audit, and Wrangler `4.114.0` dry-run bundling passed. After an initial `29/33` production run exposed stale KV policy envelopes, schema-isolation commit `4ffe15a` fixed the defect; final source commit `919f1b9` passed `33/33`, targeted authority probes, and desktop/mobile browser checks with no warnings/errors. Live high-risk attempts abstained after their evidence or verifier gates, so no positive high-risk acceptance or factual-quality claim is made. This improves the AI research safety architecture but does not change any capability row to implemented, add licensed financial data, or establish Bloomberg parity.
+
+### 2026-07-30 checkpoint 7 local update
+
+- Company research evidence now combines ticker-resolved RSS and Finnhub company news. Recognized redirect hosts can retain an attributed publisher domain, while unrelated URLs cannot borrow a reputable publisher label.
+- High-risk generation reserves an independent verifier within the declared call/cost budget, and price-action prompts request their required evidence IDs. Safe attempt telemetry and specific failure reasons make provider/evidence/verification failures visible without exposing credentials.
+- Lower-risk Node/Worker output limits and cooldown semantics are aligned. Local NEWS returned 12 source-linked enriched items; company/deep-dive evidence reached two distinct sources; current-market chat correctly explained that the Groq-only local environment lacks the required two-heavy-provider pair.
+- Evidence: `50/50` unit tests, all 10 offline evaluation thresholds, `31/31` available local contracts, zero-vulnerability audit, Wrangler `4.115.0` dry-run bundling, and browser disclosure checks passed. Production verification is pending. No capability status changes, new entitlement, positive high-risk quality claim, or Bloomberg parity claim are made.
 
 ### FT-003 Real-time market monitors
 

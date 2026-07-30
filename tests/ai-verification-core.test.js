@@ -98,7 +98,7 @@ test('high-risk pipeline requires and records a different provider and model', a
   assert.equal(runtime.totals.withinBudget, true);
 });
 
-test('same underlying model family cannot independently verify itself', async () => {
+test('same underlying model family cannot form a verified pipeline', async () => {
   const providers = [
     provider('groq', 'openai/gpt-oss-120b'),
     provider('cfai', '@cf/openai/gpt-oss-120b'),
@@ -118,8 +118,9 @@ test('same underlying model family cannot independently verify itself', async ()
         servedModel: selected.defaultModel,
       }),
     }),
-    (error) => error.code === 'verifier_unavailable' &&
-      error.runtime?.verifier?.status === 'not-run'
+    (error) => error.code === 'generation_failed' &&
+      error.runtime?.verifier?.status === 'not-run' &&
+      error.runtime?.totals?.providerCalls === 0
   );
 });
 
@@ -163,6 +164,52 @@ test('verifier selection skips a provider that cannot fit the remaining cost bud
 
   assert.deepEqual(calls, ['gemini', 'deepseek']);
   assert.equal(verification.getRuntimeMetadata(result).verifier.provider, 'deepseek');
+});
+
+test('generator retries reserve one independent verifier inside the cost budget', async () => {
+  const prep = preparation();
+  prep.policy = {
+    ...prep.policy,
+    maxProviderCalls: 4,
+    maxCostUnits: 7,
+    maxEstimatedCostUsd: null,
+  };
+  const providers = [
+    provider('github', 'openai/gpt-4.1', 3),
+    provider('cfai', '@cf/openai/gpt-oss-120b', 1),
+    provider('gemini', 'gemini-3.6-flash', 3),
+  ];
+  const calls = [];
+
+  await assert.rejects(
+    verification.runVerifiedPipeline({
+      preparation: prep,
+      providers,
+      system: 'Return JSON.',
+      user: 'Use evidence.',
+      validate: () => false,
+      extractJson: JSON.parse,
+      callProvider: async (selected) => {
+        calls.push(selected.name);
+        return {
+          text: JSON.stringify({ evidenceIds: ['ev_primary'] }),
+          requestedModel: selected.defaultModel,
+          servedModel: selected.defaultModel,
+        };
+      },
+    }),
+    (error) => {
+      assert.equal(error.code, 'generation_failed');
+      assert.deepEqual(calls, ['github', 'cfai']);
+      assert.equal(error.runtime.totals.costUnits, 4);
+      assert.equal(error.runtime.totals.providerCalls, 2);
+      assert.deepEqual(
+        error.runtime.attempts.map((attempt) => attempt.failureCode),
+        ['generator_validation_failed', 'generator_validation_failed']
+      );
+      return true;
+    }
+  );
 });
 
 test('first valid independent rejection is authoritative', async () => {

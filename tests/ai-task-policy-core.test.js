@@ -30,7 +30,7 @@ const EVIDENCE = [
 ];
 
 test('high-risk policies declare grounding, verifier, and abstention controls', () => {
-  assert.equal(policy.AI_TASK_POLICY_SCHEMA_VERSION, '2026-07-28a');
+  assert.equal(policy.AI_TASK_POLICY_SCHEMA_VERSION, '2026-07-30a');
   const genericChat = policy.getTaskPolicy('intel.chat');
   const deepDive = policy.getTaskPolicy('intel.deep-dive');
   const supplyChain = policy.getTaskPolicy('intel.supply-chain');
@@ -256,7 +256,7 @@ test('grounded responses distinguish cited evidence from the available allowlist
     inputs: { quote: true, fundamentalData: true },
   });
   const runtime = {
-    schemaVersion: '2026-07-26a',
+    schemaVersion: '2026-07-30a',
     mode: 'independent-verification',
     status: 'verified',
     generator: {
@@ -311,6 +311,25 @@ test('high-risk attachment without independent runtime verification abstains', (
   assert.equal(response.policy.runtime.verifier.status, 'not-run');
 });
 
+test('AI failure descriptions distinguish provider, generation, and verifier failures', () => {
+  const highRisk = policy.getTaskPolicy('intel.deep-dive');
+  assert.match(
+    policy.describeAiFailure(new Error('No policy-approved AI provider is available for this task.'), highRisk),
+    /At least two independent/
+  );
+  assert.match(
+    policy.describeAiFailure({
+      code: 'generation_failed',
+      runtime: { attempts: [{ provider: 'gemini' }] },
+    }, highRisk),
+    /no output passed/
+  );
+  assert.match(
+    policy.describeAiFailure({ code: 'verifier_unavailable' }, highRisk),
+    /no independent provider/
+  );
+});
+
 test('both runtimes build chat context on the backend and reject legacy coercive instructions', () => {
   for (const file of ['server.js', 'worker.js']) {
     const source = fs.readFileSync(path.join(__dirname, '..', file), 'utf8');
@@ -321,6 +340,10 @@ test('both runtimes build chat context on the backend and reject legacy coercive
     assert.doesNotMatch(source, /const CANDLE_SYSTEM/);
     assert.match(source, /item\.alertPolicy\?\.status !== 'eligible'/);
     assert.match(source, /const normalizedQuery = query\.toUpperCase\(\)/);
+    assert.match(source, /test\(query\) \? normalizedQuery : ''/);
+    assert.match(source, /\.signal,\s*4_000/);
+    assert.match(source, /tokens per minute/);
+    assert.match(source, /Math\.max\(Number\(.+?\) \|\| 0, Date\.now\(\) \+ ms\)/);
   }
 });
 
