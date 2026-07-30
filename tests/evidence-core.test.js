@@ -8,6 +8,10 @@ const companyEvidence = require('../shared/company-evidence-core.js');
 
 test('safeExternalUrl strips tracking params and rejects unsafe schemes', () => {
   assert.equal(evidence.EVIDENCE_SCHEMA_VERSION, '2026-07-30a');
+  assert.equal(evidence.NEWS_ENRICHMENT_SCHEMA_VERSION, '2026-07-30b');
+  assert.equal(evidence.hasUsefulNewsBatch({ items: Array(6).fill({}) }, 20), true);
+  assert.equal(evidence.hasUsefulNewsBatch({ items: Array(5).fill({}) }, 20), false);
+  assert.equal(evidence.hasUsefulNewsBatch({ items: Array(3).fill({}) }, 3), true);
   assert.equal(
     evidence.safeExternalUrl('https://example.com/story?utm_source=rss&fbclid=abc&id=42#fragment'),
     'https://example.com/story?id=42'

@@ -18,7 +18,7 @@ Research date: 2026-07-13
   - AI evidence-policy source commit `5a10b79` is production verified on 2026-07-16: `24/24` unit tests, `28/28` local smoke contracts, and `31/31` production smoke contracts passed
   - checkpoint 5 source commit `20c9252` is production verified: `29/29` unit tests, all 28 keyless-available local smoke contracts, `33/33` production contracts, targeted alert probes, and interactive alert checks passed
   - checkpoint 6 source commit `919f1b9` is production verified: `45/45` unit tests, the versioned 10-case offline AI safety evaluation, all 28 keyless-available local contracts, `33/33` deployed contracts, Worker dry-run bundling, targeted authority probes, and desktop/mobile disclosure checks passed
-  - checkpoint 7 candidate is locally verified: `50/50` unit tests, all offline AI thresholds, `31/31` available contracts, Worker dry-run bundling, targeted provider/evidence probes, and browser disclosure checks passed; production verification is pending
+  - checkpoint 7 core source commit `febefb3` is production verified: all seven `20260730a` assets, `33/33` contracts, and targeted provider/evidence probes passed; its first live NEWS probe exposed a one-card batch, and the `2026-07-30b` useful-batch follow-up is locally verified pending deployment
 
 ## Capability rows
 
@@ -90,11 +90,11 @@ Research date: 2026-07-13
 - Provider and model lifecycle is centralized, actual served identities and usage are disclosed safely, and variable broker routers are barred from the independent-verifier role.
 - Evidence passed `45/45` unit tests, the versioned 10-case offline policy evaluation, all 28 keyless-available local API contracts, Worker dry-run bundling, and final `33/33` deployed contracts for source commit `919f1b9`. Production situation/current-market probes failed closed when evidence or verification was insufficient; no generated high-risk response was accepted. Desktop/mobile disclosure checks had no warnings/errors. The initial `8a8b980` run exposed stale KV policy envelopes and passed `29/33`; schema-isolation commit `4ffe15a` fixed the defect before final verification. This is a production-verified model-output guardrail, not official intelligence confirmation, event-grade classification, conflict correlation, severity scoring, or War Monitor parity.
 
-### 2026-07-30 checkpoint 7 local update
+### 2026-07-30 checkpoint 7 update
 
 - High-risk generation reserves an independent verifier before spending on retries and retains bounded attempt/failure telemetry. Situation and current-market abstentions can now distinguish unavailable providers, invalid generation, verifier rejection/unavailability, and budget exhaustion.
 - Lower-risk news-enrichment output limits and provider cooldown classes are aligned across runtimes. The deterministic alert authority and withheld country-risk posture are unchanged.
-- Local evidence passed `50/50` unit tests, all offline AI thresholds, `31/31` available contracts, Worker dry-run bundling, targeted probes, and browser disclosure checks. Production verification is pending. This does not add official confirmation, canonical conflict threads, severity scoring, or War Monitor parity.
+- Core source commit `febefb3` passed `33/33` deployed contracts and targeted fail-closed probes. Its first live NEWS probe exposed a one-card result accepted from 60 inputs; `2026-07-30b` now requires a useful batch or a canonical source-linked fallback and passed all local gates pending production verification. This does not add official confirmation, canonical conflict threads, severity scoring, or War Monitor parity.
 
 ### WAR-003 Conflict threads and timelines
 

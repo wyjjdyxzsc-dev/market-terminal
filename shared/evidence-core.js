@@ -2,6 +2,7 @@
   'use strict';
 
   const EVIDENCE_SCHEMA_VERSION = '2026-07-30a';
+  const NEWS_ENRICHMENT_SCHEMA_VERSION = '2026-07-30b';
   const TRACKING_PARAMS = new Set([
     'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content',
     'utm_id', 'gclid', 'fbclid', 'mc_cid', 'mc_eid', 'ocid', 'cmpid',
@@ -327,8 +328,16 @@
     }).join('\n');
   }
 
+  function hasUsefulNewsBatch(data, availableHeadlineCount, minimumItems = 6) {
+    const items = Array.isArray(data) ? data : data && data.items;
+    const available = Math.max(0, Math.floor(Number(availableHeadlineCount) || 0));
+    const minimum = Math.max(1, Math.floor(Number(minimumItems) || 1));
+    return Array.isArray(items) && available > 0 && items.length >= Math.min(minimum, available);
+  }
+
   const api = {
     EVIDENCE_SCHEMA_VERSION,
+    NEWS_ENRICHMENT_SCHEMA_VERSION,
     canonicalizeUrl,
     safeExternalUrl,
     normalizeTimestamp,
@@ -340,6 +349,7 @@
     summarizeEvidence,
     matchEvidence,
     buildHeadlineBlock,
+    hasUsefulNewsBatch,
     classifySourceTier,
     reliabilityLabel,
     domainOf,

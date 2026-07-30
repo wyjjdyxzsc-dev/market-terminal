@@ -114,10 +114,11 @@ Deploys to `https://market-terminal.wyjjdyxzsc.workers.dev`
 - `shared/ai-evaluation-core.js` and `tests/fixtures/ai-eval-2026-07-26a.json` provide 10 versioned offline safety cases. They are regression evidence, not a live-provider benchmark or proof of factual accuracy.
 - Source commit `919f1b9` is production verified: `45/45` unit tests, all evaluation thresholds, all 28 keyless-available local smoke contracts, zero dependency vulnerabilities, Wrangler `4.114.0` dry-run bundling, `33/33` deployed contracts, targeted authority probes, and desktop/mobile browser checks passed. Available live high-risk verifier attempts failed closed, so no positive high-risk acceptance is claimed.
 
-**AI availability repair (2026-07-30 checkpoint candidate)**:
+**AI availability repair (2026-07-30 checkpoint, production follow-up pending)**:
 - Evidence, task-policy/cache, and verification schemas are `2026-07-30a`. Redirected Finnhub/Bing publisher links retain a canonical publisher domain only for known redirect hosts, and company AI routes combine RSS with normalized Finnhub company news.
 - Verified generation reserves an independent verifier inside the remaining call/cost budget. Failure attempts and safe failure codes are exposed in policy metadata and the UI distinguishes missing providers, generation validation, verifier rejection/unavailability, and budget exhaustion.
-- Lower-risk provider races use a shared 4,000-token ceiling and distinguish per-minute throttles from daily/quota exhaustion. Local NEWS enrichment, `50/50` unit tests, the 10-case evaluation, `31/31` available smoke contracts, zero-vulnerability audit, Wrangler `4.115.0` dry run, and browser checks passed. Production verification is pending.
+- Lower-risk provider races use a shared 4,000-token ceiling and distinguish per-minute throttles from daily/quota exhaustion. Source commit `febefb3` served all seven `20260730a` assets and passed `33/33` deployed contracts; available high-risk routes remained fail-closed and no positive high-risk acceptance is claimed.
+- The first deployed NEWS probe exposed a one-card model batch that passed the old non-empty validator. NEWS schema/cache `2026-07-30b` now requires six enriched items when six inputs exist and otherwise serves the canonical source-linked degraded fallback. The follow-up passed `50/50` unit tests, the 10-case evaluation, `31/31` available local contracts, zero-vulnerability audit, and Wrangler `4.115.0` dry-run bundling; production verification is pending.
 
 **Branches**: All work on `main` (no feature branches yet).
 

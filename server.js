@@ -65,6 +65,8 @@ const {
   summarizeEvidence,
   matchEvidence,
   buildHeadlineBlock,
+  hasUsefulNewsBatch,
+  NEWS_ENRICHMENT_SCHEMA_VERSION,
   domainOf: evidenceDomainOf,
 } = evidenceCore;
 const { normalizeFinnhubCompanyNews } = companyEvidenceCore;
@@ -1472,7 +1474,7 @@ async function fetchIntelNews() {
     `Current time: ${new Date().toUTCString()}.\n\n` +
     `Real, current world & market headlines pulled live moments ago:\n\n${headlineBlock(headlines)}\n\n` +
     `Produce the JSON object now.`;
-  const validate = d => { const it = Array.isArray(d) ? d : d?.items; return Array.isArray(it) && it.length > 0; };
+  const validate = (data) => hasUsefulNewsBatch(data, headlines.length);
   let data;
   try {
     data = await raceProviders('speed', NEWS_SYSTEM, userPrompt, validate);
@@ -3474,7 +3476,7 @@ app.get('/api/chart', publicRateLimit, route(async (req, res) => {
 
 app.get('/api/intel/news', rateLimit, async (req, res) => {
   try {
-    const { data, fresh } = await fetch_cached_data(`intel:news:${AI_TASK_POLICY_SCHEMA_VERSION}`, fetchNewsAndDetect, TTL.NEWS);
+    const { data, fresh } = await fetch_cached_data(`intel:news:${NEWS_ENRICHMENT_SCHEMA_VERSION}`, fetchNewsAndDetect, TTL.NEWS);
     res.json({ cached: !fresh, items: data });
   } catch (err) {
     console.error('intel news error:', err.message);
@@ -4088,7 +4090,7 @@ httpServer.listen(PORT, () => {
   // Pre-warm news cache so the first NEWS-tab open is instant
   if (speedAvail.length || heavyAvail.length) {
     console.log('  ⏳ Warming live market-news cache…');
-    fetch_cached_data(`intel:news:${AI_TASK_POLICY_SCHEMA_VERSION}`, fetchNewsAndDetect, TTL.NEWS)
+    fetch_cached_data(`intel:news:${NEWS_ENRICHMENT_SCHEMA_VERSION}`, fetchNewsAndDetect, TTL.NEWS)
       .then(() => console.log('     ✓ market news ready'))
       .catch(e => console.error('     news warm failed:', e.message));
   }

@@ -128,7 +128,19 @@ async function checkHtml(label, url) {
     { skipError: true, validate: d => Array.isArray(d.headlines) || Array.isArray(d) || d.error });
 
   await check('GET /api/intel/news', `${BASE}/api/intel/news`,
-    { skipError: true, validate: d => (Array.isArray(d.items) && d.items.every(item => item.priority !== 'high' || (item.alertPolicy?.taskId === 'intel.alert-prioritization' && item.alertPolicy?.status === 'eligible' && item.sourceCount >= 2))) || d.error });
+    {
+      skipError: true,
+      validate: d => (Array.isArray(d.items) &&
+        (d.items.length >= 6 || (d.items.length > 0 && d.items.every(item => item.degraded === true))) &&
+        d.items.every(item =>
+          typeof item.sourceUrl === 'string' &&
+          /^https?:\/\//.test(item.sourceUrl) &&
+          (item.priority !== 'high' ||
+            (item.alertPolicy?.taskId === 'intel.alert-prioritization' &&
+              item.alertPolicy?.status === 'eligible' &&
+              item.sourceCount >= 2))
+        )) || d.error,
+    });
 
   await check('GET /api/intel/analysis', `${BASE}/api/intel/analysis`,
     { skipError: true, validate: d => hasPolicy(d, 'intel.sector-analysis') && Array.isArray(d.industries) && d.industries.length === 11 && Array.isArray(d.topInvestPicks) && d.topInvestPicks.length === 0 && d.industries.every(item => item.investRank == null && item.optionsRank == null && item.investScore == null && item.optionsScore == null && item.optionsBias === 'Avoid') });

@@ -49,6 +49,8 @@ const {
   summarizeEvidence,
   matchEvidence,
   buildHeadlineBlock,
+  hasUsefulNewsBatch,
+  NEWS_ENRICHMENT_SCHEMA_VERSION,
   domainOf: evidenceDomainOf,
 } = globalThis.MarketTerminalEvidence;
 const { normalizeFinnhubCompanyNews } = globalThis.MarketTerminalCompanyEvidence;
@@ -1316,7 +1318,7 @@ async function fetchIntelNews(env) {
     `Current time: ${new Date().toUTCString()}.\n\n` +
     `Real, current world & market headlines pulled live moments ago:\n\n${headlineBlock(headlines)}\n\n` +
     `Produce the JSON object now.`;
-  const validate = (d) => { const it = Array.isArray(d) ? d : d && d.items; return Array.isArray(it) && it.length > 0; };
+  const validate = (data) => hasUsefulNewsBatch(data, headlines.length);
   let data;
   try {
     data = await runAIJson(env, NEWS_SYSTEM, userPrompt, validate);
@@ -3234,7 +3236,7 @@ async function handleApi(request, env, ctx, url) {
   if (p === '/api/intel/news') {
     try {
       if (qs.get('nocache')) { const items = await fetchNewsAndDetect(env, ctx); return json({ cached: false, items }); }
-      const { data, fresh } = await getData(env, ctx, `news:${AI_TASK_POLICY_SCHEMA_VERSION}`, () => fetchNewsAndDetect(env, ctx)); return json({ cached: !fresh, items: data });
+      const { data, fresh } = await getData(env, ctx, `news:${NEWS_ENRICHMENT_SCHEMA_VERSION}`, () => fetchNewsAndDetect(env, ctx)); return json({ cached: !fresh, items: data });
     } catch (err) { return json({ error: true, message: friendlyError(err) }, 500); }
   }
   if (p === '/api/intel/analysis') {
@@ -4271,7 +4273,7 @@ export default {
     ctx.waitUntil((async () => {
       try {
         const items = await fetchIntelNews(env);
-        await env.MT_KV.put(`cache:news:${AI_TASK_POLICY_SCHEMA_VERSION}`, JSON.stringify({ data: items, freshUntil: Date.now() + CACHE_MS })).catch(() => {});
+        await env.MT_KV.put(`cache:news:${NEWS_ENRICHMENT_SCHEMA_VERSION}`, JSON.stringify({ data: items, freshUntil: Date.now() + CACHE_MS })).catch(() => {});
         await detectAlerts(env, items);
       } catch (e) { /* swallow — next tick retries */ }
     })());

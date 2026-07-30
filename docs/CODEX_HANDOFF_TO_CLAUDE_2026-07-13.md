@@ -523,18 +523,28 @@ This work was performed by OpenAI Codex without Claude’s involvement. This doc
 - Verified tasks now preserve one independent verifier inside the remaining provider-call and cost budget before spending on another generator. Worker high-risk tasks retain deterministic reliability order instead of rotating a weak generator ahead of the known generator/verifier pair.
 - Runtime policy metadata exposes bounded failed-attempt records and safe failure codes. Backend reasons and frontend disclosure distinguish unavailable provider pairs, generation schema/evidence failure, verifier rejection, verifier unavailability, and budget exhaustion.
 - Price-action prompts now request the `evidenceIds` that validation already required. Price action also receives company-specific evidence instead of filtering a generic news pool for ticker text.
-- Lower-risk Express/Worker races now share a 4,000-output-token ceiling. This repaired local NEWS enrichment: 2,000 tokens produced invalid/truncated strict JSON, while 8,000 exceeded the account tokens-per-minute request ceiling. Per-minute limits now receive a short cooldown; explicit daily/quota exhaustion retains the longer cooldown.
+- Lower-risk Express/Worker races now share a 4,000-output-token ceiling. Per-minute limits receive a short cooldown; explicit daily/quota exhaustion retains the longer cooldown.
 - Local verification:
   - `50/50` unit tests passed, including redirect-bound publisher authority, hostile-domain non-upgrade, Finnhub normalization, verifier-budget reservation, and failure-reason cases
   - all thresholds passed for the unchanged 10-case offline AI safety fixture suite
   - local smoke passed `31/31` available contracts; fire, weather, and webcams remained documented optional key/network skips
-  - targeted NEWS returned 12 AI-enriched source-linked items with zero degraded fallbacks
+  - the initial local NEWS probe returned 12 AI-enriched source-linked items with zero degraded fallbacks
   - targeted AAPL current-market chat reached 10 trusted evidence records and returned the explicit two-heavy-provider requirement with zero model calls; company and deep-dive routes reached 14/16 evidence records and two distinct sources before correctly abstaining locally
   - `npm audit --omit=dev` reported zero vulnerabilities
-  - Wrangler `4.115.0` dry-run bundled 14 assets at 407.58 KiB raw / 98.76 KiB gzip; no manual deployment occurred
+  - Wrangler `4.115.0` dry-run bundled 14 assets; no manual deployment occurred
   - an in-app local browser check rendered one user message, one abstention response, the explicit provider-pair reason, available evidence links, and no console warnings/errors
-- All seven source-deployment references use `20260730a`.
-- Production verification is pending. No positive live high-risk acceptance, factual-quality improvement, new entitlement, or parity-row upgrade is claimed until the managed deployment and deployed probes pass.
+- Core production verification:
+  - source commit `febefb3` deployed through the managed GitHub-to-Cloudflare path and served all seven `20260730a` references
+  - `npm run test:prod` passed `33/33`, with only the documented weather-provider `502` skip
+  - AAPL and Apple company probes resolved to `AAPL / Apple Inc` with 14 evidence records across two sources; deep dive reached 16 records, price action six, sectors 28, and situation analysis 60
+  - educational chat completed through Groq; generated current-market/high-risk attempts failed generation/verification or were rejected, with bounded attempts and specific failure codes disclosed
+  - no generated high-risk/current-market response was accepted, so no positive live-provider factual-quality claim is made
+- Production-discovered NEWS follow-up:
+  - the first deployed NEWS probe returned one non-degraded card from 60 input headlines because the old validator accepted any non-empty result; this was treated as a material defect
+  - NEWS schema/cache `2026-07-30b` requires six enriched cards when six inputs exist, isolates the old cache entry, and falls back to canonical source-linked degraded items
+  - local follow-up verification passed `50/50` unit tests, all offline thresholds, `31/31` available contracts, zero-vulnerability audit, syntax checks, and Wrangler `4.115.0` dry-run bundling at 408.24 KiB raw / 98.96 KiB gzip
+  - a local undersized model batch was rejected and replaced by 14 source-linked degraded cards; all seven source references now use `20260730b`
+- Final `20260730b` managed deployment and production/browser verification remain pending. No new entitlement or parity-row upgrade is claimed.
 
 # Unresolved risks and technical debt
 
@@ -558,9 +568,10 @@ This work was performed by OpenAI Codex without Claude’s involvement. This doc
   - `8a8b980` — `Verify high-risk AI outputs independently`
   - `4ffe15a` — `Isolate AI policy cache envelopes`
   - `919f1b9` — `Share active symbol with AI chat`
+  - `febefb3` — `Restore AI evidence and provider reliability`
 - Push/deploy:
-  - `git push origin main` completed for all listed source checkpoint commits through `919f1b9`
-  - source commit `919f1b9` is production verified on `https://market-terminal.wyjjdyxzsc.workers.dev`
+  - `git push origin main` completed for all listed source checkpoint commits through `febefb3`
+  - source commit `febefb3` is production verified on `https://market-terminal.wyjjdyxzsc.workers.dev`; the `20260730b` NEWS follow-up is not yet committed or deployed
 
 # Recommended next step for Claude
 

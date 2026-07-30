@@ -178,7 +178,8 @@ Local verification completed:
 - Checkpoint 6 local verification on 2026-07-28: `npm run test:unit` passed `45/45`; `npm run test:ai-eval` passed all declared thresholds for 10 versioned fixtures; all 28 keyless-available smoke contracts passed; `npm audit --omit=dev` reported zero vulnerabilities; syntax checks passed; and Wrangler `4.114.0` dry-run bundled 14 assets at 399.10 KiB raw / 96.89 KiB gzip.
 - Checkpoint 6 browser evidence: desktop sector/deep-dive states and mobile sector layout remained safe; educational P/E chat resolved to `intel.chat`, rendered exactly one AI response and one policy note, showed active context `AAPL`, and produced no console warnings/errors.
 - Checkpoint 6 work runs from detached worktree `/tmp/market-terminal-checkpoint6-20260726`. The original checkout and its unrelated untracked master-prompt/profile files remain preserved.
-- Checkpoint 7 local verification on 2026-07-30: schemas moved to `2026-07-30a`; `npm run test:unit` passed `50/50`; the 10-case offline evaluation passed all thresholds; local smoke passed `31/31` available contracts with only documented optional-route skips; targeted company evidence, NEWS enrichment, provider-reason, and browser checks passed; `npm audit --omit=dev` found zero vulnerabilities; and Wrangler `4.115.0` dry-run bundled 14 assets at 407.58 KiB raw / 98.76 KiB gzip.
+- Checkpoint 7 local verification on 2026-07-30: schemas moved to `2026-07-30a`; `npm run test:unit` passed `50/50`; the 10-case offline evaluation passed all thresholds; local smoke passed `31/31` available contracts with only documented optional-route skips; targeted company evidence, provider-reason, and browser checks passed; and `npm audit --omit=dev` found zero vulnerabilities.
+- The production-discovered NEWS follow-up uses schema/cache `2026-07-30b`. Its useful-batch validator rejected an undersized model response and returned 14 canonical source-linked degraded items locally. The unchanged `50/50` unit suite, all offline thresholds, `31/31` available contracts, syntax checks, zero-vulnerability audit, and Wrangler `4.115.0` dry run at 408.24 KiB raw / 98.96 KiB gzip passed.
 - The Desktop-backed `node_modules` tree initially exposed dataless/duplicated dependency files and stalled Express startup. A clean `npm ci` restored the ignored dependency tree; no source or user artifact was removed.
 
 Production verification completed:
@@ -212,6 +213,12 @@ Production verification completed:
   - targeted routes exposed bounded runtime metadata and abstained safely when evidence, required inputs, or independent verification failed; deterministic candles used zero provider calls and generic educational chat completed through the speed tier
   - no generated high-risk/current-market response was accepted during the probes, so no positive live-provider quality claim is made
   - desktop/mobile production checks loaded all seven `20260728b` markers with no horizontal overflow or console warnings/errors; active AI chat context showed `AAPL`. Screenshot capture timed out, so no screenshot artifact is claimed
+- Checkpoint 7 core production verification:
+  - source commit `febefb3` reached production through the managed GitHub-to-Cloudflare path and served all seven `20260730a` markers
+  - `npm run test:prod` passed `33/33`, with only the documented weather-provider `502` skip
+  - targeted AAPL/Apple company probes returned 14 evidence records across two sources; deep dive returned 16, price action six, sectors 28, and situation analysis 60
+  - educational chat completed through Groq; generated current-market/high-risk attempts remained fail-closed at generation or verification, and no positive high-risk acceptance is claimed
+  - the first deployed NEWS probe returned one non-degraded card from 60 inputs; this exposed the old non-empty batch validator and triggered the locally verified `2026-07-30b` follow-up rather than being accepted as complete
 
 ## Checkpoints
 
@@ -227,8 +234,9 @@ Production verification completed:
 - `8a8b980` — `Verify high-risk AI outputs independently`
 - `4ffe15a` — `Isolate AI policy cache envelopes`
 - `919f1b9` — `Share active symbol with AI chat`
+- `febefb3` — `Restore AI evidence and provider reliability`
 
-All listed source commits were pushed to `origin/main`. Checkpoint 6 source commit `919f1b9` is production verified. Checkpoint 7 is locally verified and awaiting its source commit, managed deployment, and production evidence; unrelated untracked files listed below remain preserved.
+All listed source commits were pushed to `origin/main`. Checkpoint 7 core source commit `febefb3` is production verified. The `2026-07-30b` NEWS batch follow-up is locally verified and awaiting its source commit, managed deployment, and production evidence; unrelated untracked files listed below remain preserved.
 
 ## Remaining Work
 
