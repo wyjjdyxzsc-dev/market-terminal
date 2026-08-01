@@ -100,6 +100,10 @@ This file is a portable handoff for continuing work on another account. It recor
 
 > continue
 
+### User prompt 22
+
+> continue
+
 ## Authoritative Prompt Sources
 
 - Full master prompt: [MARKET_TERMINAL_TOTAL_PLATFORM_CODEX_MASTER_PROMPT.md](/Users/krishivjain/Desktop/claude projects/market-terminal/MARKET_TERMINAL_TOTAL_PLATFORM_CODEX_MASTER_PROMPT.md)
@@ -219,6 +223,11 @@ Production verification completed:
   - targeted AAPL/Apple company probes returned 14 evidence records across two sources; deep dive returned 16, price action six, sectors 28, and situation analysis 60
   - educational chat completed through Groq; generated current-market/high-risk attempts remained fail-closed at generation or verification, and no positive high-risk acceptance is claimed
   - the first deployed NEWS probe returned one non-degraded card from 60 inputs; this exposed the old non-empty batch validator and triggered the locally verified `2026-07-30b` follow-up rather than being accepted as complete
+- Checkpoint 7 follow-up production verification:
+  - source commit `90c191b` reached production through the managed path and served all seven `20260730b` markers
+  - the strengthened production smoke suite passed `33/33`, with only the documented weather-provider `502` skip
+  - normal and forced-fresh NEWS probes each returned 12 non-degraded source-linked cards; the production browser rendered all 12 and their evidence links without console warnings/errors
+  - current-market AAPL chat generated a candidate through GitHub, then safely abstained because independent verification was unavailable; the UI exposed the bounded attempt and failure stage rather than appearing silently broken
 
 ## Checkpoints
 
@@ -235,8 +244,9 @@ Production verification completed:
 - `4ffe15a` — `Isolate AI policy cache envelopes`
 - `919f1b9` — `Share active symbol with AI chat`
 - `febefb3` — `Restore AI evidence and provider reliability`
+- `90c191b` — `Require useful AI news batches`
 
-All listed source commits were pushed to `origin/main`. Checkpoint 7 core source commit `febefb3` is production verified. The `2026-07-30b` NEWS batch follow-up is locally verified and awaiting its source commit, managed deployment, and production evidence; unrelated untracked files listed below remain preserved.
+All listed source commits were pushed to `origin/main`. Checkpoint 7 source commits `febefb3` and `90c191b` are production verified. The final documentation-only cache marker is `20260801a`; unrelated untracked files listed below remain preserved.
 
 ## Remaining Work
 

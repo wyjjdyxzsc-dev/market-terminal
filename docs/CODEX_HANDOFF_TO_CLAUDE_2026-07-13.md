@@ -544,7 +544,13 @@ This work was performed by OpenAI Codex without Claude’s involvement. This doc
   - NEWS schema/cache `2026-07-30b` requires six enriched cards when six inputs exist, isolates the old cache entry, and falls back to canonical source-linked degraded items
   - local follow-up verification passed `50/50` unit tests, all offline thresholds, `31/31` available contracts, zero-vulnerability audit, syntax checks, and Wrangler `4.115.0` dry-run bundling at 408.24 KiB raw / 98.96 KiB gzip
   - a local undersized model batch was rejected and replaced by 14 source-linked degraded cards; all seven source references now use `20260730b`
-- Final `20260730b` managed deployment and production/browser verification remain pending. No new entitlement or parity-row upgrade is claimed.
+- Final follow-up production verification:
+  - source commit `90c191b` deployed through the managed path and served all seven `20260730b` references
+  - the strengthened smoke suite passed `33/33`, with only the documented weather-provider `502` skip
+  - normal and forced-fresh `/api/intel/news` probes each returned 12 non-degraded cards, all with canonical source links and evidence IDs; the previous one-card result cannot satisfy the deployed contract
+  - the browser rendered all 12 NEWS articles and their evidence links. Current-market AAPL chat reached GitHub generation, then safely abstained when independent verification was unavailable; the UI disclosed two calls, 2,764 tokens, 28,458 ms, four cost units, and the failure stage
+  - browser console errors/warnings were empty. No positive high-risk acceptance, new entitlement, or parity-row upgrade is claimed
+- The final documentation-only deployment uses all seven `20260801a` cache references.
 
 # Unresolved risks and technical debt
 
@@ -569,9 +575,10 @@ This work was performed by OpenAI Codex without Claude’s involvement. This doc
   - `4ffe15a` — `Isolate AI policy cache envelopes`
   - `919f1b9` — `Share active symbol with AI chat`
   - `febefb3` — `Restore AI evidence and provider reliability`
+  - `90c191b` — `Require useful AI news batches`
 - Push/deploy:
-  - `git push origin main` completed for all listed source checkpoint commits through `febefb3`
-  - source commit `febefb3` is production verified on `https://market-terminal.wyjjdyxzsc.workers.dev`; the `20260730b` NEWS follow-up is not yet committed or deployed
+  - `git push origin main` completed for all listed source checkpoint commits through `90c191b`
+  - source commits `febefb3` and `90c191b` are production verified on `https://market-terminal.wyjjdyxzsc.workers.dev`
 
 # Recommended next step for Claude
 

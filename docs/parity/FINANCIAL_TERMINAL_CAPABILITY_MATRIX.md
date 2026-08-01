@@ -20,7 +20,7 @@ Research date: 2026-07-13
   - AI evidence-policy source commit `5a10b79` is production verified on 2026-07-16: `24/24` unit tests, `28/28` local smoke contracts, and `31/31` production smoke contracts passed
   - checkpoint 5 source commit `20c9252` is production verified: `29/29` unit tests, all 28 keyless-available local smoke contracts, `33/33` production contracts, zero dependency vulnerabilities, Worker dry-run bundling, targeted probes, and interactive sector/watchlist/alert checks passed
   - checkpoint 6 source commit `919f1b9` is production verified: `45/45` unit tests, the versioned 10-case offline AI safety evaluation, all 28 keyless-available local contracts, `33/33` deployed contracts, zero dependency vulnerabilities, Worker dry-run bundling, targeted authority probes, and desktop/mobile telemetry/chat checks passed
-  - checkpoint 7 core source commit `febefb3` is production verified: all seven `20260730a` assets, `33/33` contracts, and targeted company/provider probes passed; its first live NEWS probe exposed a one-card batch, and the `2026-07-30b` useful-batch follow-up is locally verified pending deployment
+  - checkpoint 7 source commits `febefb3` and `90c191b` are production verified: the final source served all seven `20260730b` assets, passed `33/33`, returned 12 source-linked NEWS cards on normal/forced-fresh probes, and passed browser disclosure checks
 
 ## Capability rows
 
@@ -99,7 +99,7 @@ Research date: 2026-07-13
 - Company research evidence now combines ticker-resolved RSS and Finnhub company news. Recognized redirect hosts can retain an attributed publisher domain, while unrelated URLs cannot borrow a reputable publisher label.
 - High-risk generation reserves an independent verifier within the declared call/cost budget, and price-action prompts request their required evidence IDs. Safe attempt telemetry and specific failure reasons make provider/evidence/verification failures visible without exposing credentials.
 - Lower-risk Node/Worker output limits and cooldown semantics are aligned. Company/deep-dive evidence reached two distinct sources; current-market chat correctly explained that the Groq-only local environment lacks the required two-heavy-provider pair.
-- Core evidence: source commit `febefb3` served all seven `20260730a` assets, passed `33/33` deployed contracts, and exposed richer company evidence plus bounded fail-closed provider attempts. The first live NEWS probe revealed a one-card result accepted from 60 inputs, so `2026-07-30b` now requires a useful batch or returns canonical source-linked degraded cards; its local gates passed and production verification is pending. No capability status changes, new entitlement, positive high-risk quality claim, or Bloomberg parity claim are made.
+- Core evidence: source commit `febefb3` exposed richer company evidence plus bounded fail-closed provider attempts. When its first live NEWS probe revealed a one-card result accepted from 60 inputs, source commit `90c191b` deployed `2026-07-30b` useful-batch validation and cache isolation. The final source passed `33/33`, normal and forced-fresh probes returned 12 linked cards, and browser NEWS/chat disclosure checks had no console errors. No capability status changes, new entitlement, positive high-risk quality claim, or Bloomberg parity claim are made.
 
 ### FT-003 Real-time market monitors
 

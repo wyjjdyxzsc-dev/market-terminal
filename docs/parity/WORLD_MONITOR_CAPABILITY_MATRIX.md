@@ -19,7 +19,7 @@ Research date: 2026-07-13
   - AI evidence-policy source commit `5a10b79` is production verified on 2026-07-16: `24/24` unit tests, `28/28` local smoke contracts, and `31/31` production smoke contracts passed
   - checkpoint 5 source commit `20c9252` is production verified: `29/29` unit tests, all 28 keyless-available local smoke contracts, `33/33` production contracts, targeted alert probes, and interactive alert checks passed
   - checkpoint 6 source commit `919f1b9` is production verified: `45/45` unit tests, the versioned 10-case offline AI safety evaluation, all 28 keyless-available local contracts, `33/33` deployed contracts, Worker dry-run bundling, targeted authority probes, and desktop/mobile disclosure checks passed
-  - checkpoint 7 core source commit `febefb3` is production verified: all seven `20260730a` assets, `33/33` contracts, and targeted provider/evidence probes passed; its first live NEWS probe exposed a one-card batch, and the `2026-07-30b` useful-batch follow-up is locally verified pending deployment
+  - checkpoint 7 source commits `febefb3` and `90c191b` are production verified: the final source served all seven `20260730b` assets, passed `33/33`, returned 12 source-linked NEWS cards on normal/forced-fresh probes, and passed browser disclosure checks
 
 ## Capability rows
 
@@ -96,7 +96,7 @@ Research date: 2026-07-13
 
 - Verified generation now preserves budget for its mandatory independent verifier, keeps safe failed-attempt telemetry, and reports whether generation, verification, provider availability, or a declared budget caused an abstention.
 - Lower-risk Express/Worker output ceilings and per-minute versus daily/quota cooldowns are aligned. These controls also apply to public-news enrichment and situation-room provider health without altering deterministic alert or country-risk authority.
-- Core source commit `febefb3` passed `33/33` deployed contracts and targeted fail-closed probes. Its first live NEWS probe exposed a one-card result accepted from 60 inputs; `2026-07-30b` now requires a useful batch or a canonical source-linked fallback and passed all local gates pending production verification. No event authority, country-risk input, canonical correlation, or World Monitor parity is added.
+- Core source commit `febefb3` passed targeted fail-closed probes but exposed a one-card NEWS result accepted from 60 inputs. Source commit `90c191b` deployed `2026-07-30b` useful-batch validation and cache isolation, passed `33/33`, returned 12 linked cards on normal/forced-fresh probes, and passed browser disclosure checks. No event authority, country-risk input, canonical correlation, or World Monitor parity is added.
 
 ### WM-003 Country dossiers and instability scoring
 
