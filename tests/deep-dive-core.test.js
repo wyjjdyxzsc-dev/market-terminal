@@ -69,10 +69,29 @@ test('deterministic deep dive turns observed provider data into a useful safe do
         publishedAt: '2026-08-03T09:00:00Z',
       },
     ],
+    optionsChain: {
+      status: 'available',
+      source: 'Nasdaq',
+      sourceUrl: 'https://www.nasdaq.com/market-activity/stocks/aapl/option-chain',
+      retrievedAt: '2026-08-04T00:00:00Z',
+      contractCount: 50,
+      expiryCount: 3,
+      nearestExpiry: 'August 5, 2026',
+      atTheMoney: {
+        strike: 302.5,
+        callLast: 4.5,
+        callBid: 4.4,
+        callAsk: 4.6,
+        putLast: 3.9,
+        putBid: 3.8,
+        putAsk: 4,
+      },
+      activity: { putCallVolumeRatio: 0.875 },
+    },
     generatedAt: '2026-08-04T00:00:00Z',
   });
 
-  assert.equal(DEEP_DIVE_SCHEMA_VERSION, '2026-08-04a');
+  assert.equal(DEEP_DIVE_SCHEMA_VERSION, '2026-08-04b');
   assert.equal(dossier.deepDiveSchemaVersion, DEEP_DIVE_SCHEMA_VERSION);
   assert.equal(dossier.dataMode, 'deterministic-dossier');
   assert.equal(dossier.deterministic, true);
@@ -89,10 +108,15 @@ test('deterministic deep dive turns observed provider data into a useful safe do
   assert.ok(dossier.risks.length > 0);
   assert.equal(dossier.dataSources.news.sourceCount, 2);
   assert.equal(dossier.dataSources.news.status, 'corroborated');
+  assert.equal(dossier.equityData.status, 'available');
+  assert.equal(dossier.equityData.coverageScore, 100);
+  assert.equal(dossier.dataSources.options.status, 'available');
+  assert.equal(dossier.options.bias, 'Data Available');
+  assert.match(dossier.options.rationale, /302\.50/);
+  assert.match(dossier.options.rationale, /no options trade is recommended/i);
 
   assert.equal(dossier.investment.rating, 'Not Rated');
   assert.equal(dossier.investment.score, null);
-  assert.equal(dossier.options.bias, 'Avoid');
   assert.match(dossier.entryZone, /^N\/A/);
   assert.match(dossier.stopLoss, /^N\/A/);
   assert.match(dossier.priceTarget, /^N\/A/);
@@ -107,6 +131,9 @@ test('deterministic deep dive discloses missing inputs without inventing values'
   assert.equal(dossier.dataSources.quote.status, 'unavailable');
   assert.equal(dossier.dataSources.fundamentals.status, 'unavailable');
   assert.equal(dossier.dataSources.news.status, 'unavailable');
+  assert.equal(dossier.dataSources.options.status, 'unavailable');
+  assert.equal(dossier.equityData.coverageScore, 0);
+  assert.equal(dossier.options.bias, 'Unavailable');
   assert.match(dossier.summary, /no usable quote, fundamental metric, or analyst record/i);
   assert.ok(dossier.risks.some((risk) => /No usable pooled quote/.test(risk)));
   assert.doesNotMatch(dossier.summary, /\$0(?:\.00)?/);

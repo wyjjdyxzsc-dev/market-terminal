@@ -31,6 +31,8 @@ const apiContract = require('./shared/api-contract.js');
 const evidenceCore = require('./shared/evidence-core.js');
 const companyEvidenceCore = require('./shared/company-evidence-core.js');
 const deepDiveCore = require('./shared/deep-dive-core.js');
+const optionsChainCore = require('./shared/options-chain-core.js');
+const tickerCore = require('./shared/ticker-core.js');
 const candleAnalysisCore = require('./shared/candle-analysis-core.js');
 const marketSentimentCore = require('./shared/market-sentiment-core.js');
 const mapProvenanceCore = require('./shared/map-provenance-core.js');
@@ -72,6 +74,8 @@ const {
 } = evidenceCore;
 const { normalizeFinnhubCompanyNews, diversifyCompanyHeadlines } = companyEvidenceCore;
 const { DEEP_DIVE_SCHEMA_VERSION, buildDeterministicDeepDive } = deepDiveCore;
+const { normalizeNasdaqOptionChain, unavailableOptionsChain } = optionsChainCore;
+const { TICKER_SCHEMA_VERSION, DEFAULT_TICKER_BASKET, mergeTickerBasket } = tickerCore;
 
 const { buildDeterministicCandleAnalysis } = candleAnalysisCore;
 const { analyzeMarketSentiment } = marketSentimentCore;
@@ -861,6 +865,18 @@ const NASDAQ_HEADERS = {
   Accept: 'application/json, text/plain, */*',
   'Accept-Language': 'en-US,en;q=0.9',
 };
+
+async function getOptionsChain(symbol, spot) {
+  const retrievedAt = new Date().toISOString();
+  try {
+    const url = `https://api.nasdaq.com/api/quote/${encodeURIComponent(symbol)}/option-chain?assetclass=stocks&limit=50&money=at&type=all`;
+    const response = await fetchWithTimeout(url, { headers: NASDAQ_HEADERS }, 9000);
+    if (!response.ok) throw new Error(`Nasdaq responded ${response.status}`);
+    return normalizeNasdaqOptionChain(await response.json(), { ticker: symbol, spot, retrievedAt });
+  } catch {
+    return unavailableOptionsChain(symbol, 'The Nasdaq options-chain source was unavailable for this refresh.', retrievedAt);
+  }
+}
 
 async function chartFromYahoo(symbol, rangeKey) {
   const cfg = YAHOO_RANGE[rangeKey] || YAHOO_RANGE['1D'];
@@ -1664,6 +1680,7 @@ async function fetchDeepDive(query, options = {}) {
 
   const m   = (metricData && metricData.metric) || {};
   const rec = Array.isArray(recs) && recs.length ? recs[0] : null;
+  const optionsChain = await getOptionsChain(ticker, quote && quote.c);
   const preparation = prepareAiTask('intel.deep-dive', headlines, {
     inputs: {
       quote: Boolean(quote && Number(quote.c) > 0),
@@ -1677,6 +1694,7 @@ async function fetchDeepDive(query, options = {}) {
     metrics: m,
     recommendation: rec,
     evidence: preparation.evidence,
+    optionsChain,
   });
   const fallback = (reason) => policyAbstention(preparation, reason, {
     ...baseline,
@@ -1720,7 +1738,16 @@ async function fetchDeepDive(query, options = {}) {
     unknowns: ['Price targets, entries, stops, fair values, and options ideas require dedicated verified inputs.'],
   });
   if (policyResult.abstained) {
-    return { ...baseline, ...policyResult, aiNarrativeStatus: 'withheld', aiNarrativeEligible: true };
+    return {
+      ...baseline,
+      ...policyResult,
+      equityData: baseline.equityData,
+      options: baseline.options,
+      optionsChain: baseline.optionsChain,
+      dataSources: baseline.dataSources,
+      aiNarrativeStatus: 'withheld',
+      aiNarrativeEligible: true,
+    };
   }
   return {
     ...baseline,
@@ -1730,6 +1757,9 @@ async function fetchDeepDive(query, options = {}) {
     quote: baseline.quote,
     stats: baseline.stats,
     analystConsensus: baseline.analystConsensus,
+    equityData: baseline.equityData,
+    options: baseline.options,
+    optionsChain: baseline.optionsChain,
     dataSources: baseline.dataSources,
     dataMode: 'verified-ai-with-deterministic-data',
     deterministic: true,
@@ -3466,18 +3496,23 @@ app.get('/api/search', publicRateLimit, route(async (req, res) => {
   res.json({ result });
 }));
 
-const TICKER_BASKET = ['AAPL', 'MSFT', 'NVDA', 'AMZN', 'GOOGL', 'META', 'TSLA'];
+const _tickerLastGood = new Map();
+
+async function loadTickerBasket() {
+  const currentQuotes = {};
+  await Promise.all(DEFAULT_TICKER_BASKET.map(async (symbol) => {
+    try { currentQuotes[symbol] = await getQuote(symbol); } catch { currentQuotes[symbol] = null; }
+  }));
+  const items = mergeTickerBasket(DEFAULT_TICKER_BASKET, currentQuotes, [..._tickerLastGood.values()]);
+  for (const item of items) {
+    if (item.available && !item.stale) _tickerLastGood.set(item.symbol, item);
+  }
+  return items;
+}
+
 app.get('/api/ticker', publicRateLimit, route(async (req, res) => {
-  if (!requireFinnhub(res)) return;
-  const results = await Promise.all(
-    TICKER_BASKET.map(async symbol => {
-      try {
-        const q = await getQuote(symbol);
-        return { symbol, price: q.c ?? 0, change: q.d ?? 0, percent: q.dp ?? 0 };
-      } catch { return { symbol, price: 0, change: 0, percent: 0 }; }
-    })
-  );
-  res.json(results);
+  const { data } = await fetch_cached_data(`ticker:${TICKER_SCHEMA_VERSION}`, loadTickerBasket, 15);
+  res.json(data);
 }));
 
 app.get('/api/chart', publicRateLimit, route(async (req, res) => {

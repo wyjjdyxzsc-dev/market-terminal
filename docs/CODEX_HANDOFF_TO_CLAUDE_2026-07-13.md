@@ -2,7 +2,7 @@ This work was performed by OpenAI Codex without Claude’s involvement. This doc
 
 # Status
 
-- Handoff status: checkpoint 8 Deep Dive dossier and data-first latency follow-up are production verified
+- Handoff status: checkpoint 8 is production verified; checkpoint 9 ticker/options completeness is locally verified and awaiting managed production verification
 - Research dates: baseline 2026-07-13; AI-provider capability refresh 2026-07-28
 - Deployment URL: `https://market-terminal.wyjjdyxzsc.workers.dev`
 
@@ -576,12 +576,31 @@ This work was performed by OpenAI Codex without Claude’s involvement. This doc
 - The production browser rendered MSFT data with `AI NARRATIVE PENDING`, then changed to `AI NARRATIVE WITHHELD` while retaining the quote, four source cards, six links, and provenance. Desktop/mobile had no overflow and console logs were empty. No positive high-risk acceptance is claimed.
 - Source code was production verified with all seven `20260804b` assets; this documentation checkpoint advances all seven cache references to `20260804c`.
 
+# 2026-08-04 checkpoint 9: market-data completeness
+
+- User screenshots showed all seven header symbols as `No data` while the SPCX Deep Dive displayed a valid pooled quote, fundamentals, analyst counts, and news. The lower cards also said `STOCK —/100 Not Rated` and `OPTIONS —/100 Avoid`, making policy withholding look like missing market data.
+- Production diagnosis confirmed `/api/ticker` returned six zero-valued items and only TSLA data. The Worker route called Finnhub directly, caught failures into zeroes, and cached the array instead of using the canonical 10-provider pool used by `/api/quote` and Deep Dive.
+- Added `shared/ticker-core.js` schema `2026-08-04a`. Both runtimes now call their pooled quote path for the fixed seven-symbol basket, expose provider/as-of/freshness metadata, isolate the previous cache namespace, and retain source-attributed last-good values. The Worker last-good KV record expires after 24 hours; stale values are visibly prefixed with `~` in the tape.
+- Added `shared/options-chain-core.js` schema `2026-08-04a` and a bounded Nasdaq `money=at` adapter in both runtimes. Deep Dive receives returned contract/expiry counts, nearest observed strike, call/put last/bid/ask, volume/open interest, and returned-row put/call ratios. The source page and retrieval time remain attached.
+- Deep Dive schema advances to `2026-08-04b`. The left card is now `EQUITY DATA` with a 0-100 dataset-coverage score over quote/fundamentals/analysts/news and an explicit warning that coverage is not investment merit. The right card is `OPTIONS DATA`; it shows observed chain data when available and a precise unavailable reason otherwise.
+- Recommendation authority did not change. `investment.rating` remains `Not Rated`; fair value, target, entry, stop, and trade construction remain unavailable. Nasdaq's bounded response does not supply IV or Greeks in this adapter, and stocks without listed options cannot have a chain manufactured for them.
+- Local verification:
+  - `npm test` passed `58/58` unit tests and all `32/32` available smoke contracts; fire, weather, and webcams remained documented optional skips
+  - the strict tape contract requires seven positive prices with provider/freshness metadata, and the strict AAPL Deep Dive contract requires schema `2026-08-04b`, 100-point equity coverage inputs, and an available normalized options snapshot
+  - live local `/api/ticker` returned positive AAPL/MSFT/NVDA/AMZN/GOOGL/META/TSLA values in 1.3 seconds
+  - live local AAPL returned 131 fundamentals, 54 analyst ratings, 47 bounded options rows across three observed expiries, nearest strike 302.50, and source-attributed activity fields in 1.6 seconds
+  - the exact screenshot symbol SPCX returned 100/100 equity coverage, 48 fundamentals, 40 analyst ratings, 47 options rows, three observed expiries, and nearest strike 115.00 in 1.9 seconds
+  - the browser rendered all tape prices, five SPCX source cards, `EQUITY DATA 100/100 coverage`, and `OPTIONS DATA 47 rows`; desktop/mobile had no overflow and console logs were empty
+  - `npm run test:ai-eval` passed all unchanged 10-case thresholds, `npm audit --omit=dev` found zero vulnerabilities, and Wrangler `4.118.0` dry-run bundled 14 assets at 439.96 KiB raw / 105.44 KiB gzip
+- All seven source cache references use `20260804d`. Production verification is intentionally not claimed yet.
+
 # Unresolved risks and technical debt
 
 - The repository still has very large `server.js` and `worker.js` monoliths.
 - High-risk generated workflows now have an independent model check, but no model verifier proves truth. Live-provider drift canaries, a human-labelled finance/OSINT claim corpus, calibration measurement, and persistent aggregate observability are still missing.
 - Quant coverage now exists only for the new candlestick fallback engine, not the broader 40-indicator surface.
 - Generated Deep Dive narrative still requires two eligible heavy providers from independent model families. The deterministic dossier is available without them, but no positive high-risk generated-output quality is claimed.
+- Nasdaq options-chain availability and website terms are not a substitute for a licensed professional real-time derivatives feed. The current adapter is bounded, cached inside the dossier, lacks IV/Greeks, and can return unavailable for non-optionable symbols or upstream failures.
 - Map source snapshots are not universally supplied by upstreams. The new UI differentiates a provided snapshot from response-served time, but per-feature citations and direct upstream timestamps remain future data-source work.
 
 # Final branch, commits, tags, and working-tree state

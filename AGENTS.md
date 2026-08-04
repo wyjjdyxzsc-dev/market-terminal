@@ -84,7 +84,7 @@ Deploys to `https://market-terminal.wyjjdyxzsc.workers.dev`
 - **RJD Monte Carlo** (Module 4 upgrade): `[MC]` fan on chart now defaults to Rough Jump-Diffusion (H=0.45, λ=2) with GBM/RJD switcher pill.
 - **Mobile layout** (Module 5): osc bar wraps on narrow screens, buttons resize at ≤860px/≤480px, canvas min-height fixed, shock table hides columns on small screens.
 
-**Test suite**: `tests/smoke.js` — run `npm test` (requires local server running) or `npm run test:prod` (hits the deployed worker — run after deploys to catch server.js/worker.js drift). The unit suite has 54 tests and the smoke suite has 34 checks including the shell/version contract, POST `/api/intel/chat`, sector/company/candle policy contracts, Deep Dive deterministic-dossier contract, and alert-state authority; optional keyed/network routes are skipped locally when unavailable. `npm run test:ai-eval` runs the versioned offline AI policy-safety fixtures.
+**Test suite**: `tests/smoke.js` — run `npm test` (requires local server running) or `npm run test:prod` (hits the deployed worker — run after deploys to catch server.js/worker.js drift). The unit suite has 58 tests and the smoke suite has 35 checks including the shell/version contract, strict seven-symbol ticker data, POST `/api/intel/chat`, sector/company/candle policy contracts, Deep Dive deterministic/options-data contract, and alert-state authority; optional keyed/network routes are skipped locally when unavailable. `npm run test:ai-eval` runs the versioned offline AI policy-safety fixtures.
 
 **Resilience/UX (2026-07-05)**:
 - Terminal auto-loads last viewed symbol (localStorage `mt:lastSymbol`, default AAPL)
@@ -126,6 +126,12 @@ Deploys to `https://market-terminal.wyjjdyxzsc.workers.dev`
 - Source commits `9370cc3` and `953c0ea` are production verified. The final source served all seven `20260804b` assets, passed `33/33`, returned fresh AAPL/Apple/MSFT dossiers in 1.06-1.35 seconds, and showed the data-first pending-to-withheld lifecycle on desktop/mobile without overflow or console errors. Optional AAPL verification took 27.7 seconds separately and failed closed because no independent verifier completed; no positive high-risk acceptance is claimed.
 - Local Finnhub WebSocket startup is lazy and reconnects with bounded exponential backoff, preventing an idle five-second reconnect storm from competing with quote/fundamental work.
 
+**Market-data completeness (2026-08-04 checkpoint 9, local verified; production pending)**:
+- `/api/ticker` uses the canonical quote pool in both runtimes and retains source-attributed last-good values for 24 hours, preventing a Finnhub throttle from replacing valid tape prices with zeroes.
+- `shared/options-chain-core.js` normalizes a bounded Nasdaq at-the-money chain snapshot. Deep Dive schema `2026-08-04b` exposes returned rows, expiries, nearest strike, bid/ask, volume/open interest, and put/call ratios for optionable US stocks.
+- The UI labels its left card `EQUITY DATA` with a coverage score that explicitly is not investment merit; the right card labels observed options data instead of saying `Avoid`. IV, Greeks, fair value, targets, and trade construction remain unavailable without dedicated models/data.
+- Local evidence passed `58/58` unit tests, all `32/32` available contracts, AI fixture thresholds, zero-vulnerability audit, Wrangler `4.118.0` dry-run, live seven-symbol and SPCX/AAPL probes, and desktop/mobile browser checks without overflow or console errors.
+
 **Branches**: All work on `main` (no feature branches yet).
 
 ## Key Files
@@ -138,6 +144,8 @@ Deploys to `https://market-terminal.wyjjdyxzsc.workers.dev`
 | `public/quant.js` | Math lib (no DOM), IIFE export |
 | `public/intel.js` | Deep Dive UI + QUANT LAB |
 | `shared/deep-dive-core.js` | Deterministic Deep Dive dossier and provenance contract |
+| `shared/options-chain-core.js` | Bounded Nasdaq options-chain normalization and availability contract |
+| `shared/ticker-core.js` | Pooled ticker normalization and last-good fallback contract |
 | `public/index.html` | Layout, cache-buster versioning |
 | `shared/ai-provider-registry.js` | Current provider/model lifecycle, eligibility, pricing, and health metadata |
 | `shared/ai-verification-core.js` | Bounded generation, independent verification, runtime usage/cost telemetry |

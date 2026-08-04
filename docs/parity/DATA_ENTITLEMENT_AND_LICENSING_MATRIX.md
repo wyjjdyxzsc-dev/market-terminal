@@ -55,3 +55,11 @@
 - Source-balanced selection changes which existing metadata records survive a bounded response; it does not authorize article-body storage or alter the original source URLs. Company-relevant watch items remain titles with publisher/date attribution.
 - Analyst counts are displayed as vendor-supplied counts, not a terminal recommendation. Fair value, target, entry, stop, options chain, IV, strike, and expiry remain unavailable pending terms-compliant dedicated adapters.
 - Source commits `9370cc3` and `953c0ea` production-verify availability of the existing-data, data-first dossier. The `20260804b` latency follow-up only separates deterministic and optional AI requests; it adds no data right. Neither result implies licensed issuer research, positive model quality, or professional-terminal parity.
+
+## 2026-08-04 checkpoint 9 note
+
+- The ticker repair adds no source or entitlement; it routes the existing seven-symbol surface through the already configured quote pool and retains only source-attributed last-good values for up to 24 hours.
+- The Deep Dive adapter reads a bounded at-the-money snapshot from the public Nasdaq API host already used by this project's chart fallback and links to Nasdaq's source page. Normalized rows remain inside the existing short-lived dossier cache; no full-chain archive or redistribution product is created.
+- Public endpoint availability is not a licensed professional real-time derivatives entitlement. Operators must review Nasdaq terms before commercial redistribution or increasing retention/request volume.
+- Not every listed stock is optionable. The adapter returns an explicit unavailable state when no rows are returned or the source fails; it does not manufacture a chain. IV, Greeks, fair value, payoff analysis, and trade construction remain unavailable.
+- Local verification does not establish production availability, exchange-grade timeliness, completeness, or Bloomberg parity. FT-008 remains partial.

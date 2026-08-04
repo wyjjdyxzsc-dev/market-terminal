@@ -22,6 +22,7 @@ Research date: 2026-07-13
   - checkpoint 6 source commit `919f1b9` is production verified: `45/45` unit tests, the versioned 10-case offline AI safety evaluation, all 28 keyless-available local contracts, `33/33` deployed contracts, zero dependency vulnerabilities, Worker dry-run bundling, targeted authority probes, and desktop/mobile telemetry/chat checks passed
   - checkpoint 7 source commits `febefb3` and `90c191b` are production verified: the final source served all seven `20260730b` assets, passed `33/33`, returned 12 source-linked NEWS cards on normal/forced-fresh probes, and passed browser disclosure checks
   - checkpoint 8 source commits `9370cc3` and `953c0ea` are production verified: the final source served all seven `20260804b` assets, passed `33/33`, returned fresh AAPL/Apple/MSFT dossiers in 1.06-1.35 seconds, and passed pending-to-withheld desktop/mobile checks without console errors
+  - checkpoint 9 ticker/options completeness is locally verified: `58/58` unit tests, all AI thresholds, `32/32` available contracts, zero-vulnerability audit, Worker dry-run, live all-seven ticker plus AAPL/SPCX chain probes, and desktop/mobile checks passed; production is pending
 
 ## Capability rows
 
@@ -108,6 +109,12 @@ Research date: 2026-07-13
 - Authority boundary: deterministic observations describe supplied numbers and recent source titles only. Investment rating/score, fair value, trade levels, target, implied volatility, and options construction remain explicitly unavailable.
 - Evidence: source commit `9370cc3` served all seven `20260804a` assets and passed `33/33`; source commit `953c0ea` then separated the deterministic response from optional verification after production exposed 32-37 second uncached waits. The follow-up served all seven `20260804b` assets, passed `33/33`, returned fresh dossiers in 1.06-1.35 seconds, and passed responsive pending-to-withheld browser checks. FT-004 remains `partial`, and no Bloomberg, licensed-research, or positive high-risk model-quality parity is claimed.
 
+### 2026-08-04 checkpoint 9 update
+
+- Market monitor: the seven-symbol tape now uses the canonical quote pool and source-attributed last-good fallback instead of caching direct-Finnhub failures as zeroes.
+- Equity/derivatives data: Deep Dive schema `2026-08-04b` distinguishes dataset coverage from investment merit and adds a bounded source-linked Nasdaq at-the-money chain snapshot for optionable US stocks. Returned rows, expiries, nearest strike, call/put market, activity, and put/call ratios are deterministic observations.
+- Authority boundary: the adapter does not supply IV or Greeks, does not create a chain for non-optionable stocks, and does not issue a valuation or trade. FT-003, FT-004, and FT-008 remain `partial`; local evidence passed `58/58` unit tests, `32/32` available contracts, targeted AAPL/SPCX probes, Worker dry-run, and responsive browser checks. Production is pending.
+
 ### FT-003 Real-time market monitors
 
 - Source product/domain: Bloomberg
@@ -121,11 +128,11 @@ Research date: 2026-07-13
 - UI surfaces and command aliases: TERMINAL, SECTORS
 - Backend routes/events/jobs: `/api/quote`, `/api/ticker`, `/api/chart`
 - Security and privacy class: public read
-- Deterministic tests: smoke only
+- Deterministic tests: strict ticker-core unit and seven-symbol smoke contracts
 - Evaluation criteria: breadth, latency, stale tick labels, cross-asset monitors
 - Provenance links: `https://professional.bloomberg.com/products/bloomberg-terminal/`
 - Licensing or trademark notes: live comprehensive coverage is entitlement-heavy
-- Final evidence: browser verification confirmed chart canvas presence with non-zero dimensions and smoke coverage for `/api/chart`; production smoke passed; broader indicator/export coverage still open
+- Final evidence: prior production verifies chart/ticker shell behavior. Checkpoint 9 locally verifies seven positive pooled tape quotes plus source/freshness metadata and last-good fallback; production is pending and broader cross-asset monitor breadth remains open.
 
 ### FT-004 Equities and company intelligence
 
@@ -134,7 +141,7 @@ Research date: 2026-07-13
 - User outcome: conduct equity research from one workspace
 - Current-project equivalent: deep dive, supply chain, company profile, company news
 - Status: partial
-- Data sources and authority tier: Finnhub, public headlines, AI synthesis
+- Data sources and authority tier: pooled quotes, Finnhub company data, public headlines, bounded Nasdaq options rows, optional verified AI synthesis
 - Refresh frequency and latency class: minutes to daily
 - Geographic and asset-class coverage: mostly US equities
 - UI surfaces and command aliases: TERMINAL, DEEP DIVE, WATCHLIST
@@ -144,7 +151,7 @@ Research date: 2026-07-13
 - Evaluation criteria: structured facts, estimates, evidence links, point-in-time handling
 - Provenance links: `https://professional.bloomberg.com/products/bloomberg-terminal/research/`
 - Licensing or trademark notes: analyst and estimates data may require licensed sources
-- Final evidence: checkpoint 4 production verifies policy metadata and safe deep-dive/supply-chain behavior in source commit `5a10b79`; checkpoint 5 production verifies canonical company-news binding and non-actionable sector constraints in source commit `20c9252`. Checkpoint 8 source commits `9370cc3` and `953c0ea` production-verify the resilient data-first dossier, pooled quote routing, source provenance, and safe AI-withheld behavior. Status stays partial because issuer-grade research, options-chain data, and positive high-risk output quality evidence are absent.
+- Final evidence: checkpoint 4 production verifies policy metadata and safe deep-dive/supply-chain behavior in source commit `5a10b79`; checkpoint 5 production verifies canonical company-news binding and non-actionable sector constraints in source commit `20c9252`; checkpoint 8 production-verifies the resilient data-first dossier. Checkpoint 9 locally verifies truthful equity coverage and a bounded listed-options snapshot; production is pending. Status stays partial because issuer-grade research, complete statements/estimates, IV/Greeks, and positive high-risk output quality evidence are absent.
 
 ### FT-005 Fixed income and credit
 
@@ -208,19 +215,19 @@ Research date: 2026-07-13
 - Source product/domain: Bloomberg
 - Feature/workflow: chains, volatility surfaces, Greeks, payoff and scenario tools
 - User outcome: analyze options and structured exposures
-- Current-project equivalent: options/risk AI output and quant Monte Carlo
+- Current-project equivalent: bounded Nasdaq chain snapshot, deterministic chain activity, quant Monte Carlo
 - Status: partial
-- Data sources and authority tier: underlying quotes only at baseline
+- Data sources and authority tier: public Nasdaq at-the-money chain snapshot plus pooled underlying quotes
 - Refresh frequency and latency class: minutes
 - Geographic and asset-class coverage: weak
 - UI surfaces and command aliases: DEEP DIVE, QUANT LAB
 - Backend routes/events/jobs: `/api/intel/deepdive`
 - Security and privacy class: public read, model-generated
-- Deterministic tests: none yet
+- Deterministic tests: shared options-chain normalizer plus strict AAPL Deep Dive smoke contract
 - Evaluation criteria: real chain dependency, liquidity, Greeks provenance, scenario P&L
 - Provenance links: `https://professional.bloomberg.com/products/bloomberg-terminal/`
-- Licensing or trademark notes: cannot fabricate options-chain-dependent outputs
-- Final evidence: pending
+- Licensing or trademark notes: public website availability is not a professional real-time derivatives entitlement; IV/Greeks and trade construction remain unavailable
+- Final evidence: checkpoint 9 locally returns bounded source-linked AAPL/SPCX chain rows, expiries, nearest strikes, markets, and activity without issuing a trade. Production verification is pending; status remains partial.
 
 ### FT-009 Economics, policy, and sovereign analysis
 

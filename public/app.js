@@ -185,6 +185,7 @@ function updateMarketStatus(now) {
 async function loadTape() {
   try {
     const items = await getJSON('/api/ticker');
+    if (!Array.isArray(items)) throw new Error('Ticker payload was not an array');
     const track = $('tapeTrack');
     const html = items.map(renderTapeItem).join('');
     // Duplicate the content so the -50% keyframe loops seamlessly; the clone is
@@ -196,16 +197,19 @@ async function loadTape() {
 }
 
 function renderTapeItem(it) {
-  const noData = it.price === 0 && it.change === 0;
+  const symbol = escHtml(it && it.symbol || '—');
+  const price = Number(it && it.price);
+  const noData = !it || it.available === false || !Number.isFinite(price) || price <= 0;
   if (noData) {
-    return `<span class="tape-item"><span class="t-sym">${it.symbol}</span><span class="t-price">No data</span></span>`;
+    return `<span class="tape-item"><span class="t-sym">${symbol}</span><span class="t-price">No quote</span></span>`;
   }
   const cls = colorClass(it.percent);
   const arrow = it.percent > 0 ? '▲' : it.percent < 0 ? '▼' : '';
+  const detail = `${it.stale ? 'Last good' : 'Live pooled'} quote${it.source ? ` from ${it.source}` : ''}${it.asOf ? ` · ${new Date(it.asOf).toLocaleString()}` : ''}`;
   return (
-    `<span class="tape-item">` +
-    `<span class="t-sym">${it.symbol}</span>` +
-    `<span class="t-price">${fmtPrice(it.price)}</span>` +
+    `<span class="tape-item${it.stale ? ' is-stale' : ''}" title="${escHtml(detail)}">` +
+    `<span class="t-sym">${symbol}</span>` +
+    `<span class="t-price">${it.stale ? '~' : ''}${fmtPrice(price)}</span>` +
     `<span class="t-pct ${cls}">${arrow} ${fmtSigned(it.percent)}%</span>` +
     `</span>`
   );

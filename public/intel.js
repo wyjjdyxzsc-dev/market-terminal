@@ -833,19 +833,13 @@ function formatAiRuntimeSummary(policy) {
   let ddLoadedFor = null;
   let ddRequestId = 0;
 
-  const RATING_CLASS = (r) => {
-    const k = String(r || '').toLowerCase();
-    if (k.includes('strong buy')) return 'rate-strongbuy';
-    if (k.includes('buy')) return 'rate-buy';
-    if (k.includes('strong sell')) return 'rate-strongsell';
-    if (k.includes('sell')) return 'rate-sell';
-    return 'rate-hold';
-  };
   const BIAS_CLASS = (b) => {
     const k = String(b || '').toLowerCase();
     if (k === 'calls') return 'bias-calls';
     if (k === 'puts') return 'bias-puts';
     if (k === 'avoid') return 'bias-avoid';
+    if (k.includes('data available')) return 'bias-data';
+    if (k.includes('unavailable')) return 'bias-unavailable';
     return 'bias-straddle';
   };
   const pctChangeHtml = (q) => {
@@ -880,6 +874,9 @@ function formatAiRuntimeSummary(policy) {
       ['ANALYSTS', sources.analysts?.status, sources.analysts?.status === 'available'
         ? `${sources.analysts.ratingCount || 0} ratings${sources.analysts.period ? `, ${sources.analysts.period}` : ''}`
         : 'Consensus unavailable'],
+      ['OPTIONS', sources.options?.status, sources.options?.status === 'available'
+        ? `${sources.options.contractCount || 0} rows${sources.options.nearestExpiry ? `, ${sources.options.nearestExpiry}` : ''}`
+        : (sources.options?.reason || 'Chain unavailable')],
       ['NEWS', sources.news?.status, sources.news?.recordCount
         ? `${sources.news.recordCount} records, ${sources.news.sourceCount || 0} sources`
         : 'No qualifying records'],
@@ -946,7 +943,9 @@ function formatAiRuntimeSummary(policy) {
   }
 
   function renderDeepDive(d) {
-    const inv = d.investment || {}, opt = d.options || {}, st = d.stats || {};
+    const opt = d.options || {}, st = d.stats || {};
+    const equity = d.equityData || {};
+    const chain = d.optionsChain || {};
     const deterministicOnly = d.aiNarrativeStatus !== 'verified';
     const caseLabels = deterministicOnly
       ? ['SUPPORTING OBSERVATIONS', 'CAUTION OBSERVATIONS', 'RECENT WATCH ITEMS', 'DATA LIMITS']
@@ -971,18 +970,18 @@ function formatAiRuntimeSummary(policy) {
         <p class="dd-summary">${esc(d.summary)}</p>
 
         <div class="dd-ratings">
-          <div class="dd-rating ${RATING_CLASS(inv.rating)}">
-            <div class="dd-rating-top"><span class="dd-rating-kind">STOCK</span><span class="dd-rating-score">${inv.score != null ? inv.score : '—'}<i>/100</i></span></div>
-            <div class="dd-rating-badge">${esc(inv.rating || '—')}</div>
-            <div class="dd-rating-meta">${esc(inv.conviction || '')} conviction · ${esc(inv.horizon || '')}</div>
-            <div class="dd-rating-thesis">${esc(inv.thesis || '')}</div>
-            ${inv.fairValue && !/^N\/A/i.test(inv.fairValue) ? `<div class="dd-fair">Fair value: <b>${esc(inv.fairValue)}</b></div>` : ''}
+          <div class="dd-rating ${equity.status === 'available' ? 'rate-data' : 'rate-partial'}">
+            <div class="dd-rating-top"><span class="dd-rating-kind">EQUITY DATA</span><span class="dd-rating-score">${equity.coverageScore != null ? equity.coverageScore : '—'}<i>/100 coverage</i></span></div>
+            <div class="dd-rating-badge">${esc((equity.status || 'unavailable').toUpperCase())}</div>
+            <div class="dd-rating-meta">${Number(equity.availableDatasets || 0)}/${Number(equity.totalDatasets || 4)} datasets returned · not a stock rating</div>
+            <div class="dd-rating-thesis">${esc(equity.summary || 'No equity dataset was returned for this refresh.')}<br><span class="dd-data-note">${esc(equity.disclaimer || 'Coverage is not an investment recommendation.')}</span></div>
           </div>
           <div class="dd-rating ${BIAS_CLASS(opt.bias)}">
-            <div class="dd-rating-top"><span class="dd-rating-kind">OPTIONS</span><span class="dd-rating-score">${opt.score != null ? opt.score : '—'}<i>/100</i></span></div>
+            <div class="dd-rating-top"><span class="dd-rating-kind">OPTIONS DATA</span><span class="dd-rating-score">${chain.contractCount != null ? chain.contractCount : '—'}<i> rows</i></span></div>
             <div class="dd-rating-badge">${esc(opt.bias || '—')}</div>
-            <div class="dd-rating-meta">IV ${esc(opt.impliedVolatility || '?')} · ${esc(opt.timeframe || '')}</div>
+            <div class="dd-rating-meta">${Number(chain.expiryCount || 0)} observed expiries · nearest ${esc(opt.timeframe || 'not returned')} · IV ${esc(opt.impliedVolatility || 'not supplied')}</div>
             <div class="dd-rating-thesis"><b>${esc(opt.recommendation || '')}</b><br>${esc(opt.rationale || '')}</div>
+            ${safeHttpUrl(chain.sourceUrl || '') ? `<a class="dd-data-link" href="${esc(safeHttpUrl(chain.sourceUrl))}" target="_blank" rel="noopener noreferrer">View source chain →</a>` : ''}
           </div>
         </div>
 

@@ -20,6 +20,8 @@ import './shared/api-contract.js';
 import './shared/evidence-core.js';
 import './shared/company-evidence-core.js';
 import './shared/deep-dive-core.js';
+import './shared/options-chain-core.js';
+import './shared/ticker-core.js';
 import './shared/candle-analysis-core.js';
 import './shared/market-sentiment-core.js';
 import './shared/map-provenance-core.js';
@@ -56,6 +58,8 @@ const {
 } = globalThis.MarketTerminalEvidence;
 const { normalizeFinnhubCompanyNews, diversifyCompanyHeadlines } = globalThis.MarketTerminalCompanyEvidence;
 const { DEEP_DIVE_SCHEMA_VERSION, buildDeterministicDeepDive } = globalThis.MarketTerminalDeepDive;
+const { normalizeNasdaqOptionChain, unavailableOptionsChain } = globalThis.MarketTerminalOptionsChain;
+const { TICKER_SCHEMA_VERSION, DEFAULT_TICKER_BASKET, mergeTickerBasket } = globalThis.MarketTerminalTicker;
 
 const { buildDeterministicCandleAnalysis } = globalThis.MarketTerminalCandleAnalysis;
 const { analyzeMarketSentiment } = globalThis.MarketTerminalMarketSentiment;
@@ -396,6 +400,18 @@ const NASDAQ_HEADERS = {
   Accept: 'application/json, text/plain, */*',
   'Accept-Language': 'en-US,en;q=0.9',
 };
+
+async function getOptionsChain(symbol, spot) {
+  const retrievedAt = new Date().toISOString();
+  try {
+    const url = `https://api.nasdaq.com/api/quote/${encodeURIComponent(symbol)}/option-chain?assetclass=stocks&limit=50&money=at&type=all`;
+    const response = await fetchWithTimeout(url, { headers: NASDAQ_HEADERS }, 9000);
+    if (!response.ok) throw new Error(`Nasdaq responded ${response.status}`);
+    return normalizeNasdaqOptionChain(await response.json(), { ticker: symbol, spot, retrievedAt });
+  } catch {
+    return unavailableOptionsChain(symbol, 'The Nasdaq options-chain source was unavailable for this refresh.', retrievedAt);
+  }
+}
 
 // Nasdaq's intraday chart "x" field is actually the ET wall-clock time
 // mis-encoded as a UTC epoch (e.g. x=...04:00:00Z while z.dateTime says
@@ -1553,6 +1569,7 @@ async function fetchDeepDive(env, query, options = {}) {
   profile = prof || {};
   const m = (metricData && metricData.metric) || {};
   const rec = Array.isArray(recs) && recs.length ? recs[0] : null;
+  const optionsChain = await getOptionsChain(ticker, quote && quote.c);
   const preparation = prepareAiTask('intel.deep-dive', headlines, {
     inputs: {
       quote: Boolean(quote && Number(quote.c) > 0),
@@ -1566,6 +1583,7 @@ async function fetchDeepDive(env, query, options = {}) {
     metrics: m,
     recommendation: rec,
     evidence: preparation.evidence,
+    optionsChain,
   });
   const fallback = (reason) => policyAbstention(preparation, reason, {
     ...baseline,
@@ -1615,7 +1633,16 @@ async function fetchDeepDive(env, query, options = {}) {
     unknowns: ['Price targets, entries, stops, fair values, and options ideas require dedicated verified inputs.'],
   });
   if (policyResult.abstained) {
-    return { ...baseline, ...policyResult, aiNarrativeStatus: 'withheld', aiNarrativeEligible: true };
+    return {
+      ...baseline,
+      ...policyResult,
+      equityData: baseline.equityData,
+      options: baseline.options,
+      optionsChain: baseline.optionsChain,
+      dataSources: baseline.dataSources,
+      aiNarrativeStatus: 'withheld',
+      aiNarrativeEligible: true,
+    };
   }
   return {
     ...baseline,
@@ -1625,6 +1652,9 @@ async function fetchDeepDive(env, query, options = {}) {
     quote: baseline.quote,
     stats: baseline.stats,
     analystConsensus: baseline.analystConsensus,
+    equityData: baseline.equityData,
+    options: baseline.options,
+    optionsChain: baseline.optionsChain,
     dataSources: baseline.dataSources,
     dataMode: 'verified-ai-with-deterministic-data',
     deterministic: true,
@@ -3214,13 +3244,22 @@ async function handleApi(request, env, ctx, url) {
     return json({ result });
   }
   if (p === '/api/ticker') {
-    const basket = ['AAPL', 'MSFT', 'NVDA', 'AMZN', 'GOOGL', 'META', 'TSLA'];
     // 15s stale-while-revalidate: the tape polls often, but the basket only needs
-    // to change every few seconds — keeps us comfortably under Finnhub's limit.
-    const { data } = await getData(env, ctx, 'ticker', async () => Promise.all(basket.map(async (symbol) => {
-      try { const q = await finnhub(env, '/quote', { symbol }); return { symbol, price: q.c ?? 0, change: q.d ?? 0, percent: q.dp ?? 0 }; }
-      catch { return { symbol, price: 0, change: 0, percent: 0 }; }
-    })), 15 * 1000);
+    // to change every few seconds. The last-good cache prevents a provider
+    // throttle from replacing valid prices with zeroes.
+    const { data } = await getData(env, ctx, `ticker:${TICKER_SCHEMA_VERSION}`, async () => {
+      let previous = [];
+      try { previous = JSON.parse(await env.MT_KV.get(`ticker:last-good:${TICKER_SCHEMA_VERSION}`) || '[]'); } catch {}
+      const currentQuotes = {};
+      await Promise.all(DEFAULT_TICKER_BASKET.map(async (symbol) => {
+        try { currentQuotes[symbol] = await getQuoteCached(env, symbol); } catch { currentQuotes[symbol] = null; }
+      }));
+      const items = mergeTickerBasket(DEFAULT_TICKER_BASKET, currentQuotes, previous);
+      if (items.some((item) => item.available && !item.stale)) {
+        await env.MT_KV.put(`ticker:last-good:${TICKER_SCHEMA_VERSION}`, JSON.stringify(items.filter((item) => item.available)), { expirationTtl: 86_400 }).catch(() => {});
+      }
+      return items;
+    }, 15 * 1000);
     return json(data);
   }
   if (p === '/api/chart') {

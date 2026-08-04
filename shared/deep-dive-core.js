@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const DEEP_DIVE_SCHEMA_VERSION = '2026-08-04a';
+  const DEEP_DIVE_SCHEMA_VERSION = '2026-08-04b';
 
   function finiteNumber(value) {
     if (value === null || value === undefined || value === '') return null;
@@ -112,7 +112,7 @@
     return { records, sourceCount: sources.size, trustedCount: trusted.length, newestAt };
   }
 
-  function buildSummary(company, ticker, quote, stats, consensus) {
+  function buildSummary(company, ticker, quote, stats, consensus, optionsChain) {
     const sentences = [];
     if (quote) {
       let sentence = `${company} (${ticker}) has a latest pooled quote of ${formatPrice(quote.price)}`;
@@ -134,6 +134,9 @@
     if (consensus && consensus.total) {
       sentences.push(`The analyst feed contains ${consensus.total} ratings for ${consensus.period || 'the latest period'}: ${consensus.positive} positive-category, ${consensus.hold} hold, and ${consensus.negative} negative-category.`);
     }
+    if (optionsChain && optionsChain.status === 'available') {
+      sentences.push(`Nasdaq returned ${optionsChain.contractCount} bounded at-the-money options rows across ${optionsChain.expiryCount} observed expiries; this is chain data, not a trade recommendation.`);
+    }
     if (!sentences.length) {
       sentences.push(`${company} (${ticker}) was resolved, but no usable quote, fundamental metric, or analyst record was returned for this refresh.`);
     }
@@ -152,7 +155,7 @@
     return matching.length ? matching : records;
   }
 
-  function buildObservations(quote, stats, consensus, coverage, company, ticker) {
+  function buildObservations(quote, stats, consensus, coverage, company, ticker, optionsChain) {
     const supporting = [];
     const caution = [];
     if (quote && quote.percent !== null) {
@@ -182,15 +185,88 @@
     });
     if (!watchItems.length) watchItems.push('No qualifying recent company headline was available for this refresh.');
 
-    const limits = [
-      'Price targets, entries, stops, fair values, and options trades are withheld because dedicated verified models and options-chain inputs are not connected.',
-    ];
+    const limits = ['Price targets, entries, stops, and fair values are withheld because a dedicated verified valuation model is not connected.'];
+    if (optionsChain && optionsChain.status === 'available') {
+      limits.push('Options-chain rows are available, but implied volatility, Greeks, and a verified options trade model are not connected.');
+    } else {
+      limits.push(optionsChain && optionsChain.reason
+        ? optionsChain.reason
+        : 'No listed options-chain rows were verified for this refresh.');
+    }
     if (!quote) limits.push('No usable pooled quote was returned.');
     if (stats.pe === null && stats.marketCap === null && stats.high52 === null) limits.push('Fundamental coverage is unavailable or incomplete.');
     if (!consensus || !consensus.total) limits.push('No current analyst-consensus counts were returned.');
     if (coverage.sourceCount < 2) limits.push(`Headline coverage spans ${coverage.sourceCount} normalized source domain; source concentration limits corroboration.`);
 
     return { supporting, caution, watchItems, limits };
+  }
+
+  function buildEquityData(quote, fundamentalCount, consensus, coverage, generatedAt) {
+    const datasets = {
+      quote: Boolean(quote),
+      fundamentals: fundamentalCount > 0,
+      analysts: Boolean(consensus && consensus.total),
+      news: coverage.records.length > 0,
+    };
+    const availableCount = Object.values(datasets).filter(Boolean).length;
+    const coverageScore = (datasets.quote ? 30 : 0) +
+      (datasets.fundamentals ? 30 : 0) +
+      (datasets.analysts ? 20 : 0) +
+      (datasets.news ? 20 : 0);
+    const details = [];
+    if (quote) details.push(`pooled quote from ${quote.source}`);
+    if (fundamentalCount) details.push(`${fundamentalCount} numeric fundamentals`);
+    if (consensus && consensus.total) details.push(`${consensus.total} analyst ratings`);
+    if (coverage.records.length) details.push(`${coverage.records.length} linked news records`);
+    return {
+      status: availableCount === 4 ? 'available' : availableCount ? 'partial' : 'unavailable',
+      coverageScore,
+      availableDatasets: availableCount,
+      totalDatasets: 4,
+      datasets,
+      asOf: generatedAt,
+      summary: details.length ? details.join(', ') : 'No usable equity dataset was returned for this refresh.',
+      disclaimer: 'Coverage measures returned datasets, not investment merit or expected return.',
+    };
+  }
+
+  function formatOptionMarket(bid, ask, last) {
+    if (bid !== null && bid !== undefined && ask !== null && ask !== undefined) return `${bid.toFixed(2)}/${ask.toFixed(2)} bid/ask`;
+    if (last !== null && last !== undefined) return `${last.toFixed(2)} last`;
+    return 'no quoted market';
+  }
+
+  function buildOptionsData(optionsChain) {
+    if (!optionsChain || optionsChain.status !== 'available') {
+      return {
+        recommendation: 'No listed chain returned',
+        bias: 'Unavailable',
+        score: null,
+        impliedVolatility: 'Not supplied',
+        timeframe: 'No expiry returned',
+        rationale: optionsChain && optionsChain.reason
+          ? optionsChain.reason
+          : 'No listed options-chain rows were verified for this response.',
+      };
+    }
+    const atm = optionsChain.atTheMoney;
+    const activity = optionsChain.activity || {};
+    const details = [];
+    if (atm) {
+      details.push(`Nearest returned strike ${atm.strike.toFixed(2)}: call ${formatOptionMarket(atm.callBid, atm.callAsk, atm.callLast)}; put ${formatOptionMarket(atm.putBid, atm.putAsk, atm.putLast)}.`);
+    }
+    if (activity.putCallVolumeRatio !== null && activity.putCallVolumeRatio !== undefined) {
+      details.push(`Returned-row put/call volume ratio ${activity.putCallVolumeRatio.toFixed(3)}.`);
+    }
+    details.push('Observed chain data only; no options trade is recommended.');
+    return {
+      recommendation: 'Listed chain available',
+      bias: 'Data Available',
+      score: null,
+      impliedVolatility: 'Not supplied',
+      timeframe: optionsChain.nearestExpiry || 'Nearest listed expiry',
+      rationale: details.join(' '),
+    };
   }
 
   function buildDeterministicDeepDive(input = {}) {
@@ -202,9 +278,11 @@
     const stats = buildStats(profile, metrics, quote);
     const analystConsensus = buildAnalystConsensus(input.recommendation);
     const coverage = evidenceCoverage(input.evidence);
-    const observations = buildObservations(quote, stats, analystConsensus, coverage, company, ticker);
     const generatedAt = input.generatedAt || new Date().toISOString();
     const fundamentalCount = Object.values(metrics).filter((value) => finiteNumber(value) !== null).length;
+    const optionsChain = input.optionsChain && typeof input.optionsChain === 'object' ? input.optionsChain : null;
+    const observations = buildObservations(quote, stats, analystConsensus, coverage, company, ticker, optionsChain);
+    const equityData = buildEquityData(quote, fundamentalCount, analystConsensus, coverage, generatedAt);
 
     return {
       deepDiveSchemaVersion: DEEP_DIVE_SCHEMA_VERSION,
@@ -217,7 +295,9 @@
       quote,
       stats,
       analystConsensus,
-      summary: buildSummary(company, ticker, quote, stats, analystConsensus),
+      equityData,
+      optionsChain,
+      summary: buildSummary(company, ticker, quote, stats, analystConsensus, optionsChain),
       newsSentiment: 'unrated',
       keyDrivers: `Observed inputs include ${quote ? `a pooled quote from ${quote.source}` : 'no usable pooled quote'}, ${fundamentalCount} numeric fundamental fields, and ${coverage.records.length} qualifying headline records across ${coverage.sourceCount} normalized sources. No causal driver is inferred automatically.`,
       investment: {
@@ -228,14 +308,7 @@
         fairValue: 'N/A - no verified valuation model',
         thesis: 'No investment recommendation is issued without a verified valuation model.',
       },
-      options: {
-        recommendation: 'Avoid - options-chain data is not connected',
-        bias: 'Avoid',
-        score: null,
-        impliedVolatility: 'Unknown',
-        timeframe: 'N/A',
-        rationale: 'No options-chain, strike, or expiry data was verified for this response.',
-      },
+      options: buildOptionsData(optionsChain),
       technicalBias: 'Unrated',
       entryZone: 'N/A - no verified trade plan',
       stopLoss: 'N/A - no verified trade plan',
@@ -261,6 +334,15 @@
           provider: analystConsensus ? 'Finnhub recommendations' : null,
           ratingCount: analystConsensus ? analystConsensus.total : 0,
           period: analystConsensus ? analystConsensus.period : '',
+        },
+        options: {
+          status: optionsChain && optionsChain.status === 'available' ? 'available' : 'unavailable',
+          provider: optionsChain ? optionsChain.source : null,
+          contractCount: optionsChain ? optionsChain.contractCount : 0,
+          expiryCount: optionsChain ? optionsChain.expiryCount : 0,
+          nearestExpiry: optionsChain ? optionsChain.nearestExpiry : null,
+          retrievedAt: optionsChain ? optionsChain.retrievedAt : null,
+          reason: optionsChain && optionsChain.status !== 'available' ? optionsChain.reason : null,
         },
         news: {
           status: coverage.records.length ? (coverage.sourceCount >= 2 ? 'corroborated' : 'concentrated') : 'unavailable',

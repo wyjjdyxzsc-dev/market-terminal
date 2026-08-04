@@ -108,6 +108,12 @@ This file is a portable handoff for continuing work on another account. It recor
 
 > deep dive does not work fix all of this
 
+### User prompt 24
+
+> y is data not availible there should be data for every stock
+
+The prompt included screenshots showing an all-`No data` seven-symbol tape plus SPCX Deep Dive cards labelled `STOCK —/100 Not Rated` and `OPTIONS —/100 Avoid` despite available quote/fundamental/analyst/news data.
+
 ## Authoritative Prompt Sources
 
 - Full master prompt: [MARKET_TERMINAL_TOTAL_PLATFORM_CODEX_MASTER_PROMPT.md](/Users/krishivjain/Desktop/claude projects/market-terminal/MARKET_TERMINAL_TOTAL_PLATFORM_CODEX_MASTER_PROMPT.md)
@@ -165,6 +171,8 @@ The following production-oriented vertical slices were implemented and deployed:
 - Reconciled lower-risk Express/Worker output ceilings and per-minute versus daily/quota cooldown behavior; local NEWS enrichment returned 12 source-linked non-degraded items.
 - Restored Deep Dive as a deterministic dossier that survives AI abstention, uses the pooled quote cascade, preserves source diversity, exposes data provenance and relevant watch items, and keeps unsupported recommendation/options fields withheld.
 - Changed local Finnhub WebSocket startup to lazy subscription and bounded exponential reconnect backoff so an idle connection cannot create a five-second retry storm.
+- Routed the seven-symbol ticker through the canonical quote pool, added source/freshness metadata and versioned last-good fallback, and made stale values visually explicit instead of caching provider failures as zeroes.
+- Added a bounded source-linked Nasdaq options-chain snapshot plus truthful equity dataset coverage to Deep Dive. The UI no longer presents data availability as an investment score, while IV/Greeks/valuation/trade construction remain explicitly unavailable.
 - Unit tests for API contracts, evidence helpers, and candle analysis.
 - Expanded smoke tests covering local and production endpoint contracts.
 
@@ -193,6 +201,7 @@ Local verification completed:
 - Checkpoint 8 local verification on 2026-08-04: schema `2026-08-04a` returned useful deterministic AAPL/Apple/MSFT dossiers while the optional high-risk narrative correctly abstained in the Groq-only environment; `npm test` passed `54/54` unit tests and `31/31` available contracts, all offline AI thresholds passed, dependency audit found zero vulnerabilities, Wrangler `4.118.0` dry-run bundled 14 assets, and desktop/mobile browser checks found no overflow or console errors.
 - Checkpoint 8 source production verification: commit `9370cc3` served all seven `20260804a` assets, passed `33/33` production contracts, and returned useful AAPL/Apple/MSFT dossiers with three source domains. No high-risk narrative completed independent verification. Uncached Apple/MSFT probes exposed a second material defect: the response blocked 32-37 seconds on optional AI after deterministic data was ready.
 - Source commit `953c0ea` implements the `20260804b` follow-up by splitting deterministic and optional `ai=1` cache/API paths. The UI renders the dossier first, performs verification in the background, and ignores stale query completions. Local `54/54` unit, `31/31` available contract, offline AI threshold, zero-vulnerability audit, Wrangler `4.118.0` dry-run at 424.74 KiB raw / 102.62 KiB gzip, desktop, and mobile checks passed.
+- Checkpoint 9 local verification on 2026-08-04: ticker schema `2026-08-04a`, options schema `2026-08-04a`, and Deep Dive schema `2026-08-04b` passed `58/58` unit tests, all offline AI thresholds, `32/32` available contracts, zero-vulnerability audit, and Wrangler `4.118.0` dry-run at 439.96 KiB raw / 105.44 KiB gzip. Live local tape returned all seven prices; AAPL and SPCX returned bounded 47-row options snapshots. Desktop/mobile showed no overflow or console errors. Production verification remains pending.
 - The Desktop-backed `node_modules` tree initially exposed dataless/duplicated dependency files and stalled Express startup. A clean `npm ci` restored the ignored dependency tree; no source or user artifact was removed.
 
 Production verification completed:

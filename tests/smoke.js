@@ -117,6 +117,12 @@ async function checkHtml(label, url) {
   await check('GET /api/quote?symbol=AAPL', `${BASE}/api/quote?symbol=AAPL`,
     { skipError: true, validate: d => typeof d.c === 'number' || typeof d.pc === 'number' || d.error });
 
+  await check('GET /api/ticker', `${BASE}/api/ticker`, {
+    validate: d => Array.isArray(d) && d.length === 7 && d.every(item =>
+      typeof item.symbol === 'string' && Number(item.price) > 0 &&
+      item.available === true && typeof item.source === 'string' && typeof item.stale === 'boolean'),
+  });
+
   await check('GET /api/chart?symbol=AAPL&range=1D', `${BASE}/api/chart?symbol=AAPL&range=1D`,
     { skipError: true, validate: d => Array.isArray(d.points) || d.error });
 
@@ -214,7 +220,7 @@ async function checkHtml(label, url) {
   // Deep-dive — uses ?q= param
   await check('GET /api/intel/deepdive?q=AAPL', `${BASE}/api/intel/deepdive?q=AAPL`,
     { validate: d => hasPolicy(d, 'intel.deep-dive') &&
-      d.deepDiveSchemaVersion === '2026-08-04a' &&
+      d.deepDiveSchemaVersion === '2026-08-04b' &&
       d.deterministic === true &&
       /^(deterministic-dossier|verified-ai-with-deterministic-data)$/.test(d.dataMode || '') &&
       typeof d.summary === 'string' && d.summary.length > 40 &&
@@ -222,8 +228,11 @@ async function checkHtml(label, url) {
       d.dataSources?.quote?.status === 'available' &&
       ['pending', 'withheld', 'verified'].includes(d.aiNarrativeStatus) &&
       [d.bullCase, d.bearCase, d.catalysts, d.risks].every(items => Array.isArray(items) && items.length > 0) &&
+      d.equityData?.status === 'available' && Number(d.equityData?.coverageScore) > 0 &&
       d.investment?.rating === 'Not Rated' && d.investment?.score == null &&
-      d.options?.bias === 'Avoid' && /^N\/A/.test(d.priceTarget || '') });
+      d.dataSources?.options?.status === 'available' && d.optionsChain?.status === 'available' &&
+      Number(d.optionsChain?.contractCount) > 0 && d.options?.bias === 'Data Available' &&
+      /^N\/A/.test(d.priceTarget || '') });
 
   // AI chat (skipError — needs a heavy-tier AI key)
   await check('POST /api/intel/chat', `${BASE}/api/intel/chat`, {
