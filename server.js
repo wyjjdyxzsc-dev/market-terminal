@@ -1643,7 +1643,7 @@ async function fetchSupplyChain(query) {
   );
 }
 
-async function fetchDeepDive(query) {
+async function fetchDeepDive(query, options = {}) {
   let ticker  = /^[A-Z.]{1,6}$/.test(query) ? query.toUpperCase() : '';
   if (!ticker) {
     try {
@@ -1681,7 +1681,17 @@ async function fetchDeepDive(query) {
   const fallback = (reason) => policyAbstention(preparation, reason, {
     ...baseline,
     aiNarrativeStatus: 'withheld',
+    aiNarrativeEligible: preparation.canGenerate,
   });
+  if (!options.includeAi) {
+    return policyAbstention(preparation, preparation.canGenerate
+      ? 'The deterministic dossier loaded first; the optional independently verified AI narrative is available as a separate follow-up request.'
+      : 'The current evidence did not meet the deep-dive grounding policy.', {
+      ...baseline,
+      aiNarrativeStatus: preparation.canGenerate ? 'pending' : 'withheld',
+      aiNarrativeEligible: preparation.canGenerate,
+    });
+  }
   if (!preparation.canGenerate) return fallback('The current evidence did not meet the deep-dive grounding policy.');
   const dataBlock =
     `LIVE DATA for ${profile.name || ticker} (${ticker}):\n` +
@@ -1710,7 +1720,7 @@ async function fetchDeepDive(query) {
     unknowns: ['Price targets, entries, stops, fair values, and options ideas require dedicated verified inputs.'],
   });
   if (policyResult.abstained) {
-    return { ...baseline, ...policyResult, aiNarrativeStatus: 'withheld' };
+    return { ...baseline, ...policyResult, aiNarrativeStatus: 'withheld', aiNarrativeEligible: true };
   }
   return {
     ...baseline,
@@ -1724,6 +1734,7 @@ async function fetchDeepDive(query) {
     dataMode: 'verified-ai-with-deterministic-data',
     deterministic: true,
     aiNarrativeStatus: 'verified',
+    aiNarrativeEligible: true,
   };
 }
 
@@ -3536,8 +3547,10 @@ app.get('/api/intel/deepdive', rateLimit, async (req, res) => {
   try {
     const query = (req.query.q || '').toString().trim().slice(0, 60);
     if (!query) return res.status(400).json({ error: true, message: 'Missing company name or ticker.' });
+    const includeAi = req.query.ai === '1';
     const { data, fresh } = await fetch_cached_data(
-      `intel:deepdive:${DEEP_DIVE_SCHEMA_VERSION}:${AI_TASK_POLICY_SCHEMA_VERSION}:${query.toLowerCase()}`, () => fetchDeepDive(query), TTL.NEWS
+      `intel:deepdive:${DEEP_DIVE_SCHEMA_VERSION}:${AI_TASK_POLICY_SCHEMA_VERSION}:${includeAi ? 'ai' : 'data'}:${query.toLowerCase()}`,
+      () => fetchDeepDive(query, { includeAi }), TTL.NEWS
     );
     res.json({ cached: !fresh, ...data });
   } catch (err) {

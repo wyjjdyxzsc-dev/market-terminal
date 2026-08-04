@@ -54,4 +54,4 @@
 - No new source or entitlement was added. The deterministic Deep Dive dossier reorganizes existing pooled quotes, Finnhub company profile/metric/recommendation fields, and linked headline metadata into an explicitly sourced view.
 - Source-balanced selection changes which existing metadata records survive a bounded response; it does not authorize article-body storage or alter the original source URLs. Company-relevant watch items remain titles with publisher/date attribution.
 - Analyst counts are displayed as vendor-supplied counts, not a terminal recommendation. Fair value, target, entry, stop, options chain, IV, strike, and expiry remain unavailable pending terms-compliant dedicated adapters.
-- Local verification does not imply production availability, licensed issuer research, positive model quality, or professional-terminal parity.
+- Source commit `9370cc3` production-verifies availability of the existing-data dossier. The `20260804b` latency follow-up only separates deterministic and optional AI requests; it adds no data right. Neither result implies licensed issuer research, positive model quality, or professional-terminal parity.

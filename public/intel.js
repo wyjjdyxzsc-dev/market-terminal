@@ -831,6 +831,7 @@ function formatAiRuntimeSummary(policy) {
 
   // ---------- Deep Dive (full AI analyst report) ----------
   let ddLoadedFor = null;
+  let ddRequestId = 0;
 
   const RATING_CLASS = (r) => {
     const k = String(r || '').toLowerCase();
@@ -925,15 +926,18 @@ function formatAiRuntimeSummary(policy) {
       ? new Date(policy.dataAsOf).toLocaleString()
       : '';
     const hasDeterministicDossier = data && data.deterministic === true;
-    const title = policy.status === 'abstained'
-      ? (hasDeterministicDossier ? 'AI NARRATIVE WITHHELD' : 'RESEARCH WITHHELD')
-      : (policy.status === 'deterministic' ? 'DETERMINISTIC ANALYSIS' : 'EVIDENCE-GATED RESEARCH');
+    const narrativePending = data && data.aiNarrativeStatus === 'pending';
+    const title = narrativePending
+      ? 'AI NARRATIVE PENDING'
+      : (policy.status === 'abstained'
+        ? (hasDeterministicDossier ? 'AI NARRATIVE WITHHELD' : 'RESEARCH WITHHELD')
+        : (policy.status === 'deterministic' ? 'DETERMINISTIC ANALYSIS' : 'EVIDENCE-GATED RESEARCH'));
     const count = Number(policy.evidenceCount || 0);
     const runtime = formatAiRuntimeSummary(policy);
-    return `<div class="policy-notice ${policy.status === 'abstained' ? 'is-abstained' : 'is-grounded'}">
+    return `<div class="policy-notice ${narrativePending ? 'is-pending' : (policy.status === 'abstained' ? 'is-abstained' : 'is-grounded')}">
       <div class="policy-notice-title">${title}</div>
       ${policy.reason ? `<div class="policy-notice-reason">${esc(policy.reason)}</div>` : ''}
-      ${policy.status === 'abstained' && hasDeterministicDossier ? '<div class="policy-notice-meta">The source-backed deterministic company dossier remains available below.</div>' : ''}
+      ${policy.status === 'abstained' && hasDeterministicDossier ? `<div class="policy-notice-meta">${narrativePending ? 'The source-backed dossier is ready while independent verification continues.' : 'The source-backed deterministic company dossier remains available below.'}</div>` : ''}
       <div class="policy-notice-meta">${count} qualifying source record${count === 1 ? '' : 's'}${asOf ? ` · as of ${esc(asOf)}` : ''} · ${esc(policy.verifier || 'policy check')}</div>
       ${runtime ? `<div class="policy-notice-meta">${esc(runtime)}</div>` : ''}
       ${sourceLinks ? `<div class="policy-notice-sources">${policy.status === 'grounded' ? 'Cited' : 'Available evidence'}: ${sourceLinks}</div>` : ''}
@@ -1504,9 +1508,37 @@ function formatAiRuntimeSummary(policy) {
     ctx2.fillText('$' + S0.toFixed(2), padL - 6, yOf(S0) + 3);
   }
 
+  function updateDeepDivePolicyNotice(data) {
+    const current = $('#ddResult .policy-notice');
+    if (!current) return;
+    const holder = document.createElement('div');
+    holder.innerHTML = policyNotice(data);
+    if (holder.firstElementChild) current.replaceWith(holder.firstElementChild);
+  }
+
+  async function loadVerifiedDeepDiveNarrative(query, requestId) {
+    try {
+      const data = await fetchJSON('/api/intel/deepdive?q=' + encodeURIComponent(query) + '&ai=1');
+      if (requestId !== ddRequestId) return;
+      if (data.error) throw new Error(data.message);
+      if (data.aiNarrativeStatus === 'verified') {
+        renderDeepDive(data);
+        $('#ddStatus').textContent = 'Dossier loaded with an independently verified AI narrative.';
+        return;
+      }
+      updateDeepDivePolicyNotice(data);
+      const reason = data.policy && data.policy.reason ? ` ${data.policy.reason}` : '';
+      $('#ddStatus').textContent = `Deterministic dossier ready. The optional AI narrative was withheld.${reason}`;
+    } catch (error) {
+      if (requestId !== ddRequestId) return;
+      $('#ddStatus').textContent = 'Deterministic dossier ready. The optional AI narrative could not be verified on this refresh.';
+    }
+  }
+
   async function loadDeepDive(query) {
     const q = String(query || '').trim();
     if (!q) return;
+    const requestId = ++ddRequestId;
     ddLoadedFor = q;
     $('#ddInput').value = q;
     $('#ddStatus').className = 'status';
@@ -1514,13 +1546,20 @@ function formatAiRuntimeSummary(policy) {
     $('#ddResult').innerHTML = '';
     try {
       const data = await fetchJSON('/api/intel/deepdive?q=' + encodeURIComponent(q));
+      if (requestId !== ddRequestId) return;
       if (data.error) throw new Error(data.message);
       renderDeepDive(data);
       $('#ddStatus').className = 'status policy-status';
-      $('#ddStatus').textContent = data.aiNarrativeStatus === 'verified'
-        ? 'Dossier loaded with an independently verified AI narrative.'
-        : 'Deterministic dossier loaded. The optional AI narrative was withheld; live data sections remain available.';
+      if (data.aiNarrativeStatus === 'pending') {
+        $('#ddStatus').textContent = 'Deterministic dossier loaded. Independent verification of the optional AI narrative is continuing in the background.';
+        void loadVerifiedDeepDiveNarrative(q, requestId);
+      } else {
+        $('#ddStatus').textContent = data.aiNarrativeStatus === 'verified'
+          ? 'Dossier loaded with an independently verified AI narrative.'
+          : 'Deterministic dossier loaded. The optional AI narrative was withheld; live data sections remain available.';
+      }
     } catch (err) {
+      if (requestId !== ddRequestId) return;
       $('#ddStatus').className = 'status error';
       $('#ddStatus').textContent = 'Could not analyze that stock: ' + err.message;
     }

@@ -1233,8 +1233,13 @@ a { color: inherit; }
   border-color: rgba(255,160,40,.38); border-left-color: var(--amber);
   background: linear-gradient(105deg, rgba(255,160,40,.09), rgba(255,160,40,.02));
 }
+.policy-notice.is-pending {
+  border-color: rgba(69,200,220,.42); border-left-color: var(--cyan);
+  background: linear-gradient(105deg, rgba(69,200,220,.1), rgba(69,200,220,.02));
+}
 .policy-notice-title { color: var(--cyan); font-weight: 700; letter-spacing: 1.2px; }
 .policy-notice.is-abstained .policy-notice-title { color: var(--amber); }
+.policy-notice.is-pending .policy-notice-title { color: var(--cyan); }
 .policy-notice-reason { color: var(--text); margin-top: 4px; }
 .policy-notice-meta, .policy-notice-disclaimer { color: var(--muted); margin-top: 4px; }
 .policy-notice-sources { color: var(--muted); margin-top: 5px; }

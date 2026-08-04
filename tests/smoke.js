@@ -220,7 +220,7 @@ async function checkHtml(label, url) {
       typeof d.summary === 'string' && d.summary.length > 40 &&
       Number(d.quote?.price) > 0 && typeof d.quote?.source === 'string' &&
       d.dataSources?.quote?.status === 'available' &&
-      ['withheld', 'verified'].includes(d.aiNarrativeStatus) &&
+      ['pending', 'withheld', 'verified'].includes(d.aiNarrativeStatus) &&
       [d.bullCase, d.bearCase, d.catalysts, d.risks].every(items => Array.isArray(items) && items.length > 0) &&
       d.investment?.rating === 'Not Rated' && d.investment?.score == null &&
       d.options?.bias === 'Avoid' && /^N\/A/.test(d.priceTarget || '') });

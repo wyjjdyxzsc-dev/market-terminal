@@ -2,7 +2,7 @@ This work was performed by OpenAI Codex without Claude’s involvement. This doc
 
 # Status
 
-- Handoff status: checkpoint 7 production verified; checkpoint 8 Deep Dive resilience is locally verified and awaiting managed production verification
+- Handoff status: checkpoint 8 source dossier is production verified; the data-first latency follow-up is locally verified and awaiting managed production verification
 - Research dates: baseline 2026-07-13; AI-provider capability refresh 2026-07-28
 - Deployment URL: `https://market-terminal.wyjjdyxzsc.workers.dev`
 
@@ -561,7 +561,7 @@ This work was performed by OpenAI Codex without Claude’s involvement. This doc
 - Both runtimes use their canonical quote cascade for Deep Dive. Cache keys include `DEEP_DIVE_SCHEMA_VERSION`, isolating the old empty fallback envelopes.
 - The Deep Dive UI now distinguishes `AI NARRATIVE WITHHELD` from dossier availability, renders four source-status cards and six source links, uses factual observation/watch/data-limit labels, suppresses unavailable trade levels, and has a two-column mobile provenance layout.
 - Local Finnhub WebSocket handling now connects only after the first quote subscription and backs off from 5 to 60 seconds after repeated closes. This removes the observed idle five-second reconnect loop while retaining the REST quote cascade.
-- Local verification:
+- Source and local verification:
   - `npm test` passed `54/54` unit tests and all `31/31` available smoke contracts; fire, weather, and webcams remained documented optional skips
   - the strict Deep Dive smoke contract no longer permits an endpoint error and requires schema `2026-08-04a`, a positive pooled quote, non-empty deterministic sections, provenance, and safe withheld actionable fields
   - `npm run test:ai-eval` passed all thresholds across the unchanged 10-case offline safety fixture set
@@ -569,7 +569,10 @@ This work was performed by OpenAI Codex without Claude’s involvement. This doc
   - Wrangler `4.118.0` dry-run bundled 14 assets at 424.08 KiB raw / 102.46 KiB gzip; no manual deployment occurred
   - AAPL, Apple, and MSFT probes returned `200`, resolved identity, a pooled quote, non-empty dossier sections, and two or three normalized news sources. AAPL returned 131 numeric metrics and 54 analyst ratings in the observed refresh
   - desktop interaction and a 390x844 responsive check rendered the dossier without horizontal overflow or console warnings/errors
-- All seven source cache references use `20260804a`. Production verification is intentionally not claimed yet.
+  - source commit `9370cc3` reached production through the managed path, served all seven `20260804a` assets, passed `33/33` production contracts, and returned useful AAPL/Apple/MSFT dossiers with three source domains
+  - available high-risk generation produced no independently verified acceptance, so the narrative remained safely withheld and no positive model-quality claim is made
+- The first production probes exposed 32-37 second uncached waits because optional AI verification blocked the already-ready dossier. The `20260804b` follow-up splits deterministic and `ai=1` cache/API paths; the UI renders data first, verifies in the background, and ignores stale query completions. Its local `54/54` unit, `31/31` available contract, offline AI threshold, zero-vulnerability audit, Wrangler `4.118.0` dry-run at 424.74 KiB raw / 102.62 KiB gzip, desktop, and mobile checks pass; managed production verification is pending.
+- All seven follow-up source cache references use `20260804b`.
 
 # Unresolved risks and technical debt
 
@@ -596,9 +599,10 @@ This work was performed by OpenAI Codex without Claude’s involvement. This doc
   - `919f1b9` — `Share active symbol with AI chat`
   - `febefb3` — `Restore AI evidence and provider reliability`
   - `90c191b` — `Require useful AI news batches`
+  - `9370cc3` — `Restore resilient Deep Dive dossier`
 - Push/deploy:
-  - `git push origin main` completed for all listed source checkpoint commits through `90c191b`
-  - source commits `febefb3` and `90c191b` are production verified on `https://market-terminal.wyjjdyxzsc.workers.dev`
+  - `git push origin main` completed for all listed source checkpoint commits through `9370cc3`
+  - source commits through `9370cc3` are production verified on `https://market-terminal.wyjjdyxzsc.workers.dev`; the `20260804b` latency follow-up in this checkpoint is locally verified and awaiting managed production verification
 
 # Recommended next step for Claude
 

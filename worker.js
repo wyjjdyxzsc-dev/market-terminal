@@ -1530,7 +1530,7 @@ async function fetchSupplyChain(env, query) {
 
 // Deep-dive: always produce a deterministic company dossier, then optionally
 // augment its non-actionable narrative through the verified AI pipeline.
-async function fetchDeepDive(env, query) {
+async function fetchDeepDive(env, query, options = {}) {
   let ticker = /^[A-Z.]{1,6}$/.test(query) ? query.toUpperCase() : '';
   let profile = null;
   if (!ticker) {
@@ -1570,7 +1570,17 @@ async function fetchDeepDive(env, query) {
   const fallback = (reason) => policyAbstention(preparation, reason, {
     ...baseline,
     aiNarrativeStatus: 'withheld',
+    aiNarrativeEligible: preparation.canGenerate,
   });
+  if (!options.includeAi) {
+    return policyAbstention(preparation, preparation.canGenerate
+      ? 'The deterministic dossier loaded first; the optional independently verified AI narrative is available as a separate follow-up request.'
+      : 'The current evidence did not meet the deep-dive grounding policy.', {
+      ...baseline,
+      aiNarrativeStatus: preparation.canGenerate ? 'pending' : 'withheld',
+      aiNarrativeEligible: preparation.canGenerate,
+    });
+  }
   if (!preparation.canGenerate) return fallback('The current evidence did not meet the deep-dive grounding policy.');
   const dataBlock =
     `LIVE DATA for ${profile.name || ticker} (${ticker}):\n` +
@@ -1605,7 +1615,7 @@ async function fetchDeepDive(env, query) {
     unknowns: ['Price targets, entries, stops, fair values, and options ideas require dedicated verified inputs.'],
   });
   if (policyResult.abstained) {
-    return { ...baseline, ...policyResult, aiNarrativeStatus: 'withheld' };
+    return { ...baseline, ...policyResult, aiNarrativeStatus: 'withheld', aiNarrativeEligible: true };
   }
   return {
     ...baseline,
@@ -1619,6 +1629,7 @@ async function fetchDeepDive(env, query) {
     dataMode: 'verified-ai-with-deterministic-data',
     deterministic: true,
     aiNarrativeStatus: 'verified',
+    aiNarrativeEligible: true,
   };
 }
 
@@ -3245,7 +3256,8 @@ async function handleApi(request, env, ctx, url) {
   if (p === '/api/intel/deepdive') {
     const query = (qs.get('q') || '').trim().slice(0, 60);
     if (!query) return json({ error: true, message: 'Missing company name or ticker.' }, 400);
-    try { const { data, fresh } = await getData(env, ctx, `deepdive:${DEEP_DIVE_SCHEMA_VERSION}:${AI_TASK_POLICY_SCHEMA_VERSION}:${query.toLowerCase()}`, () => fetchDeepDive(env, query)); return json({ cached: !fresh, ...data }); }
+    const includeAi = qs.get('ai') === '1';
+    try { const { data, fresh } = await getData(env, ctx, `deepdive:${DEEP_DIVE_SCHEMA_VERSION}:${AI_TASK_POLICY_SCHEMA_VERSION}:${includeAi ? 'ai' : 'data'}:${query.toLowerCase()}`, () => fetchDeepDive(env, query, { includeAi })); return json({ cached: !fresh, ...data }); }
     catch (err) { return json({ error: true, message: friendlyError(err) }, 500); }
   }
   if (p === '/api/intel/candle') {

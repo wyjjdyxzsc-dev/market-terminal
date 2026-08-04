@@ -190,7 +190,9 @@ Local verification completed:
 - Checkpoint 6 work runs from detached worktree `/tmp/market-terminal-checkpoint6-20260726`. The original checkout and its unrelated untracked master-prompt/profile files remain preserved.
 - Checkpoint 7 local verification on 2026-07-30: schemas moved to `2026-07-30a`; `npm run test:unit` passed `50/50`; the 10-case offline evaluation passed all thresholds; local smoke passed `31/31` available contracts with only documented optional-route skips; targeted company evidence, provider-reason, and browser checks passed; and `npm audit --omit=dev` found zero vulnerabilities.
 - The production-discovered NEWS follow-up uses schema/cache `2026-07-30b`. Its useful-batch validator rejected an undersized model response and returned 14 canonical source-linked degraded items locally. The unchanged `50/50` unit suite, all offline thresholds, `31/31` available contracts, syntax checks, zero-vulnerability audit, and Wrangler `4.115.0` dry run at 408.24 KiB raw / 98.96 KiB gzip passed.
-- Checkpoint 8 local verification on 2026-08-04: schema `2026-08-04a` returned useful deterministic AAPL/Apple/MSFT dossiers while the optional high-risk narrative correctly abstained in the Groq-only environment; `npm test` passed `54/54` unit tests and `31/31` available contracts, all offline AI thresholds passed, dependency audit found zero vulnerabilities, Wrangler `4.118.0` dry-run bundled 14 assets, and desktop/mobile browser checks found no overflow or console errors. Production verification remains pending.
+- Checkpoint 8 local verification on 2026-08-04: schema `2026-08-04a` returned useful deterministic AAPL/Apple/MSFT dossiers while the optional high-risk narrative correctly abstained in the Groq-only environment; `npm test` passed `54/54` unit tests and `31/31` available contracts, all offline AI thresholds passed, dependency audit found zero vulnerabilities, Wrangler `4.118.0` dry-run bundled 14 assets, and desktop/mobile browser checks found no overflow or console errors.
+- Checkpoint 8 source production verification: commit `9370cc3` served all seven `20260804a` assets, passed `33/33` production contracts, and returned useful AAPL/Apple/MSFT dossiers with three source domains. No high-risk narrative completed independent verification. Uncached Apple/MSFT probes exposed a second material defect: the response blocked 32-37 seconds on optional AI after deterministic data was ready.
+- The `20260804b` follow-up splits deterministic and optional `ai=1` cache/API paths. The UI renders the dossier first, performs verification in the background, and ignores stale query completions. Local `54/54` unit, `31/31` available contract, offline AI threshold, zero-vulnerability audit, Wrangler `4.118.0` dry-run at 424.74 KiB raw / 102.62 KiB gzip, desktop, and mobile checks pass; managed production verification is pending.
 - The Desktop-backed `node_modules` tree initially exposed dataless/duplicated dependency files and stalled Express startup. A clean `npm ci` restored the ignored dependency tree; no source or user artifact was removed.
 
 Production verification completed:
@@ -235,6 +237,11 @@ Production verification completed:
   - the strengthened production smoke suite passed `33/33`, with only the documented weather-provider `502` skip
   - normal and forced-fresh NEWS probes each returned 12 non-degraded source-linked cards; the production browser rendered all 12 and their evidence links without console warnings/errors
   - current-market AAPL chat generated a candidate through GitHub, then safely abstained because independent verification was unavailable; the UI exposed the bounded attempt and failure stage rather than appearing silently broken
+- Checkpoint 8 source production verification:
+  - source commit `9370cc3` reached production through the managed path and served all seven `20260804a` markers
+  - `npm run test:prod` passed `33/33`, and targeted AAPL/Apple/MSFT routes returned schema `2026-08-04a`, useful deterministic sections, pooled quote provenance, safe unavailable actionable fields, and three normalized source domains
+  - generated narrative did not complete independent verification and remained safely withheld; no positive high-risk acceptance is claimed
+  - production uncached Apple/MSFT probes took 32-37 seconds because optional verification blocked the ready dossier, triggering the locally verified `20260804b` data-first follow-up
 
 ## Checkpoints
 
@@ -252,8 +259,9 @@ Production verification completed:
 - `919f1b9` — `Share active symbol with AI chat`
 - `febefb3` — `Restore AI evidence and provider reliability`
 - `90c191b` — `Require useful AI news batches`
+- `9370cc3` — `Restore resilient Deep Dive dossier`
 
-All listed source commits were pushed to `origin/main`. Checkpoint 7 source commits `febefb3` and `90c191b` are production verified. The final documentation-only cache marker is `20260801a`; unrelated untracked files listed below remain preserved.
+All listed source commits were pushed to `origin/main` and are production verified through `9370cc3`. The `20260804b` data-first follow-up is local-only at this log revision; unrelated untracked files listed below remain preserved.
 
 ## Remaining Work
 
