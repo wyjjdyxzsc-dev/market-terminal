@@ -86,3 +86,9 @@ This is an implementation audit of the model providers used by Market Terminal. 
 - Provider prices, models, account permissions, retention terms, regional availability, and limits can change. Operators must re-check official documentation and their account terms before enabling a provider.
 - No new market-data entitlement is created by using an AI provider. Unsupported research rankings, relationship graphs, options construction, country scores, and trade levels remain withheld.
 - Persistent aggregate AI observability, a human-labelled finance/OSINT evaluation corpus, live-provider drift canaries, and calibration measurement remain future work.
+
+## 2026-08-04 Deep Dive Availability Boundary
+
+- The observed Deep Dive incident was not evidence that every AI provider was offline. The route lost source diversity before generation, bypassed the quote pool, and exposed an empty fallback; the local environment also still has only Groq and therefore cannot form a valid high-risk generator/verifier pair.
+- Schema `2026-08-04a` makes the quote/fundamental/analyst/evidence dossier deterministic and leaves only the optional narrative under the provider registry and independent-verification pipeline. No provider model, eligibility, price, or lifecycle entry changed in this checkpoint.
+- Local verification passed `54/54` unit tests, the unchanged 10-case evaluation thresholds, `31/31` available contracts, targeted company probes, and browser disclosure checks. The result demonstrates graceful provider absence, not positive live high-risk output quality; production verification is pending.

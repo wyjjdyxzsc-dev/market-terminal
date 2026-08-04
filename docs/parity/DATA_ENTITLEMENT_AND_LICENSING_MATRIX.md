@@ -48,3 +48,10 @@
 - Redirect publisher attribution changes evidence classification only for recognized redirect hosts and known publisher labels; it does not grant redistribution rights, replace the original link, or authorize storing full article text.
 - Provider retry budgets, output ceilings, cooldowns, and failure diagnostics are service-usage controls. Current-market/high-risk generation still requires two eligible independent heavy providers and remains subject to each provider account's terms and limits.
 - Core source commit `febefb3` passed production contracts and targeted probes without adding an entitlement. After its first live NEWS probe exposed an undersized batch, source commit `90c191b` deployed `2026-07-30b` validation, cache isolation, and fallback behavior and passed production/API/browser checks. No new market-data, issuer-research, options, relationship, intelligence, or professional-terminal entitlement is claimed.
+
+## 2026-08-04 checkpoint 8 note
+
+- No new source or entitlement was added. The deterministic Deep Dive dossier reorganizes existing pooled quotes, Finnhub company profile/metric/recommendation fields, and linked headline metadata into an explicitly sourced view.
+- Source-balanced selection changes which existing metadata records survive a bounded response; it does not authorize article-body storage or alter the original source URLs. Company-relevant watch items remain titles with publisher/date attribution.
+- Analyst counts are displayed as vendor-supplied counts, not a terminal recommendation. Fair value, target, entry, stop, options chain, IV, strike, and expiry remain unavailable pending terms-compliant dedicated adapters.
+- Local verification does not imply production availability, licensed issuer research, positive model quality, or professional-terminal parity.

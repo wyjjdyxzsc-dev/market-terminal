@@ -19,6 +19,7 @@
 import './shared/api-contract.js';
 import './shared/evidence-core.js';
 import './shared/company-evidence-core.js';
+import './shared/deep-dive-core.js';
 import './shared/candle-analysis-core.js';
 import './shared/market-sentiment-core.js';
 import './shared/map-provenance-core.js';
@@ -53,7 +54,8 @@ const {
   NEWS_ENRICHMENT_SCHEMA_VERSION,
   domainOf: evidenceDomainOf,
 } = globalThis.MarketTerminalEvidence;
-const { normalizeFinnhubCompanyNews } = globalThis.MarketTerminalCompanyEvidence;
+const { normalizeFinnhubCompanyNews, diversifyCompanyHeadlines } = globalThis.MarketTerminalCompanyEvidence;
+const { DEEP_DIVE_SCHEMA_VERSION, buildDeterministicDeepDive } = globalThis.MarketTerminalDeepDive;
 
 const { buildDeterministicCandleAnalysis } = globalThis.MarketTerminalCandleAnalysis;
 const { analyzeMarketSentiment } = globalThis.MarketTerminalMarketSentiment;
@@ -647,7 +649,7 @@ async function fetchCompanyHeadlines(env, query, limit = 14) {
       })).catch(() => [])
       : Promise.resolve([]),
   ]);
-  return mergeHeadlines(lists).slice(0, limit);
+  return diversifyCompanyHeadlines(mergeHeadlines(lists), limit);
 }
 
 const headlineBlock = (headlines) => buildHeadlineBlock((headlines || []).map((headline) => ({
@@ -1526,8 +1528,8 @@ async function fetchSupplyChain(env, query) {
   );
 }
 
-// Deep-dive: combine live Finnhub fundamentals + analyst consensus + current
-// headlines, then have the AI pool produce stock + options ratings.
+// Deep-dive: always produce a deterministic company dossier, then optionally
+// augment its non-actionable narrative through the verified AI pipeline.
 async function fetchDeepDive(env, query) {
   let ticker = /^[A-Z.]{1,6}$/.test(query) ? query.toUpperCase() : '';
   let profile = null;
@@ -1543,7 +1545,7 @@ async function fetchDeepDive(env, query) {
   // Pull everything in parallel.
   const [prof, quote, metricData, recs, headlines] = await Promise.all([
     finnhub(env, '/stock/profile2', { symbol: ticker }).catch(() => ({})),
-    finnhub(env, '/quote', { symbol: ticker }).catch(() => ({})),
+    getQuoteCached(env, ticker).catch(() => null),
     finnhub(env, '/stock/metric', { symbol: ticker, metric: 'all' }).catch(() => ({})),
     finnhub(env, '/stock/recommendation', { symbol: ticker }).catch(() => []),
     fetchCompanyHeadlines(env, ticker, 16),
@@ -1551,57 +1553,32 @@ async function fetchDeepDive(env, query) {
   profile = prof || {};
   const m = (metricData && metricData.metric) || {};
   const rec = Array.isArray(recs) && recs.length ? recs[0] : null;
-
-  const fmtCap = (v) => (v ? (v >= 1e6 ? `$${(v / 1e6).toFixed(2)}T` : v >= 1e3 ? `$${(v / 1e3).toFixed(1)}B` : `$${v}M`) : 'N/A');
-  const quoteSnapshot = (quote && (quote.c || quote.pc)) ? { price: quote.c, change: quote.d, percent: quote.dp } : null;
-  const stats = {
-    high52: m['52WeekHigh'] ?? null, low52: m['52WeekLow'] ?? null,
-    pe: m.peTTM ?? m.peNormalizedAnnual ?? null, beta: m.beta ?? null,
-    marketCap: fmtCap(profile.marketCapitalization), industry: profile.finnhubIndustry || null,
-    logo: profile.logo || null,
-  };
-  const analystConsensus = rec
-    ? { strongBuy: rec.strongBuy, buy: rec.buy, hold: rec.hold, sell: rec.sell, strongSell: rec.strongSell, period: rec.period }
-    : null;
   const preparation = prepareAiTask('intel.deep-dive', headlines, {
     inputs: {
-      quote: Boolean(quoteSnapshot),
-      fundamentalData: Boolean(profile && profile.name && Object.keys(m).length),
+      quote: Boolean(quote && Number(quote.c) > 0),
+      fundamentalData: Object.keys(m).length > 0,
     },
   });
-  const fallback = (reason) => policyAbstention(preparation, reason, {
+  const baseline = buildDeterministicDeepDive({
     ticker,
-    company: profile.name || ticker,
-    quote: quoteSnapshot,
-    stats,
-    analystConsensus,
-    summary: 'The available data is insufficient for a calibrated deep-dive recommendation.',
-    newsSentiment: 'neutral',
-    keyDrivers: 'No causal claim is made without a cited evidence record.',
-    investment: {
-      rating: 'Not Rated', score: null, conviction: 'Low', horizon: 'No verified horizon',
-      fairValue: 'N/A - no verified valuation model',
-      thesis: 'No investment recommendation is issued without a verified valuation model.',
-    },
-    options: {
-      recommendation: 'Avoid - options-chain data is not connected', bias: 'Avoid', score: null,
-      impliedVolatility: 'Unknown', timeframe: 'N/A',
-      rationale: 'No options-chain, strike, or expiry data was verified for this response.',
-    },
-    technicalBias: 'Neutral',
-    entryZone: 'N/A - no verified trade plan',
-    stopLoss: 'N/A - no verified trade plan',
-    priceTarget: 'N/A - no verified valuation model',
-    bullCase: [], bearCase: [], catalysts: [], risks: [],
+    profile,
+    quote,
+    metrics: m,
+    recommendation: rec,
+    evidence: preparation.evidence,
+  });
+  const fallback = (reason) => policyAbstention(preparation, reason, {
+    ...baseline,
+    aiNarrativeStatus: 'withheld',
   });
   if (!preparation.canGenerate) return fallback('The current evidence did not meet the deep-dive grounding policy.');
   const dataBlock =
     `LIVE DATA for ${profile.name || ticker} (${ticker}):\n` +
-    `- Price: ${quote.c ?? 'N/A'} (change ${quote.d ?? 'N/A'}, ${quote.dp ?? 'N/A'}% today)\n` +
-    `- Day range: ${quote.l ?? '?'}–${quote.h ?? '?'}; Prev close ${quote.pc ?? '?'}\n` +
+    `- Price: ${quote?.c ?? 'N/A'} (change ${quote?.d ?? 'N/A'}, ${quote?.dp ?? 'N/A'}% today)\n` +
+    `- Day range: ${quote?.l ?? '?'}-${quote?.h ?? '?'}; Prev close ${quote?.pc ?? '?'}\n` +
     `- 52-week range: ${m['52WeekLow'] ?? '?'}–${m['52WeekHigh'] ?? '?'}\n` +
     `- P/E (TTM): ${m.peTTM ?? m.peNormalizedAnnual ?? 'N/A'}; P/B: ${m.pbAnnual ?? 'N/A'}; Beta: ${m.beta ?? 'N/A'}\n` +
-    `- Market cap: ${fmtCap(profile.marketCapitalization)}; Industry: ${profile.finnhubIndustry || 'N/A'}\n` +
+    `- Market cap: ${baseline.stats.marketCap || 'N/A'}; Industry: ${profile.finnhubIndustry || 'N/A'}\n` +
     `- 52w price return: ${m['52WeekPriceReturnDaily'] ?? 'N/A'}%; Div yield: ${m.dividendYieldIndicatedAnnual ?? m.currentDividendYieldTTM ?? 'N/A'}%\n` +
     (rec ? `- Analyst consensus (${rec.period}): strongBuy ${rec.strongBuy}, buy ${rec.buy}, hold ${rec.hold}, sell ${rec.sell}, strongSell ${rec.strongSell}\n` : '');
 
@@ -1624,15 +1601,25 @@ async function fetchDeepDive(env, query) {
     return fallback(describeAiFailure(error, preparation.policy));
   }
 
-  const result = attachPolicy(preparation, data, {
+  const policyResult = attachPolicy(preparation, data, {
     unknowns: ['Price targets, entries, stops, fair values, and options ideas require dedicated verified inputs.'],
   });
-  result.ticker = ticker;
-  result.company = result.company || profile.name || ticker;
-  result.quote = quoteSnapshot;
-  result.stats = stats;
-  result.analystConsensus = analystConsensus;
-  return result;
+  if (policyResult.abstained) {
+    return { ...baseline, ...policyResult, aiNarrativeStatus: 'withheld' };
+  }
+  return {
+    ...baseline,
+    ...policyResult,
+    ticker,
+    company: policyResult.company || baseline.company,
+    quote: baseline.quote,
+    stats: baseline.stats,
+    analystConsensus: baseline.analystConsensus,
+    dataSources: baseline.dataSources,
+    dataMode: 'verified-ai-with-deterministic-data',
+    deterministic: true,
+    aiNarrativeStatus: 'verified',
+  };
 }
 
 // ───────────────────────── GLOBAL MAP layer data ─────────────────────────
@@ -3258,7 +3245,7 @@ async function handleApi(request, env, ctx, url) {
   if (p === '/api/intel/deepdive') {
     const query = (qs.get('q') || '').trim().slice(0, 60);
     if (!query) return json({ error: true, message: 'Missing company name or ticker.' }, 400);
-    try { const { data, fresh } = await getData(env, ctx, `deepdive:${AI_TASK_POLICY_SCHEMA_VERSION}:${query.toLowerCase()}`, () => fetchDeepDive(env, query)); return json({ cached: !fresh, ...data }); }
+    try { const { data, fresh } = await getData(env, ctx, `deepdive:${DEEP_DIVE_SCHEMA_VERSION}:${AI_TASK_POLICY_SCHEMA_VERSION}:${query.toLowerCase()}`, () => fetchDeepDive(env, query)); return json({ cached: !fresh, ...data }); }
     catch (err) { return json({ error: true, message: friendlyError(err) }, 500); }
   }
   if (p === '/api/intel/candle') {

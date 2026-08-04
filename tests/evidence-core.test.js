@@ -90,6 +90,21 @@ test('Finnhub company news becomes policy-ready evidence with ticker identity', 
   assert.equal(headlines[0].evidence.rawMetadata.vendor, 'Finnhub');
 });
 
+test('company headline selection reserves room for independent source domains', () => {
+  const headlines = [
+    { title: 'Newest Yahoo item', link: 'https://finnhub.io/a', evidence: { publisherDomain: 'finance.yahoo.com' } },
+    { title: 'Second Yahoo item', link: 'https://finnhub.io/b', evidence: { publisherDomain: 'finance.yahoo.com' } },
+    { title: 'Bing aggregate item', link: 'https://www.bing.com/news/apiclick.aspx?id=1', evidence: { publisherDomain: 'bing.com' } },
+    { title: 'Third Yahoo item', link: 'https://finnhub.io/c', evidence: { publisherDomain: 'finance.yahoo.com' } },
+  ];
+
+  const selected = companyEvidence.diversifyCompanyHeadlines(headlines, 2);
+  assert.deepEqual(selected.map((headline) => headline.title), [
+    'Newest Yahoo item',
+    'Bing aggregate item',
+  ]);
+});
+
 test('dedupeEvidence keeps first canonical record and marks duplicates', () => {
   const first = evidence.normalizeEvidenceRecord({
     title: 'Fed official comments on rates',

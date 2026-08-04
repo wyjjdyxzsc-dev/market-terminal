@@ -2,7 +2,7 @@ This work was performed by OpenAI Codex without Claude’s involvement. This doc
 
 # Status
 
-- Handoff status: checkpoint 6 source commit `919f1b9` production verified; residual evaluation/observability and broader platform parity work remains
+- Handoff status: checkpoint 7 production verified; checkpoint 8 Deep Dive resilience is locally verified and awaiting managed production verification
 - Research dates: baseline 2026-07-13; AI-provider capability refresh 2026-07-28
 - Deployment URL: `https://market-terminal.wyjjdyxzsc.workers.dev`
 
@@ -552,11 +552,31 @@ This work was performed by OpenAI Codex without Claude’s involvement. This doc
   - browser console errors/warnings were empty. No positive high-risk acceptance, new entitlement, or parity-row upgrade is claimed
 - The final documentation-only deployment uses all seven `20260801a` cache references.
 
+# 2026-08-04 checkpoint 8: Deep Dive deterministic resilience
+
+- Incident reproduction showed `/api/intel/deepdive` returning `200` but looking broken because every recent evidence slot could be occupied by one Finnhub/Yahoo publisher domain. The high-risk policy then abstained before provider calls, direct Finnhub quote access could fail even while the pooled quote endpoint worked, and the fallback rendered empty bull/bear/watch/risk sections.
+- Added `shared/deep-dive-core.js` with schema `2026-08-04a`. Express and the Worker now return the same deterministic company dossier containing pooled quote provenance, fundamental metrics, 52-week position, analyst counts, source coverage, factual observations, company-relevant watch items, and explicit data limits.
+- The optional AI narrative remains subject to existing evidence, different-provider/different-model verification, and budget rules. AI failure or absence now sets `aiNarrativeStatus: withheld` without removing the deterministic dossier. Rating, score, fair value, entry, stop, target, IV, strike, expiry, and options construction remain unavailable.
+- `shared/company-evidence-core.js` now reserves one headline slot per available normalized source domain before filling remaining slots by recency. This prevents a high-volume vendor feed from crowding independent RSS evidence out of the policy window and makes distinct sources visible at the top of the UI evidence list.
+- Both runtimes use their canonical quote cascade for Deep Dive. Cache keys include `DEEP_DIVE_SCHEMA_VERSION`, isolating the old empty fallback envelopes.
+- The Deep Dive UI now distinguishes `AI NARRATIVE WITHHELD` from dossier availability, renders four source-status cards and six source links, uses factual observation/watch/data-limit labels, suppresses unavailable trade levels, and has a two-column mobile provenance layout.
+- Local Finnhub WebSocket handling now connects only after the first quote subscription and backs off from 5 to 60 seconds after repeated closes. This removes the observed idle five-second reconnect loop while retaining the REST quote cascade.
+- Local verification:
+  - `npm test` passed `54/54` unit tests and all `31/31` available smoke contracts; fire, weather, and webcams remained documented optional skips
+  - the strict Deep Dive smoke contract no longer permits an endpoint error and requires schema `2026-08-04a`, a positive pooled quote, non-empty deterministic sections, provenance, and safe withheld actionable fields
+  - `npm run test:ai-eval` passed all thresholds across the unchanged 10-case offline safety fixture set
+  - `npm audit --omit=dev` reported zero vulnerabilities
+  - Wrangler `4.118.0` dry-run bundled 14 assets at 424.08 KiB raw / 102.46 KiB gzip; no manual deployment occurred
+  - AAPL, Apple, and MSFT probes returned `200`, resolved identity, a pooled quote, non-empty dossier sections, and two or three normalized news sources. AAPL returned 131 numeric metrics and 54 analyst ratings in the observed refresh
+  - desktop interaction and a 390x844 responsive check rendered the dossier without horizontal overflow or console warnings/errors
+- All seven source cache references use `20260804a`. Production verification is intentionally not claimed yet.
+
 # Unresolved risks and technical debt
 
 - The repository still has very large `server.js` and `worker.js` monoliths.
 - High-risk generated workflows now have an independent model check, but no model verifier proves truth. Live-provider drift canaries, a human-labelled finance/OSINT claim corpus, calibration measurement, and persistent aggregate observability are still missing.
 - Quant coverage now exists only for the new candlestick fallback engine, not the broader 40-indicator surface.
+- Generated Deep Dive narrative still requires two eligible heavy providers from independent model families. The deterministic dossier is available without them, but no positive high-risk generated-output quality is claimed.
 - Map source snapshots are not universally supplied by upstreams. The new UI differentiates a provided snapshot from response-served time, but per-feature citations and direct upstream timestamps remain future data-source work.
 
 # Final branch, commits, tags, and working-tree state

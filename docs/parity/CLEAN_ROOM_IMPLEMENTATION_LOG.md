@@ -95,3 +95,10 @@ This file records how parity work is implemented without copying protected code,
 - Core source commit `febefb3` deployed through the managed path, served all seven `20260730a` assets, and passed `33/33` production contracts plus targeted provider/evidence probes. The available generated high-risk attempts failed closed, so no positive quality claim is made.
 - The first live NEWS probe exposed a project-local validation defect: one generated card was accepted from 60 input headlines. The original `2026-07-30b` minimum-batch/cache-isolation repair uses only this repository's normalized evidence and fallback path; it passed all local gates. No parity status changes.
 - Source commit `90c191b` deployed the repair through the managed path, passed `33/33`, returned 12 linked cards on normal/forced-fresh probes, and passed a browser check without console errors. No third-party protected material, new entitlement, or parity status was introduced.
+
+## 2026-08-04 checkpoint 8
+
+- Implemented `shared/deep-dive-core.js`, source-reserving company headline selection, pooled quote integration, deterministic provenance UI, and local WebSocket backoff from this repository's own data contracts and directly observed failure behavior.
+- The dossier uses only already configured provider fields and normalized headline metadata. Factual observations are arithmetic/descriptive; unsupported valuation, trade levels, ratings, and options output remain withheld.
+- No competitor source, prompt, schema, code, test, ranking method, protected UI, article body, or licensed dataset was consulted or copied for this repair. Public Cloudflare documentation was used only to verify Worker tooling and runtime practices.
+- Local evidence passed `54/54` unit tests, all offline safety thresholds, `31/31` available smoke contracts, zero-vulnerability audit, Wrangler dry-run bundling, targeted company probes, and desktop/mobile checks. Production and parity status changes are not claimed.

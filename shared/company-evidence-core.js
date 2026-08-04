@@ -56,8 +56,45 @@
     });
   }
 
+  function headlineSourceKey(headline) {
+    const record = headline && headline.evidence || {};
+    return String(
+      record.publisherDomain ||
+      evidenceApi.domainOf(headline && headline.link) ||
+      record.publisher ||
+      headline && headline.source ||
+      'unknown'
+    ).trim().toLowerCase();
+  }
+
+  // Reserve one slot for each available publisher domain before recency fills
+  // the remainder. This prevents a high-volume vendor feed from crowding out
+  // independently sourced RSS evidence needed by the grounding policy.
+  function diversifyCompanyHeadlines(items, limit = 14) {
+    const headlines = Array.isArray(items) ? items : [];
+    const cap = Math.max(1, Math.min(50, Number(limit) || 14));
+    const selected = [];
+    const selectedIndexes = new Set();
+    const sources = new Set();
+
+    for (let index = 0; index < headlines.length && selected.length < cap; index++) {
+      const source = headlineSourceKey(headlines[index]);
+      if (sources.has(source)) continue;
+      sources.add(source);
+      selected.push(headlines[index]);
+      selectedIndexes.add(index);
+    }
+    for (let index = 0; index < headlines.length && selected.length < cap; index++) {
+      if (selectedIndexes.has(index)) continue;
+      selected.push(headlines[index]);
+    }
+
+    return selected;
+  }
+
   const api = {
     normalizeFinnhubCompanyNews,
+    diversifyCompanyHeadlines,
   };
 
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

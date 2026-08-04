@@ -869,6 +869,43 @@ function formatAiRuntimeSummary(policy) {
 
   const liList = (arr) => (Array.isArray(arr) ? arr : []).map((x) => `<li>${esc(x)}</li>`).join('');
 
+  function deepDiveProvenance(data) {
+    const sources = data && data.dataSources || {};
+    const cards = [
+      ['QUOTE', sources.quote?.status, sources.quote?.provider || 'No usable provider'],
+      ['FUNDAMENTALS', sources.fundamentals?.status, sources.fundamentals?.status === 'available'
+        ? `${sources.fundamentals.fieldCount || 0} Finnhub metrics`
+        : 'Metrics unavailable'],
+      ['ANALYSTS', sources.analysts?.status, sources.analysts?.status === 'available'
+        ? `${sources.analysts.ratingCount || 0} ratings${sources.analysts.period ? `, ${sources.analysts.period}` : ''}`
+        : 'Consensus unavailable'],
+      ['NEWS', sources.news?.status, sources.news?.recordCount
+        ? `${sources.news.recordCount} records, ${sources.news.sourceCount || 0} sources`
+        : 'No qualifying records'],
+    ];
+    if (!cards.some(([, status]) => status)) return '';
+    return `<div class="dd-provenance">${cards.map(([label, status, detail]) => {
+      const state = String(status || 'unavailable').toLowerCase().replace(/[^a-z-]/g, '');
+      return `<div class="dd-source"><div><span>${label}</span><i class="dd-source-state is-${esc(state)}">${esc(status || 'unavailable')}</i></div><b>${esc(detail)}</b></div>`;
+    }).join('')}</div>`;
+  }
+
+  function deepDiveEvidence(data) {
+    const evidence = Array.isArray(data && data.evidence) ? data.evidence.slice(0, 6) : [];
+    if (!evidence.length) return '';
+    return `<div class="dd-evidence"><div class="dd-evidence-title">RECENT SOURCE EVIDENCE</div>${evidence.map((entry) => {
+      const url = safeHttpUrl(entry.sourceUrl || '');
+      const date = entry.publishedAt && !Number.isNaN(new Date(entry.publishedAt).valueOf())
+        ? new Date(entry.publishedAt).toLocaleDateString()
+        : 'time unavailable';
+      const title = esc(entry.title || 'Untitled source record');
+      const headline = url
+        ? `<a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${title}</a>`
+        : `<span>${title}</span>`;
+      return `<div class="dd-evidence-row"><div>${headline}</div><span>${esc(entry.publisher || entry.publisherDomain || 'source')} · ${esc(date)}</span></div>`;
+    }).join('')}</div>`;
+  }
+
   function policyNotice(data) {
     const policy = data && data.policy;
     if (!policy) return '';
@@ -887,14 +924,16 @@ function formatAiRuntimeSummary(policy) {
     const asOf = policy.dataAsOf && !Number.isNaN(new Date(policy.dataAsOf).valueOf())
       ? new Date(policy.dataAsOf).toLocaleString()
       : '';
+    const hasDeterministicDossier = data && data.deterministic === true;
     const title = policy.status === 'abstained'
-      ? 'RESEARCH WITHHELD'
+      ? (hasDeterministicDossier ? 'AI NARRATIVE WITHHELD' : 'RESEARCH WITHHELD')
       : (policy.status === 'deterministic' ? 'DETERMINISTIC ANALYSIS' : 'EVIDENCE-GATED RESEARCH');
     const count = Number(policy.evidenceCount || 0);
     const runtime = formatAiRuntimeSummary(policy);
     return `<div class="policy-notice ${policy.status === 'abstained' ? 'is-abstained' : 'is-grounded'}">
       <div class="policy-notice-title">${title}</div>
       ${policy.reason ? `<div class="policy-notice-reason">${esc(policy.reason)}</div>` : ''}
+      ${policy.status === 'abstained' && hasDeterministicDossier ? '<div class="policy-notice-meta">The source-backed deterministic company dossier remains available below.</div>' : ''}
       <div class="policy-notice-meta">${count} qualifying source record${count === 1 ? '' : 's'}${asOf ? ` · as of ${esc(asOf)}` : ''} · ${esc(policy.verifier || 'policy check')}</div>
       ${runtime ? `<div class="policy-notice-meta">${esc(runtime)}</div>` : ''}
       ${sourceLinks ? `<div class="policy-notice-sources">${policy.status === 'grounded' ? 'Cited' : 'Available evidence'}: ${sourceLinks}</div>` : ''}
@@ -904,10 +943,16 @@ function formatAiRuntimeSummary(policy) {
 
   function renderDeepDive(d) {
     const inv = d.investment || {}, opt = d.options || {}, st = d.stats || {};
+    const deterministicOnly = d.aiNarrativeStatus !== 'verified';
+    const caseLabels = deterministicOnly
+      ? ['SUPPORTING OBSERVATIONS', 'CAUTION OBSERVATIONS', 'RECENT WATCH ITEMS', 'DATA LIMITS']
+      : ['BULL CASE', 'BEAR CASE', 'CATALYSTS', 'RISKS'];
+    const usableLevel = (value) => value && !/^(n\/a|unrated)(\s|$)/i.test(String(value));
+    const showLevels = [d.technicalBias, d.entryZone, d.stopLoss, d.priceTarget].some(usableLevel);
     const html = `
       <div class="dd-card">
         <div class="dd-head">
-          ${st.logo ? `<img class="dd-logo" src="${esc(st.logo)}" alt="" onerror="this.style.display='none'">` : ''}
+          ${st.logo ? `<img class="dd-logo" src="${esc(st.logo)}" alt="">` : ''}
           <div class="dd-id">
             <div class="dd-ticker" data-ticker="${esc(d.ticker)}">${esc(d.ticker)}</div>
             <div class="dd-name">${esc(d.company)}${st.industry ? ` · ${esc(st.industry)}` : ''}</div>
@@ -917,6 +962,8 @@ function formatAiRuntimeSummary(policy) {
 
         ${policyNotice(d)}
 
+        ${deepDiveProvenance(d)}
+
         <p class="dd-summary">${esc(d.summary)}</p>
 
         <div class="dd-ratings">
@@ -925,7 +972,7 @@ function formatAiRuntimeSummary(policy) {
             <div class="dd-rating-badge">${esc(inv.rating || '—')}</div>
             <div class="dd-rating-meta">${esc(inv.conviction || '')} conviction · ${esc(inv.horizon || '')}</div>
             <div class="dd-rating-thesis">${esc(inv.thesis || '')}</div>
-            ${inv.fairValue && inv.fairValue !== 'N/A' ? `<div class="dd-fair">Fair value: <b>${esc(inv.fairValue)}</b></div>` : ''}
+            ${inv.fairValue && !/^N\/A/i.test(inv.fairValue) ? `<div class="dd-fair">Fair value: <b>${esc(inv.fairValue)}</b></div>` : ''}
           </div>
           <div class="dd-rating ${BIAS_CLASS(opt.bias)}">
             <div class="dd-rating-top"><span class="dd-rating-kind">OPTIONS</span><span class="dd-rating-score">${opt.score != null ? opt.score : '—'}<i>/100</i></span></div>
@@ -935,36 +982,40 @@ function formatAiRuntimeSummary(policy) {
           </div>
         </div>
 
-        ${d.keyDrivers ? `<div class="dd-drivers"><span class="dd-drivers-label">WHAT'S MOVING IT</span> ${esc(d.keyDrivers)}</div>` : ''}
+        ${d.keyDrivers ? `<div class="dd-drivers"><span class="dd-drivers-label">${deterministicOnly ? 'OBSERVED DATA' : "WHAT'S MOVING IT"}</span> ${esc(d.keyDrivers)}</div>` : ''}
 
-        ${(d.technicalBias || d.entryZone || d.stopLoss || d.priceTarget) ? `
+        ${showLevels ? `
         <div class="dd-levels">
-          ${d.technicalBias ? `<div class="dd-level-bias dd-level-bias--${esc((d.technicalBias||'').toLowerCase())}"><span>TECH BIAS</span><b>${esc(d.technicalBias)}</b></div>` : ''}
-          ${d.entryZone ? `<div class="dd-level-item"><span>ENTRY</span><b>${esc(d.entryZone)}</b></div>` : ''}
-          ${d.stopLoss ? `<div class="dd-level-item dd-level-stop"><span>STOP</span><b>${esc(d.stopLoss)}</b></div>` : ''}
-          ${d.priceTarget ? `<div class="dd-level-item dd-level-target"><span>TARGET</span><b>${esc(d.priceTarget)}</b></div>` : ''}
+          ${usableLevel(d.technicalBias) ? `<div class="dd-level-bias dd-level-bias--${esc((d.technicalBias||'').toLowerCase())}"><span>TECH BIAS</span><b>${esc(d.technicalBias)}</b></div>` : ''}
+          ${usableLevel(d.entryZone) ? `<div class="dd-level-item"><span>ENTRY</span><b>${esc(d.entryZone)}</b></div>` : ''}
+          ${usableLevel(d.stopLoss) ? `<div class="dd-level-item dd-level-stop"><span>STOP</span><b>${esc(d.stopLoss)}</b></div>` : ''}
+          ${usableLevel(d.priceTarget) ? `<div class="dd-level-item dd-level-target"><span>TARGET</span><b>${esc(d.priceTarget)}</b></div>` : ''}
         </div>` : ''}
 
         <div class="dd-cases">
-          <div class="dd-case dd-bull"><h4>▲ BULL CASE</h4><ul>${liList(d.bullCase)}</ul></div>
-          <div class="dd-case dd-bear"><h4>▼ BEAR CASE</h4><ul>${liList(d.bearCase)}</ul></div>
+          <div class="dd-case dd-bull"><h4>${esc(caseLabels[0])}</h4><ul>${liList(d.bullCase)}</ul></div>
+          <div class="dd-case dd-bear"><h4>${esc(caseLabels[1])}</h4><ul>${liList(d.bearCase)}</ul></div>
         </div>
 
         <div class="dd-cases">
-          <div class="dd-case dd-cat"><h4>⚡ CATALYSTS</h4><ul>${liList(d.catalysts)}</ul></div>
-          <div class="dd-case dd-risk"><h4>⚠ RISKS</h4><ul>${liList(d.risks)}</ul></div>
+          <div class="dd-case dd-cat"><h4>${esc(caseLabels[2])}</h4><ul>${liList(d.catalysts)}</ul></div>
+          <div class="dd-case dd-risk"><h4>${esc(caseLabels[3])}</h4><ul>${liList(d.risks)}</ul></div>
         </div>
 
         <div class="dd-stats">
           ${st.marketCap ? `<div class="dd-stat"><span>MKT CAP</span><b>${esc(st.marketCap)}</b></div>` : ''}
           ${st.pe != null ? `<div class="dd-stat"><span>P/E</span><b>${Number(st.pe).toFixed(1)}</b></div>` : ''}
+          ${st.pb != null ? `<div class="dd-stat"><span>P/B</span><b>${Number(st.pb).toFixed(1)}</b></div>` : ''}
           ${st.beta != null ? `<div class="dd-stat"><span>BETA</span><b>${Number(st.beta).toFixed(2)}</b></div>` : ''}
           ${st.high52 != null ? `<div class="dd-stat"><span>52W HIGH</span><b>$${Number(st.high52).toFixed(2)}</b></div>` : ''}
           ${st.low52 != null ? `<div class="dd-stat"><span>52W LOW</span><b>$${Number(st.low52).toFixed(2)}</b></div>` : ''}
-          <div class="dd-stat news-tone"><span>NEWS TONE</span><b class="tone-${esc(d.newsSentiment || 'neutral')}">${esc((d.newsSentiment || 'neutral').toUpperCase())}</b></div>
+          ${st.rangePosition != null ? `<div class="dd-stat"><span>52W POSITION</span><b>${Number(st.rangePosition).toFixed(1)}%</b></div>` : ''}
+          <div class="dd-stat news-tone"><span>NEWS TONE</span><b class="tone-${esc(d.newsSentiment || 'unrated')}">${esc((d.newsSentiment || 'unrated').toUpperCase())}</b></div>
         </div>
 
         ${consensusBar(d.analystConsensus)}
+
+        ${deepDiveEvidence(d)}
 
         <button class="dd-open" data-ticker="${esc(d.ticker)}">Open ${esc(d.ticker)} in Terminal →</button>
         <p class="dd-disclaimer">Policy-gated terminal research — educational only, not investment advice.</p>
@@ -1058,6 +1109,8 @@ function formatAiRuntimeSummary(policy) {
       </div>`;
     const wrap = $('#ddResult');
     wrap.innerHTML = html;
+    const logo = wrap.querySelector('.dd-logo');
+    if (logo) logo.addEventListener('error', () => { logo.hidden = true; }, { once: true });
     wrap.querySelectorAll('[data-ticker]').forEach((el) => {
       el.style.cursor = 'pointer';
       el.addEventListener('click', () => drillTo(el.dataset.ticker));
@@ -1457,13 +1510,16 @@ function formatAiRuntimeSummary(policy) {
     ddLoadedFor = q;
     $('#ddInput').value = q;
     $('#ddStatus').className = 'status';
-    $('#ddStatus').innerHTML = '<span class="spinner"></span>Running deep analysis on ' + esc(q.toUpperCase()) + '… (gathering live news, fundamentals & analyst views, then reasoning)';
+    $('#ddStatus').innerHTML = '<span class="spinner"></span>Building a source-backed dossier for ' + esc(q.toUpperCase()) + '… (pooled quote, fundamentals, analyst counts, and current evidence)';
     $('#ddResult').innerHTML = '';
     try {
       const data = await fetchJSON('/api/intel/deepdive?q=' + encodeURIComponent(q));
       if (data.error) throw new Error(data.message);
-      $('#ddStatus').textContent = '';
       renderDeepDive(data);
+      $('#ddStatus').className = 'status policy-status';
+      $('#ddStatus').textContent = data.aiNarrativeStatus === 'verified'
+        ? 'Dossier loaded with an independently verified AI narrative.'
+        : 'Deterministic dossier loaded. The optional AI narrative was withheld; live data sections remain available.';
     } catch (err) {
       $('#ddStatus').className = 'status error';
       $('#ddStatus').textContent = 'Could not analyze that stock: ' + err.message;

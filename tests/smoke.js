@@ -213,7 +213,17 @@ async function checkHtml(label, url) {
 
   // Deep-dive — uses ?q= param
   await check('GET /api/intel/deepdive?q=AAPL', `${BASE}/api/intel/deepdive?q=AAPL`,
-    { skipError: true, validate: d => hasPolicy(d, 'intel.deep-dive') && d.investment?.rating === 'Not Rated' && d.investment?.score == null && d.options?.bias === 'Avoid' && /^N\/A/.test(d.priceTarget || '') });
+    { validate: d => hasPolicy(d, 'intel.deep-dive') &&
+      d.deepDiveSchemaVersion === '2026-08-04a' &&
+      d.deterministic === true &&
+      /^(deterministic-dossier|verified-ai-with-deterministic-data)$/.test(d.dataMode || '') &&
+      typeof d.summary === 'string' && d.summary.length > 40 &&
+      Number(d.quote?.price) > 0 && typeof d.quote?.source === 'string' &&
+      d.dataSources?.quote?.status === 'available' &&
+      ['withheld', 'verified'].includes(d.aiNarrativeStatus) &&
+      [d.bullCase, d.bearCase, d.catalysts, d.risks].every(items => Array.isArray(items) && items.length > 0) &&
+      d.investment?.rating === 'Not Rated' && d.investment?.score == null &&
+      d.options?.bias === 'Avoid' && /^N\/A/.test(d.priceTarget || '') });
 
   // AI chat (skipError — needs a heavy-tier AI key)
   await check('POST /api/intel/chat', `${BASE}/api/intel/chat`, {

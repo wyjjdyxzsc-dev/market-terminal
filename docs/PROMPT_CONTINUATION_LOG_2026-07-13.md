@@ -104,6 +104,10 @@ This file is a portable handoff for continuing work on another account. It recor
 
 > continue
 
+### User prompt 23
+
+> deep dive does not work fix all of this
+
 ## Authoritative Prompt Sources
 
 - Full master prompt: [MARKET_TERMINAL_TOTAL_PLATFORM_CODEX_MASTER_PROMPT.md](/Users/krishivjain/Desktop/claude projects/market-terminal/MARKET_TERMINAL_TOTAL_PLATFORM_CODEX_MASTER_PROMPT.md)
@@ -159,6 +163,8 @@ The following production-oriented vertical slices were implemented and deployed:
 - Routed company impact, deep dive, current-market chat, and price action through ticker-backed company evidence; added required price-action evidence IDs.
 - Reserved independent-verifier budget before generator retries, stabilized Worker high-risk provider order, and exposed safe failed-attempt diagnostics plus specific abstention reasons.
 - Reconciled lower-risk Express/Worker output ceilings and per-minute versus daily/quota cooldown behavior; local NEWS enrichment returned 12 source-linked non-degraded items.
+- Restored Deep Dive as a deterministic dossier that survives AI abstention, uses the pooled quote cascade, preserves source diversity, exposes data provenance and relevant watch items, and keeps unsupported recommendation/options fields withheld.
+- Changed local Finnhub WebSocket startup to lazy subscription and bounded exponential reconnect backoff so an idle connection cannot create a five-second retry storm.
 - Unit tests for API contracts, evidence helpers, and candle analysis.
 - Expanded smoke tests covering local and production endpoint contracts.
 
@@ -184,6 +190,7 @@ Local verification completed:
 - Checkpoint 6 work runs from detached worktree `/tmp/market-terminal-checkpoint6-20260726`. The original checkout and its unrelated untracked master-prompt/profile files remain preserved.
 - Checkpoint 7 local verification on 2026-07-30: schemas moved to `2026-07-30a`; `npm run test:unit` passed `50/50`; the 10-case offline evaluation passed all thresholds; local smoke passed `31/31` available contracts with only documented optional-route skips; targeted company evidence, provider-reason, and browser checks passed; and `npm audit --omit=dev` found zero vulnerabilities.
 - The production-discovered NEWS follow-up uses schema/cache `2026-07-30b`. Its useful-batch validator rejected an undersized model response and returned 14 canonical source-linked degraded items locally. The unchanged `50/50` unit suite, all offline thresholds, `31/31` available contracts, syntax checks, zero-vulnerability audit, and Wrangler `4.115.0` dry run at 408.24 KiB raw / 98.96 KiB gzip passed.
+- Checkpoint 8 local verification on 2026-08-04: schema `2026-08-04a` returned useful deterministic AAPL/Apple/MSFT dossiers while the optional high-risk narrative correctly abstained in the Groq-only environment; `npm test` passed `54/54` unit tests and `31/31` available contracts, all offline AI thresholds passed, dependency audit found zero vulnerabilities, Wrangler `4.118.0` dry-run bundled 14 assets, and desktop/mobile browser checks found no overflow or console errors. Production verification remains pending.
 - The Desktop-backed `node_modules` tree initially exposed dataless/duplicated dependency files and stalled Express startup. A clean `npm ci` restored the ignored dependency tree; no source or user artifact was removed.
 
 Production verification completed:

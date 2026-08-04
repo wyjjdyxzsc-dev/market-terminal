@@ -84,7 +84,7 @@ Deploys to `https://market-terminal.wyjjdyxzsc.workers.dev`
 - **RJD Monte Carlo** (Module 4 upgrade): `[MC]` fan on chart now defaults to Rough Jump-Diffusion (H=0.45, λ=2) with GBM/RJD switcher pill.
 - **Mobile layout** (Module 5): osc bar wraps on narrow screens, buttons resize at ≤860px/≤480px, canvas min-height fixed, shock table hides columns on small screens.
 
-**Test suite**: `tests/smoke.js` — run `npm test` (requires local server running) or `npm run test:prod` (hits the deployed worker — run after deploys to catch server.js/worker.js drift). The suite has 34 checks including the shell/version contract, POST `/api/intel/chat`, sector/company/candle policy contracts, and alert-state authority; optional keyed/network routes are skipped locally when unavailable. `npm run test:ai-eval` runs the versioned offline AI policy-safety fixtures.
+**Test suite**: `tests/smoke.js` — run `npm test` (requires local server running) or `npm run test:prod` (hits the deployed worker — run after deploys to catch server.js/worker.js drift). The unit suite has 54 tests and the smoke suite has 34 checks including the shell/version contract, POST `/api/intel/chat`, sector/company/candle policy contracts, Deep Dive deterministic-dossier contract, and alert-state authority; optional keyed/network routes are skipped locally when unavailable. `npm run test:ai-eval` runs the versioned offline AI policy-safety fixtures.
 
 **Resilience/UX (2026-07-05)**:
 - Terminal auto-loads last viewed symbol (localStorage `mt:lastSymbol`, default AAPL)
@@ -120,6 +120,12 @@ Deploys to `https://market-terminal.wyjjdyxzsc.workers.dev`
 - Lower-risk provider races use a shared 4,000-token ceiling and distinguish per-minute throttles from daily/quota exhaustion. Source commit `febefb3` served all seven `20260730a` assets and passed `33/33` deployed contracts; available high-risk routes remained fail-closed and no positive high-risk acceptance is claimed.
 - The first deployed NEWS probe exposed a one-card model batch that passed the old non-empty validator. Source commit `90c191b` added NEWS schema/cache `2026-07-30b`, requires six enriched items when six inputs exist, and otherwise serves the canonical source-linked degraded fallback. It passed `50/50` unit tests, the 10-case evaluation, `31/31` available local contracts, zero-vulnerability audit, Wrangler `4.115.0` dry-run bundling, `33/33` production contracts, forced-fresh NEWS probes with 12 linked cards, and a production browser pass with no console errors.
 
+**Deep Dive resilience (2026-08-04 checkpoint, local verified; production pending)**:
+- `shared/deep-dive-core.js` schema `2026-08-04a` builds a deterministic quote, fundamentals, analyst-consensus, relevant-watch-item, and limitation dossier in both runtimes. Unsupported ratings, valuation, trade levels, and options construction remain withheld.
+- Company evidence reserves slots for distinct source domains before recency fills the remaining limit. Deep Dive uses the 10-provider quote pool instead of direct Finnhub quote access, and its cache key includes the dossier schema.
+- The UI separates deterministic data from the optional verified AI narrative, exposes four source-status cards and six evidence links, and remains responsive at 390px. Local verification passed `54/54` unit tests, all AI fixture thresholds, `31/31` available contracts, zero-vulnerability audit, Wrangler `4.118.0` dry-run, targeted AAPL/Apple/MSFT probes, and browser checks with no console errors.
+- Local Finnhub WebSocket startup is lazy and reconnects with bounded exponential backoff, preventing an idle five-second reconnect storm from competing with quote/fundamental work.
+
 **Branches**: All work on `main` (no feature branches yet).
 
 ## Key Files
@@ -131,6 +137,7 @@ Deploys to `https://market-terminal.wyjjdyxzsc.workers.dev`
 | `public/app.js` | UI, drawChart(), loadSymbol(), panel logic |
 | `public/quant.js` | Math lib (no DOM), IIFE export |
 | `public/intel.js` | Deep Dive UI + QUANT LAB |
+| `shared/deep-dive-core.js` | Deterministic Deep Dive dossier and provenance contract |
 | `public/index.html` | Layout, cache-buster versioning |
 | `shared/ai-provider-registry.js` | Current provider/model lifecycle, eligibility, pricing, and health metadata |
 | `shared/ai-verification-core.js` | Bounded generation, independent verification, runtime usage/cost telemetry |

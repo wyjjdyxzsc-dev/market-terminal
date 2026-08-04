@@ -13,7 +13,7 @@ small Express backend that keeps every API key server-side.
 
 ---
 
-## Repository operational state (2026-07-30)
+## Repository operational state (2026-08-04)
 
 - Deploy by pushing to `main`. Do not run `wrangler deploy` manually for production; GitHub is wired to Cloudflare Workers and is the canonical deploy path for this repo.
 - `npm test` now runs unit coverage plus the local smoke suite. Start the local server first with `npm start`.
@@ -24,6 +24,7 @@ small Express backend that keeps every API key server-side.
 - Checkpoint 5 source commit `20c9252` extends that authority model to sector analysis, company-news impact, deterministic candle commentary, and corroboration-gated alerts. It is production verified with `29/29` unit tests, all 28 keyless-available local smoke contracts, and `33/33` deployed contracts.
 - Checkpoint 6 source commit `919f1b9` adds a current-model provider registry, independent different-provider/different-model verification for generated high-risk tasks, bounded calls/tokens/latency/cost, safe runtime telemetry, and offline safety evaluations. It is production verified with `45/45` unit tests, all 10-case evaluation thresholds, all 28 keyless-available local contracts, `33/33` deployed contracts, targeted authority probes, and desktop/mobile browser checks. Available live high-risk verifier attempts failed closed; no positive high-risk acceptance is claimed.
 - Checkpoint 7 source commits `febefb3` and `90c191b` are production verified. The repair restores company evidence attribution/ingestion, reserves verifier budget, aligns provider limits/cooldowns, and exposes safe failure diagnostics. After the first live probe exposed a one-card NEWS batch, schema/cache `2026-07-30b` added useful-batch validation and a truthful source-linked fallback. The final deployment served all seven `20260730b` assets, passed `33/33` production contracts, returned 12 source-linked cards on cached and forced-fresh probes, and rendered all 12 in the browser with no console errors. Current-market chat reached generation and disclosed a verifier-unavailable abstention; no positive high-risk acceptance is claimed.
+- Checkpoint 8 restores Deep Dive as an always-useful deterministic dossier. Schema `2026-08-04a` uses the pooled quote cascade, source-balanced company evidence, fundamentals, analyst counts, explicit provenance, and relevant watch items even when the optional independently verified AI narrative abstains. Local evidence is `54/54` unit tests, all offline AI thresholds, `31/31` available smoke contracts, zero dependency vulnerabilities, Wrangler `4.118.0` dry-run bundling, AAPL/Apple/MSFT probes, and desktop/mobile browser checks without console errors. Production verification is pending for the source checkpoint.
 - Current provider evidence and limitations are recorded in [docs/AI_PROVIDER_CAPABILITY_AUDIT_2026-07-28.md](/Users/krishivjain/Desktop/claude projects/market-terminal/docs/AI_PROVIDER_CAPABILITY_AUDIT_2026-07-28.md).
 - The latest external-agent checkpoint and evidence log lives in [docs/CODEX_HANDOFF_TO_CLAUDE_2026-07-13.md](/Users/krishivjain/Desktop/claude projects/market-terminal/docs/CODEX_HANDOFF_TO_CLAUDE_2026-07-13.md).
 
@@ -36,6 +37,7 @@ small Express backend that keeps every API key server-side.
 | **TERMINAL** | Live quote, snapshot stats, hand-drawn canvas chart, company profile, and company news.        |
 | **NEWS**     | A live "market wire" — real headlines (Google News) structured by AI into categorized, ticker-tagged cards with a breaking section and category filters. |
 | **SECTORS**  | Evidence-bounded interpretation across 11 GICS sectors; unsupported ranks, picks, and options strategies are shown as unavailable. |
+| **DEEP DIVE** | Deterministic quote/fundamental/analyst/evidence dossier, optionally augmented only after independent AI verification. |
 | **WATCHLIST**| Add any company/ticker to see canonical source-linked news with cited impact interpretation or an explicit unrated fallback. Saved in your browser. |
 | **ALERTS**   | Corroboration-gated market-moving headlines, optionally **pushed to your device** when deterministic eligibility checks pass. |
 
@@ -48,6 +50,7 @@ small Express backend that keeps every API key server-side.
 - **Resilient chart data** — uses Yahoo Finance, and **automatically falls back to Nasdaq** when Yahoo's API rate-limits your network (common on shared/CGNAT connections), so the chart always renders.
 - **Scrolling ticker tape** of mega-caps, color-coded, refreshed every 60s.
 - **Evidence-bound news, sector analysis & watchlist interpretation** — grounded on current source-linked headlines and routed only through task-approved providers; unmet evidence/provider gates produce explicit withheld states. Cached server-side with stale-while-revalidate.
+- **Resilient Deep Dive** — always returns a source-backed deterministic company dossier from the pooled quote path, fundamental metrics, analyst counts, and diversified evidence; AI/provider failure withholds only the optional narrative.
 - **Breaking-news push alerts** — only deterministic policy-eligible items can enter the high-priority delivery path; installable as a PWA (works on Android/desktop Chrome and, after Add-to-Home-Screen, iOS).
 - **Live clock + US market status** (OPEN / CLOSED / PRE-MKT / AFTER-HRS, America/New_York).
 - **Fully responsive**, keyboard-accessible, and respects `prefers-reduced-motion`.
@@ -171,6 +174,7 @@ market-terminal/
 | `GET /api/intel/analysis`            | Evidence-gated interpretation for 11 sectors; unsupported ranks/picks are withheld |
 | `GET /api/sentiment/market`          | Deterministic benchmark-breadth and RSS-news sentiment, with evidence coverage |
 | `GET /api/intel/company?q=`          | Canonical company news with cited impact interpretation or an unrated fallback |
+| `GET /api/intel/deepdive?q=`         | Deterministic company dossier plus an optional independently verified AI narrative |
 | `GET /api/intel/alerts`              | Recent breaking alerts                                      |
 | push: `vapid-public-key` · `subscribe` · `unsubscribe` · `test-push` | Web Push plumbing                 |
 
@@ -180,6 +184,7 @@ market-terminal/
 
 - **A tab says a key is missing** — TERMINAL needs a configured quote provider, normally `FINNHUB_API_KEY`. NEWS and educational chat can use one speed provider such as Groq. Generated current-market/high-risk research requires two eligible heavy providers with independent model families. Make sure `.env` sits next to `server.js`, then restart.
 - **Rate limits** — provider limits vary by account. Per-minute throttles use a short cooldown; daily/quota exhaustion uses a longer cooldown. AI responses are cached under schema-specific task TTLs, and NEWS degrades to canonical raw headlines if enrichment is unavailable.
+- **Deep Dive says the AI narrative was withheld** — the quote, fundamentals, analyst counts, observations, watch items, and source evidence are still live deterministic sections. Generated narrative requires two eligible heavy providers from different model families and safely remains optional.
 - **Chart works but quotes don't (or vice-versa)** — the chart is keyless (Yahoo/Nasdaq) while quotes use Finnhub; if only the chart loads, your Finnhub key is missing/invalid.
 - **Alerts say "Blocked"** — notifications are blocked for the site in your browser/OS settings. Re-allow and reload. On iPhone, Add to Home Screen first.
 

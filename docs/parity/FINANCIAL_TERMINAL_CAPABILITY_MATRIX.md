@@ -21,6 +21,7 @@ Research date: 2026-07-13
   - checkpoint 5 source commit `20c9252` is production verified: `29/29` unit tests, all 28 keyless-available local smoke contracts, `33/33` production contracts, zero dependency vulnerabilities, Worker dry-run bundling, targeted probes, and interactive sector/watchlist/alert checks passed
   - checkpoint 6 source commit `919f1b9` is production verified: `45/45` unit tests, the versioned 10-case offline AI safety evaluation, all 28 keyless-available local contracts, `33/33` deployed contracts, zero dependency vulnerabilities, Worker dry-run bundling, targeted authority probes, and desktop/mobile telemetry/chat checks passed
   - checkpoint 7 source commits `febefb3` and `90c191b` are production verified: the final source served all seven `20260730b` assets, passed `33/33`, returned 12 source-linked NEWS cards on normal/forced-fresh probes, and passed browser disclosure checks
+  - checkpoint 8 Deep Dive resilience is locally verified: schema `2026-08-04a`, `54/54` unit tests, all AI fixture thresholds, `31/31` available local contracts, zero-vulnerability audit, Worker dry-run bundling, targeted company probes, and desktop/mobile checks passed; production is pending
 
 ## Capability rows
 
@@ -101,6 +102,12 @@ Research date: 2026-07-13
 - Lower-risk Node/Worker output limits and cooldown semantics are aligned. Company/deep-dive evidence reached two distinct sources; current-market chat correctly explained that the Groq-only local environment lacks the required two-heavy-provider pair.
 - Core evidence: source commit `febefb3` exposed richer company evidence plus bounded fail-closed provider attempts. When its first live NEWS probe revealed a one-card result accepted from 60 inputs, source commit `90c191b` deployed `2026-07-30b` useful-batch validation and cache isolation. The final source passed `33/33`, normal and forced-fresh probes returned 12 linked cards, and browser NEWS/chat disclosure checks had no console errors. No capability status changes, new entitlement, positive high-risk quality claim, or Bloomberg parity claim are made.
 
+### 2026-08-04 checkpoint 8 update
+
+- Equities workflow: Deep Dive now returns a deterministic dossier from the pooled quote cascade, Finnhub metrics/recommendation counts, and source-balanced company evidence even when generated narrative cannot form an independent heavy-provider pair.
+- Authority boundary: deterministic observations describe supplied numbers and recent source titles only. Investment rating/score, fair value, trade levels, target, implied volatility, and options construction remain explicitly unavailable.
+- Evidence: schema `2026-08-04a` passed `54/54` unit tests, the offline safety thresholds, `31/31` available local API contracts, targeted AAPL/Apple/MSFT probes, zero-vulnerability audit, Wrangler `4.118.0` dry-run, and desktop/mobile browser checks without console errors. Production is pending, so FT-004 remains `partial` and no Bloomberg or licensed-research parity is claimed.
+
 ### FT-003 Real-time market monitors
 
 - Source product/domain: Bloomberg
@@ -137,7 +144,7 @@ Research date: 2026-07-13
 - Evaluation criteria: structured facts, estimates, evidence links, point-in-time handling
 - Provenance links: `https://professional.bloomberg.com/products/bloomberg-terminal/research/`
 - Licensing or trademark notes: analyst and estimates data may require licensed sources
-- Final evidence: checkpoint 4 production verifies policy metadata and safe deep-dive/supply-chain behavior in source commit `5a10b79`; checkpoint 5 production verifies canonical company-news binding and non-actionable sector constraints in source commit `20c9252`. Status remains partial because issuer-grade research, options-chain data, and independent claim verification are absent.
+- Final evidence: checkpoint 4 production verifies policy metadata and safe deep-dive/supply-chain behavior in source commit `5a10b79`; checkpoint 5 production verifies canonical company-news binding and non-actionable sector constraints in source commit `20c9252`. Checkpoint 8 locally verifies a resilient deterministic dossier, pooled quote routing, source provenance, and safe AI-withheld behavior; production remains pending. Status stays partial because issuer-grade research, options-chain data, and positive high-risk output quality evidence are absent.
 
 ### FT-005 Fixed income and credit
 

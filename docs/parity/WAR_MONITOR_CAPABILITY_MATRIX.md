@@ -19,6 +19,7 @@ Research date: 2026-07-13
   - checkpoint 5 source commit `20c9252` is production verified: `29/29` unit tests, all 28 keyless-available local smoke contracts, `33/33` production contracts, targeted alert probes, and interactive alert checks passed
   - checkpoint 6 source commit `919f1b9` is production verified: `45/45` unit tests, the versioned 10-case offline AI safety evaluation, all 28 keyless-available local contracts, `33/33` deployed contracts, Worker dry-run bundling, targeted authority probes, and desktop/mobile disclosure checks passed
   - checkpoint 7 source commits `febefb3` and `90c191b` are production verified: the final source served all seven `20260730b` assets, passed `33/33`, returned 12 source-linked NEWS cards on normal/forced-fresh probes, and passed browser disclosure checks
+  - checkpoint 8 Deep Dive resilience is locally verified with `54/54` unit tests, `31/31` available contracts, Worker dry-run bundling, and desktop/mobile browser checks; it changes no War Monitor row and awaits production verification
 
 ## Capability rows
 
@@ -95,6 +96,11 @@ Research date: 2026-07-13
 - High-risk generation reserves an independent verifier before spending on retries and retains bounded attempt/failure telemetry. Situation and current-market abstentions can now distinguish unavailable providers, invalid generation, verifier rejection/unavailability, and budget exhaustion.
 - Lower-risk news-enrichment output limits and provider cooldown classes are aligned across runtimes. The deterministic alert authority and withheld country-risk posture are unchanged.
 - Core source commit `febefb3` passed targeted fail-closed probes but exposed a one-card NEWS result accepted from 60 inputs. Source commit `90c191b` deployed `2026-07-30b` useful-batch validation and cache isolation, passed `33/33`, returned 12 linked cards on normal/forced-fresh probes, and passed browser disclosure checks. This does not add official confirmation, canonical conflict threads, severity scoring, or War Monitor parity.
+
+### 2026-08-04 checkpoint 8 update
+
+- This checkpoint repairs the financial Deep Dive dossier and local quote-WebSocket retry behavior. It does not add conflict evidence, geolocation, source-origin independence, dedicated trackers, voice, or operational alert authority.
+- Local evidence passed `54/54` unit tests, all offline AI thresholds, `31/31` available contracts, Worker dry-run bundling, and responsive browser checks. Production is pending and every War Monitor row retains its prior status.
 
 ### WAR-003 Conflict threads and timelines
 

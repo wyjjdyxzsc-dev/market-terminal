@@ -30,6 +30,7 @@ const webpush   = require('web-push');
 const apiContract = require('./shared/api-contract.js');
 const evidenceCore = require('./shared/evidence-core.js');
 const companyEvidenceCore = require('./shared/company-evidence-core.js');
+const deepDiveCore = require('./shared/deep-dive-core.js');
 const candleAnalysisCore = require('./shared/candle-analysis-core.js');
 const marketSentimentCore = require('./shared/market-sentiment-core.js');
 const mapProvenanceCore = require('./shared/map-provenance-core.js');
@@ -69,7 +70,8 @@ const {
   NEWS_ENRICHMENT_SCHEMA_VERSION,
   domainOf: evidenceDomainOf,
 } = evidenceCore;
-const { normalizeFinnhubCompanyNews } = companyEvidenceCore;
+const { normalizeFinnhubCompanyNews, diversifyCompanyHeadlines } = companyEvidenceCore;
+const { DEEP_DIVE_SCHEMA_VERSION, buildDeterministicDeepDive } = deepDiveCore;
 
 const { buildDeterministicCandleAnalysis } = candleAnalysisCore;
 const { analyzeMarketSentiment } = marketSentimentCore;
@@ -599,9 +601,26 @@ async function raceProviders(taskType, sys, usr, validate = () => true, policy =
 const _wsQuoteCache = new Map(); // SYMBOL → { c, d, dp, h, l, o, pc, t, src }
 let   _wsConn       = null;
 const _wsSubscribed = new Set();
+let   _wsReconnectTimer = null;
+let   _wsRetryMs = 5000;
+let   _wsOpenedAt = 0;
+const WS_RETRY_MAX_MS = 60_000;
+
+function _wsScheduleReconnect() {
+  if (!_wsSubscribed.size || _wsReconnectTimer) return;
+  const delay = _wsRetryMs;
+  _wsRetryMs = Math.min(WS_RETRY_MAX_MS, _wsRetryMs * 2);
+  console.warn(`[ws] Finnhub disconnected - reconnecting in ${Math.round(delay / 1000)} s`);
+  _wsReconnectTimer = setTimeout(() => {
+    _wsReconnectTimer = null;
+    _wsConnect();
+  }, delay);
+  if (typeof _wsReconnectTimer.unref === 'function') _wsReconnectTimer.unref();
+}
 
 function _wsConnect() {
-  if (!WS || !FINNHUB_KEYS.length) return;
+  if (!WS || !FINNHUB_KEYS.length || !_wsSubscribed.size) return;
+  if (_wsReconnectTimer) return;
   if (_wsConn && (
     _wsConn.readyState === WS.OPEN ||
     _wsConn.readyState === WS.CONNECTING
@@ -611,6 +630,7 @@ function _wsConnect() {
   _wsConn = new WS(`wss://ws.finnhub.io?token=${key}`);
 
   _wsConn.on('open', () => {
+    _wsOpenedAt = Date.now();
     console.log('[ws] Finnhub connected');
     _wsSubscribed.forEach(sym =>
       _wsConn.send(JSON.stringify({ type: 'subscribe', symbol: sym }))
@@ -621,6 +641,7 @@ function _wsConnect() {
     try {
       const msg = JSON.parse(raw.toString());
       if (msg.type !== 'trade' || !Array.isArray(msg.data)) return;
+      _wsRetryMs = 5000;
       msg.data.forEach(trade => {
         const sym  = trade.s;
         const prev = _wsQuoteCache.get(sym) || {};
@@ -642,8 +663,9 @@ function _wsConnect() {
   });
 
   _wsConn.on('close', () => {
-    console.warn('[ws] Finnhub disconnected — reconnecting in 5 s…');
-    setTimeout(_wsConnect, 5000);
+    if (_wsOpenedAt && Date.now() - _wsOpenedAt >= 60_000) _wsRetryMs = 5000;
+    _wsConn = null;
+    _wsScheduleReconnect();
   });
 
   _wsConn.on('error', err => console.error('[ws] Finnhub WS error:', err.message));
@@ -651,8 +673,11 @@ function _wsConnect() {
 
 function wsSubscribe(symbol) {
   _wsSubscribed.add(symbol);
-  if (_wsConn && _wsConn.readyState === WS.OPEN)
+  if (_wsConn && _wsConn.readyState === WS.OPEN) {
     _wsConn.send(JSON.stringify({ type: 'subscribe', symbol }));
+  } else {
+    _wsConnect();
+  }
 }
 
 // ── 4b: REST provider fetchers ─────────────────────────────────────────────
@@ -1085,7 +1110,7 @@ async function fetchCompanyHeadlines(query, limit = 14) {
       })).catch(() => [])
       : Promise.resolve([]),
   ]);
-  return mergeHeadlines(lists).slice(0, limit);
+  return diversifyCompanyHeadlines(mergeHeadlines(lists), limit);
 }
 
 const headlineBlock = (headlines) => buildHeadlineBlock((headlines || []).map((headline) => ({
@@ -1631,7 +1656,7 @@ async function fetchDeepDive(query) {
 
   const [profile, quote, metricData, recs, headlines] = await Promise.all([
     finnhub('/stock/profile2', { symbol: ticker }).catch(() => ({})),
-    finnhub('/quote',          { symbol: ticker }).catch(() => ({})),
+    getQuote(ticker).catch(() => null),
     finnhub('/stock/metric',   { symbol: ticker, metric: 'all' }).catch(() => ({})),
     finnhub('/stock/recommendation', { symbol: ticker }).catch(() => []),
     fetchCompanyHeadlines(ticker, 16),
@@ -1639,57 +1664,32 @@ async function fetchDeepDive(query) {
 
   const m   = (metricData && metricData.metric) || {};
   const rec = Array.isArray(recs) && recs.length ? recs[0] : null;
-
-  const fmtCap = v => v ? (v >= 1e6 ? `$${(v / 1e6).toFixed(2)}T` : v >= 1e3 ? `$${(v / 1e3).toFixed(1)}B` : `$${v}M`) : 'N/A';
-  const quoteSnapshot = (quote && (quote.c || quote.pc)) ? { price: quote.c, change: quote.d, percent: quote.dp } : null;
-  const stats = {
-    high52: m['52WeekHigh'] ?? null, low52: m['52WeekLow'] ?? null,
-    pe: m.peTTM ?? m.peNormalizedAnnual ?? null, beta: m.beta ?? null,
-    marketCap: fmtCap(profile.marketCapitalization), industry: profile.finnhubIndustry || null,
-    logo: profile.logo || null,
-  };
-  const analystConsensus = rec
-    ? { strongBuy: rec.strongBuy, buy: rec.buy, hold: rec.hold, sell: rec.sell, strongSell: rec.strongSell, period: rec.period }
-    : null;
   const preparation = prepareAiTask('intel.deep-dive', headlines, {
     inputs: {
-      quote: Boolean(quoteSnapshot),
-      fundamentalData: Boolean(profile?.name && Object.keys(m).length),
+      quote: Boolean(quote && Number(quote.c) > 0),
+      fundamentalData: Object.keys(m).length > 0,
     },
   });
-  const fallback = (reason) => policyAbstention(preparation, reason, {
+  const baseline = buildDeterministicDeepDive({
     ticker,
-    company: profile.name || ticker,
-    quote: quoteSnapshot,
-    stats,
-    analystConsensus,
-    summary: 'The available data is insufficient for a calibrated deep-dive recommendation.',
-    newsSentiment: 'neutral',
-    keyDrivers: 'No causal claim is made without a cited evidence record.',
-    investment: {
-      rating: 'Not Rated', score: null, conviction: 'Low', horizon: 'No verified horizon',
-      fairValue: 'N/A - no verified valuation model',
-      thesis: 'No investment recommendation is issued without a verified valuation model.',
-    },
-    options: {
-      recommendation: 'Avoid - options-chain data is not connected', bias: 'Avoid', score: null,
-      impliedVolatility: 'Unknown', timeframe: 'N/A',
-      rationale: 'No options-chain, strike, or expiry data was verified for this response.',
-    },
-    technicalBias: 'Neutral',
-    entryZone: 'N/A - no verified trade plan',
-    stopLoss: 'N/A - no verified trade plan',
-    priceTarget: 'N/A - no verified valuation model',
-    bullCase: [], bearCase: [], catalysts: [], risks: [],
+    profile,
+    quote,
+    metrics: m,
+    recommendation: rec,
+    evidence: preparation.evidence,
+  });
+  const fallback = (reason) => policyAbstention(preparation, reason, {
+    ...baseline,
+    aiNarrativeStatus: 'withheld',
   });
   if (!preparation.canGenerate) return fallback('The current evidence did not meet the deep-dive grounding policy.');
   const dataBlock =
     `LIVE DATA for ${profile.name || ticker} (${ticker}):\n` +
-    `- Price: ${quote.c ?? 'N/A'} (change ${quote.d ?? 'N/A'}, ${quote.dp ?? 'N/A'}% today)\n` +
-    `- Day range: ${quote.l ?? '?'}–${quote.h ?? '?'}; Prev close ${quote.pc ?? '?'}\n` +
+    `- Price: ${quote?.c ?? 'N/A'} (change ${quote?.d ?? 'N/A'}, ${quote?.dp ?? 'N/A'}% today)\n` +
+    `- Day range: ${quote?.l ?? '?'}-${quote?.h ?? '?'}; Prev close ${quote?.pc ?? '?'}\n` +
     `- 52-week range: ${m['52WeekLow'] ?? '?'}–${m['52WeekHigh'] ?? '?'}\n` +
     `- P/E (TTM): ${m.peTTM ?? m.peNormalizedAnnual ?? 'N/A'}; P/B: ${m.pbAnnual ?? 'N/A'}; Beta: ${m.beta ?? 'N/A'}\n` +
-    `- Market cap: ${fmtCap(profile.marketCapitalization)}; Industry: ${profile.finnhubIndustry || 'N/A'}\n` +
+    `- Market cap: ${baseline.stats.marketCap || 'N/A'}; Industry: ${profile.finnhubIndustry || 'N/A'}\n` +
     `- 52w price return: ${m['52WeekPriceReturnDaily'] ?? 'N/A'}%; Div yield: ${m.dividendYieldIndicatedAnnual ?? m.currentDividendYieldTTM ?? 'N/A'}%\n` +
     (rec ? `- Analyst consensus (${rec.period}): strongBuy ${rec.strongBuy}, buy ${rec.buy}, hold ${rec.hold}, sell ${rec.sell}, strongSell ${rec.strongSell}\n` : '');
 
@@ -1706,15 +1706,25 @@ async function fetchDeepDive(query) {
     return fallback(describeAiFailure(error, preparation.policy));
   }
 
-  const result = attachPolicy(preparation, data, {
+  const policyResult = attachPolicy(preparation, data, {
     unknowns: ['Price targets, entries, stops, fair values, and options ideas require dedicated verified inputs.'],
   });
-  result.ticker = ticker;
-  result.company = result.company || profile.name || ticker;
-  result.quote = quoteSnapshot;
-  result.stats = stats;
-  result.analystConsensus = analystConsensus;
-  return result;
+  if (policyResult.abstained) {
+    return { ...baseline, ...policyResult, aiNarrativeStatus: 'withheld' };
+  }
+  return {
+    ...baseline,
+    ...policyResult,
+    ticker,
+    company: policyResult.company || baseline.company,
+    quote: baseline.quote,
+    stats: baseline.stats,
+    analystConsensus: baseline.analystConsensus,
+    dataSources: baseline.dataSources,
+    dataMode: 'verified-ai-with-deterministic-data',
+    deterministic: true,
+    aiNarrativeStatus: 'verified',
+  };
 }
 
 async function fetchInvestmentReport() {
@@ -3527,7 +3537,7 @@ app.get('/api/intel/deepdive', rateLimit, async (req, res) => {
     const query = (req.query.q || '').toString().trim().slice(0, 60);
     if (!query) return res.status(400).json({ error: true, message: 'Missing company name or ticker.' });
     const { data, fresh } = await fetch_cached_data(
-      `intel:deepdive:${AI_TASK_POLICY_SCHEMA_VERSION}:${query.toLowerCase()}`, () => fetchDeepDive(query), TTL.NEWS
+      `intel:deepdive:${DEEP_DIVE_SCHEMA_VERSION}:${AI_TASK_POLICY_SCHEMA_VERSION}:${query.toLowerCase()}`, () => fetchDeepDive(query), TTL.NEWS
     );
     res.json({ cached: !fresh, ...data });
   } catch (err) {
@@ -4084,8 +4094,8 @@ httpServer.listen(PORT, () => {
   console.log(`  WS support       ${WS ? 'ws package loaded ✓' : 'not installed (REST-only) — run: npm i ws'}`);
   console.log(`  AI parallel      ${process.env.AI_PARALLEL || '5'} (batch race width)\n`);
 
-  // Warm Finnhub WebSocket
-  _wsConnect();
+  // The Finnhub socket starts lazily on the first subscribed quote. Opening an
+  // idle connection here causes free-tier disconnect/reconnect storms.
 
   // Pre-warm news cache so the first NEWS-tab open is instant
   if (speedAvail.length || heavyAvail.length) {
