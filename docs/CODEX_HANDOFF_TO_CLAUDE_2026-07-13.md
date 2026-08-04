@@ -2,7 +2,7 @@ This work was performed by OpenAI Codex without Claude’s involvement. This doc
 
 # Status
 
-- Handoff status: checkpoint 8 source dossier is production verified; the data-first latency follow-up is locally verified and awaiting managed production verification
+- Handoff status: checkpoint 8 Deep Dive dossier and data-first latency follow-up are production verified
 - Research dates: baseline 2026-07-13; AI-provider capability refresh 2026-07-28
 - Deployment URL: `https://market-terminal.wyjjdyxzsc.workers.dev`
 
@@ -571,8 +571,10 @@ This work was performed by OpenAI Codex without Claude’s involvement. This doc
   - desktop interaction and a 390x844 responsive check rendered the dossier without horizontal overflow or console warnings/errors
   - source commit `9370cc3` reached production through the managed path, served all seven `20260804a` assets, passed `33/33` production contracts, and returned useful AAPL/Apple/MSFT dossiers with three source domains
   - available high-risk generation produced no independently verified acceptance, so the narrative remained safely withheld and no positive model-quality claim is made
-- The first production probes exposed 32-37 second uncached waits because optional AI verification blocked the already-ready dossier. The `20260804b` follow-up splits deterministic and `ai=1` cache/API paths; the UI renders data first, verifies in the background, and ignores stale query completions. Its local `54/54` unit, `31/31` available contract, offline AI threshold, zero-vulnerability audit, Wrangler `4.118.0` dry-run at 424.74 KiB raw / 102.62 KiB gzip, desktop, and mobile checks pass; managed production verification is pending.
-- All seven follow-up source cache references use `20260804b`.
+- The first production probes exposed 32-37 second uncached waits because optional AI verification blocked the already-ready dossier. Source commit `953c0ea` splits deterministic and `ai=1` cache/API paths; the UI renders data first, verifies in the background, and ignores stale query completions. Local gates passed `54/54` unit tests, `31/31` available contracts, offline AI thresholds, zero-vulnerability audit, and Wrangler `4.118.0` dry-run at 424.74 KiB raw / 102.62 KiB gzip.
+- Follow-up production verification served all seven `20260804b` assets and passed `33/33`. Fresh AAPL/Apple/MSFT default probes returned in 1.06-1.35 seconds with pooled quotes, populated deterministic sections, three-source coverage, and safe `Not Rated`/`Avoid`/`N/A` fields. Optional AAPL `ai=1` took 27.7 seconds separately and was withheld because no independent verifier completed.
+- The production browser rendered MSFT data with `AI NARRATIVE PENDING`, then changed to `AI NARRATIVE WITHHELD` while retaining the quote, four source cards, six links, and provenance. Desktop/mobile had no overflow and console logs were empty. No positive high-risk acceptance is claimed.
+- Source code was production verified with all seven `20260804b` assets; this documentation checkpoint advances all seven cache references to `20260804c`.
 
 # Unresolved risks and technical debt
 
@@ -600,9 +602,10 @@ This work was performed by OpenAI Codex without Claude’s involvement. This doc
   - `febefb3` — `Restore AI evidence and provider reliability`
   - `90c191b` — `Require useful AI news batches`
   - `9370cc3` — `Restore resilient Deep Dive dossier`
+  - `953c0ea` — `Return Deep Dive before AI verification`
 - Push/deploy:
-  - `git push origin main` completed for all listed source checkpoint commits through `9370cc3`
-  - source commits through `9370cc3` are production verified on `https://market-terminal.wyjjdyxzsc.workers.dev`; the `20260804b` latency follow-up in this checkpoint is locally verified and awaiting managed production verification
+  - `git push origin main` completed for all listed source checkpoint commits through `953c0ea`
+  - source commits through `953c0ea` are production verified on `https://market-terminal.wyjjdyxzsc.workers.dev`
 
 # Recommended next step for Claude
 

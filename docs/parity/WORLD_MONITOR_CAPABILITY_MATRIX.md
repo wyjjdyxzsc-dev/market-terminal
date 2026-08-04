@@ -20,7 +20,7 @@ Research date: 2026-07-13
   - checkpoint 5 source commit `20c9252` is production verified: `29/29` unit tests, all 28 keyless-available local smoke contracts, `33/33` production contracts, targeted alert probes, and interactive alert checks passed
   - checkpoint 6 source commit `919f1b9` is production verified: `45/45` unit tests, the versioned 10-case offline AI safety evaluation, all 28 keyless-available local contracts, `33/33` deployed contracts, Worker dry-run bundling, targeted authority probes, and desktop/mobile disclosure checks passed
   - checkpoint 7 source commits `febefb3` and `90c191b` are production verified: the final source served all seven `20260730b` assets, passed `33/33`, returned 12 source-linked NEWS cards on normal/forced-fresh probes, and passed browser disclosure checks
-  - checkpoint 8 Deep Dive source commit `9370cc3` passed `33/33` production contracts; its `20260804b` data-first latency follow-up is locally verified and production-pending. Neither changes a World Monitor row
+  - checkpoint 8 Deep Dive source commits `9370cc3` and `953c0ea` passed `33/33` production contracts; the final source served all seven `20260804b` assets and passed desktop/mobile checks. Neither changes a World Monitor row
 
 ## Capability rows
 
@@ -102,7 +102,7 @@ Research date: 2026-07-13
 ### 2026-08-04 checkpoint 8 update
 
 - The shared source-balanced evidence selector, deterministic Deep Dive dossier, and pooled quote path improve a financial research surface only. They do not add a world-event adapter, canonical incident model, map layer, language, team, or enterprise workflow.
-- Source commit `9370cc3` served all seven `20260804a` assets and passed `33/33` production contracts. The `20260804b` data-first follow-up addresses a production-observed Deep Dive wait and is locally verified; follow-up production is pending. Every World Monitor row retains its prior status.
+- Source commit `9370cc3` served all seven `20260804a` assets and passed `33/33`; source commit `953c0ea` addressed the production-observed Deep Dive wait, served all seven `20260804b` assets, passed `33/33`, and passed desktop/mobile checks. Every World Monitor row retains its prior status.
 
 ### WM-003 Country dossiers and instability scoring
 
