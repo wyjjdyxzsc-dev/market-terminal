@@ -2,7 +2,7 @@ This work was performed by OpenAI Codex without Claude’s involvement. This doc
 
 # Status
 
-- Handoff status: checkpoint 8 is production verified; checkpoint 9 ticker/options completeness is locally verified and awaiting managed production verification
+- Handoff status: checkpoint 9 ticker/options completeness is production verified
 - Research dates: baseline 2026-07-13; AI-provider capability refresh 2026-07-28
 - Deployment URL: `https://market-terminal.wyjjdyxzsc.workers.dev`
 
@@ -592,7 +592,14 @@ This work was performed by OpenAI Codex without Claude’s involvement. This doc
   - the exact screenshot symbol SPCX returned 100/100 equity coverage, 48 fundamentals, 40 analyst ratings, 47 options rows, three observed expiries, and nearest strike 115.00 in 1.9 seconds
   - the browser rendered all tape prices, five SPCX source cards, `EQUITY DATA 100/100 coverage`, and `OPTIONS DATA 47 rows`; desktop/mobile had no overflow and console logs were empty
   - `npm run test:ai-eval` passed all unchanged 10-case thresholds, `npm audit --omit=dev` found zero vulnerabilities, and Wrangler `4.118.0` dry-run bundled 14 assets at 439.96 KiB raw / 105.44 KiB gzip
-- All seven source cache references use `20260804d`. Production verification is intentionally not claimed yet.
+- Production verification:
+  - source commit `ebacf62` reached production through the managed GitHub-to-Cloudflare path and served all seven `20260804d` assets
+  - the strengthened deployed suite passed `34/34`, with only the documented weather-provider `502` skip
+  - `/api/ticker` returned all seven positive prices in 1.9 seconds. AAPL/NVDA/AMZN/GOOGL/META/TSLA used Twelve Data while MSFT used Finnhub, proving the fallback path rather than a cached Finnhub-only success
+  - SPCX returned schema `2026-08-04b`, 100/100 equity coverage, 48 fundamentals, 40 analyst ratings, 47 Nasdaq rows across three observed expiries, nearest strike 115.00, and source-attributed activity in 4.7 seconds
+  - the browser rendered every tape price, five SPCX source cards, `EQUITY DATA 100/100 coverage`, `OPTIONS DATA 47 rows`, and the Nasdaq source link. Desktop/mobile had no overflow and console logs were empty
+  - the optional AI narrative remained withheld after generation/schema checks without hiding deterministic data; no positive high-risk acceptance is claimed
+- Source code was production verified with all seven `20260804d` assets; this documentation checkpoint advances all seven cache references to `20260804e`.
 
 # Unresolved risks and technical debt
 
@@ -622,9 +629,10 @@ This work was performed by OpenAI Codex without Claude’s involvement. This doc
   - `90c191b` — `Require useful AI news batches`
   - `9370cc3` — `Restore resilient Deep Dive dossier`
   - `953c0ea` — `Return Deep Dive before AI verification`
+  - `ebacf62` — `Restore ticker and listed options data`
 - Push/deploy:
-  - `git push origin main` completed for all listed source checkpoint commits through `953c0ea`
-  - source commits through `953c0ea` are production verified on `https://market-terminal.wyjjdyxzsc.workers.dev`
+  - `git push origin main` completed for all listed source checkpoint commits through `ebacf62`
+  - source commits through `ebacf62` are production verified on `https://market-terminal.wyjjdyxzsc.workers.dev`
 
 # Recommended next step for Claude
 

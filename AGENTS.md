@@ -126,11 +126,11 @@ Deploys to `https://market-terminal.wyjjdyxzsc.workers.dev`
 - Source commits `9370cc3` and `953c0ea` are production verified. The final source served all seven `20260804b` assets, passed `33/33`, returned fresh AAPL/Apple/MSFT dossiers in 1.06-1.35 seconds, and showed the data-first pending-to-withheld lifecycle on desktop/mobile without overflow or console errors. Optional AAPL verification took 27.7 seconds separately and failed closed because no independent verifier completed; no positive high-risk acceptance is claimed.
 - Local Finnhub WebSocket startup is lazy and reconnects with bounded exponential backoff, preventing an idle five-second reconnect storm from competing with quote/fundamental work.
 
-**Market-data completeness (2026-08-04 checkpoint 9, local verified; production pending)**:
+**Market-data completeness (2026-08-04 checkpoint 9, production verified)**:
 - `/api/ticker` uses the canonical quote pool in both runtimes and retains source-attributed last-good values for 24 hours, preventing a Finnhub throttle from replacing valid tape prices with zeroes.
 - `shared/options-chain-core.js` normalizes a bounded Nasdaq at-the-money chain snapshot. Deep Dive schema `2026-08-04b` exposes returned rows, expiries, nearest strike, bid/ask, volume/open interest, and put/call ratios for optionable US stocks.
 - The UI labels its left card `EQUITY DATA` with a coverage score that explicitly is not investment merit; the right card labels observed options data instead of saying `Avoid`. IV, Greeks, fair value, targets, and trade construction remain unavailable without dedicated models/data.
-- Local evidence passed `58/58` unit tests, all `32/32` available contracts, AI fixture thresholds, zero-vulnerability audit, Wrangler `4.118.0` dry-run, live seven-symbol and SPCX/AAPL probes, and desktop/mobile browser checks without overflow or console errors.
+- Source commit `ebacf62` passed `58/58` unit tests, all `32/32` available local contracts, AI fixture thresholds, zero-vulnerability audit, and Wrangler `4.118.0` dry-run. Production served all seven `20260804d` assets, passed `34/34`, returned all seven tape prices from pooled providers, and rendered SPCX with 100/100 coverage and 47 options rows on desktop/mobile without overflow or console errors.
 
 **Branches**: All work on `main` (no feature branches yet).
 

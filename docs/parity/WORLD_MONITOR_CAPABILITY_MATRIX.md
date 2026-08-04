@@ -21,7 +21,7 @@ Research date: 2026-07-13
   - checkpoint 6 source commit `919f1b9` is production verified: `45/45` unit tests, the versioned 10-case offline AI safety evaluation, all 28 keyless-available local contracts, `33/33` deployed contracts, Worker dry-run bundling, targeted authority probes, and desktop/mobile disclosure checks passed
   - checkpoint 7 source commits `febefb3` and `90c191b` are production verified: the final source served all seven `20260730b` assets, passed `33/33`, returned 12 source-linked NEWS cards on normal/forced-fresh probes, and passed browser disclosure checks
   - checkpoint 8 Deep Dive source commits `9370cc3` and `953c0ea` passed `33/33` production contracts; the final source served all seven `20260804b` assets and passed desktop/mobile checks. Neither changes a World Monitor row
-  - checkpoint 9 ticker/options completeness is locally verified with `58/58` unit tests, `32/32` available contracts, Worker dry-run, and responsive browser checks; it changes no World Monitor row and awaits production verification
+  - checkpoint 9 source commit `ebacf62` served all seven `20260804d` assets, passed `34/34`, and passed responsive browser checks; it changes no World Monitor row
 
 ## Capability rows
 
@@ -108,7 +108,7 @@ Research date: 2026-07-13
 ### 2026-08-04 checkpoint 9 update
 
 - This checkpoint repairs financial ticker and listed-options data presentation. It adds no world-event adapter, country-dossier authority, map layer, language, team, or enterprise workflow.
-- Local `58/58` unit, `32/32` available contract, Worker dry-run, targeted API, and desktop/mobile browser checks passed. Production is pending and every World Monitor row retains its prior status.
+- Source commit `ebacf62` passed local gates, served all seven `20260804d` assets, passed `34/34`, and passed desktop/mobile browser checks. Every World Monitor row retains its prior status.
 
 ### WM-003 Country dossiers and instability scoring
 

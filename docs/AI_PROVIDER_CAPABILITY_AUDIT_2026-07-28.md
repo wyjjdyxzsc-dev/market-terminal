@@ -97,4 +97,4 @@ This is an implementation audit of the model providers used by Market Terminal. 
 
 - Checkpoint 9 changes no AI provider, model, eligibility, verifier, token, latency, or cost policy. It prevents AI abstention from being visually conflated with missing deterministic market data.
 - Equity coverage and normalized options rows retain deterministic authority. The optional narrative cannot overwrite those fields when generation or verification abstains.
-- Local `58/58` unit, offline AI threshold, strict contract, and browser checks confirm that listed options data can remain visible while the high-risk narrative stays withheld. This is not positive model-quality evidence, a recommendation, or a relaxation of independent verification.
+- Local `58/58` unit, offline AI threshold, strict contract, and browser checks confirmed that listed options data remains visible while the high-risk narrative stays withheld. Source commit `ebacf62` then served all seven `20260804d` assets, passed `34/34`, and reproduced the same SPCX state in production. This is not positive model-quality evidence, a recommendation, or a relaxation of independent verification.

@@ -201,7 +201,7 @@ Local verification completed:
 - Checkpoint 8 local verification on 2026-08-04: schema `2026-08-04a` returned useful deterministic AAPL/Apple/MSFT dossiers while the optional high-risk narrative correctly abstained in the Groq-only environment; `npm test` passed `54/54` unit tests and `31/31` available contracts, all offline AI thresholds passed, dependency audit found zero vulnerabilities, Wrangler `4.118.0` dry-run bundled 14 assets, and desktop/mobile browser checks found no overflow or console errors.
 - Checkpoint 8 source production verification: commit `9370cc3` served all seven `20260804a` assets, passed `33/33` production contracts, and returned useful AAPL/Apple/MSFT dossiers with three source domains. No high-risk narrative completed independent verification. Uncached Apple/MSFT probes exposed a second material defect: the response blocked 32-37 seconds on optional AI after deterministic data was ready.
 - Source commit `953c0ea` implements the `20260804b` follow-up by splitting deterministic and optional `ai=1` cache/API paths. The UI renders the dossier first, performs verification in the background, and ignores stale query completions. Local `54/54` unit, `31/31` available contract, offline AI threshold, zero-vulnerability audit, Wrangler `4.118.0` dry-run at 424.74 KiB raw / 102.62 KiB gzip, desktop, and mobile checks passed.
-- Checkpoint 9 local verification on 2026-08-04: ticker schema `2026-08-04a`, options schema `2026-08-04a`, and Deep Dive schema `2026-08-04b` passed `58/58` unit tests, all offline AI thresholds, `32/32` available contracts, zero-vulnerability audit, and Wrangler `4.118.0` dry-run at 439.96 KiB raw / 105.44 KiB gzip. Live local tape returned all seven prices; AAPL and SPCX returned bounded 47-row options snapshots. Desktop/mobile showed no overflow or console errors. Production verification remains pending.
+- Checkpoint 9 local verification on 2026-08-04: ticker schema `2026-08-04a`, options schema `2026-08-04a`, and Deep Dive schema `2026-08-04b` passed `58/58` unit tests, all offline AI thresholds, `32/32` available contracts, zero-vulnerability audit, and Wrangler `4.118.0` dry-run at 439.96 KiB raw / 105.44 KiB gzip. Live local tape returned all seven prices; AAPL and SPCX returned bounded 47-row options snapshots. Desktop/mobile showed no overflow or console errors; subsequent production evidence is recorded below.
 - The Desktop-backed `node_modules` tree initially exposed dataless/duplicated dependency files and stalled Express startup. A clean `npm ci` restored the ignored dependency tree; no source or user artifact was removed.
 
 Production verification completed:
@@ -257,6 +257,13 @@ Production verification completed:
   - fresh AAPL/Apple/MSFT default probes returned in 1.06-1.35 seconds with pooled quotes, populated deterministic sections, three-source coverage, and safe `Not Rated`/`Avoid`/`N/A` fields
   - optional AAPL `ai=1` took 27.7 seconds separately and was withheld because no independent provider/model completed verification; no positive high-risk acceptance is claimed
   - the browser rendered MSFT data in the pending state, then retained the quote, four source cards, six evidence links, and provenance after the state changed to withheld. Desktop/mobile had no overflow and console logs were empty
+- Checkpoint 9 market-data completeness production verification:
+  - source commit `ebacf62` reached production through the managed path and served all seven `20260804d` markers
+  - the strengthened production suite passed `34/34`, with only the documented weather-provider `502` skip
+  - `/api/ticker` returned seven positive prices in 1.9 seconds. Six symbols used Twelve Data and MSFT used Finnhub, directly verifying pooled fallback instead of Finnhub-only zeroes
+  - SPCX returned schema `2026-08-04b`, 100/100 equity coverage, 48 fundamentals, 40 analyst ratings, 47 Nasdaq options rows across three observed expiries, nearest strike 115.00, and source-attributed activity in 4.7 seconds
+  - the browser rendered every tape price, five SPCX source cards, coverage/options data cards, and the Nasdaq source link. Desktop/mobile had no overflow and console logs were empty
+  - optional AI remained withheld without replacing deterministic data; no every-stock options claim, IV/Greeks claim, trade recommendation, or parity upgrade is made
 
 ## Checkpoints
 
@@ -276,8 +283,9 @@ Production verification completed:
 - `90c191b` — `Require useful AI news batches`
 - `9370cc3` — `Restore resilient Deep Dive dossier`
 - `953c0ea` — `Return Deep Dive before AI verification`
+- `ebacf62` — `Restore ticker and listed options data`
 
-All listed source commits were pushed to `origin/main` and are production verified through `953c0ea`. The final documentation cache marker is `20260804c`; unrelated untracked files listed below remain preserved.
+All listed source commits were pushed to `origin/main` and are production verified through `ebacf62`. The final documentation cache marker is `20260804e`; unrelated untracked files listed below remain preserved.
 
 ## Remaining Work
 
