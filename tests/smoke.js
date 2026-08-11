@@ -220,19 +220,23 @@ async function checkHtml(label, url) {
   // Deep-dive — uses ?q= param
   await check('GET /api/intel/deepdive?q=AAPL', `${BASE}/api/intel/deepdive?q=AAPL`,
     { validate: d => hasPolicy(d, 'intel.deep-dive') &&
-      d.deepDiveSchemaVersion === '2026-08-04b' &&
-      d.deterministic === true &&
-      /^(deterministic-dossier|verified-ai-with-deterministic-data)$/.test(d.dataMode || '') &&
+      d.deepDiveSchemaVersion === '2026-08-11a' &&
+      /^(deterministic-dossier|ai-analysis-with-deterministic-data)$/.test(d.dataMode || '') &&
       typeof d.summary === 'string' && d.summary.length > 40 &&
       Number(d.quote?.price) > 0 && typeof d.quote?.source === 'string' &&
       d.dataSources?.quote?.status === 'available' &&
-      ['pending', 'withheld', 'verified'].includes(d.aiNarrativeStatus) &&
+      ['ready', 'unavailable'].includes(d.aiNarrativeStatus) &&
       [d.bullCase, d.bearCase, d.catalysts, d.risks].every(items => Array.isArray(items) && items.length > 0) &&
       d.equityData?.status === 'available' && Number(d.equityData?.coverageScore) > 0 &&
-      d.investment?.rating === 'Not Rated' && d.investment?.score == null &&
       d.dataSources?.options?.status === 'available' && d.optionsChain?.status === 'available' &&
-      Number(d.optionsChain?.contractCount) > 0 && d.options?.bias === 'Data Available' &&
-      /^N\/A/.test(d.priceTarget || '') });
+      Number(d.optionsChain?.contractCount) > 0 &&
+      // A completed analysis must carry a real rating and options view; when it does not
+      // complete, the deterministic dossier must say so rather than invent one.
+      (d.aiNarrativeStatus === 'ready'
+        ? d.deterministic === false && typeof d.investment?.rating === 'string' &&
+          d.investment.rating !== 'Not Rated' && typeof d.options?.bias === 'string'
+        : d.deterministic === true && d.investment?.rating === 'Not Rated' &&
+          d.options?.bias === 'Data Only' && /^N\/A/.test(d.priceTarget || '')) });
 
   // AI chat (skipError — needs a heavy-tier AI key)
   await check('POST /api/intel/chat', `${BASE}/api/intel/chat`, {

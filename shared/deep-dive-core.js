@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const DEEP_DIVE_SCHEMA_VERSION = '2026-08-04b';
+  const DEEP_DIVE_SCHEMA_VERSION = '2026-08-11a';
 
   function finiteNumber(value) {
     if (value === null || value === undefined || value === '') return null;
@@ -185,13 +185,9 @@
     });
     if (!watchItems.length) watchItems.push('No qualifying recent company headline was available for this refresh.');
 
-    const limits = ['Price targets, entries, stops, and fair values are withheld because a dedicated verified valuation model is not connected.'];
-    if (optionsChain && optionsChain.status === 'available') {
-      limits.push('Options-chain rows are available, but implied volatility, Greeks, and a verified options trade model are not connected.');
-    } else {
-      limits.push(optionsChain && optionsChain.reason
-        ? optionsChain.reason
-        : 'No listed options-chain rows were verified for this refresh.');
+    const limits = ['The AI analyst narrative did not complete on this refresh, so the live data below is shown on its own.'];
+    if (optionsChain && optionsChain.status !== 'available') {
+      limits.push(optionsChain.reason || 'No listed options-chain rows were returned for this refresh.');
     }
     if (!quote) limits.push('No usable pooled quote was returned.');
     if (stats.pe === null && stats.marketCap === null && stats.high52 === null) limits.push('Fundamental coverage is unavailable or incomplete.');
@@ -246,7 +242,7 @@
         timeframe: 'No expiry returned',
         rationale: optionsChain && optionsChain.reason
           ? optionsChain.reason
-          : 'No listed options-chain rows were verified for this response.',
+          : 'No listed options-chain rows were returned for this response.',
       };
     }
     const atm = optionsChain.atTheMoney;
@@ -258,15 +254,45 @@
     if (activity.putCallVolumeRatio !== null && activity.putCallVolumeRatio !== undefined) {
       details.push(`Returned-row put/call volume ratio ${activity.putCallVolumeRatio.toFixed(3)}.`);
     }
-    details.push('Observed chain data only; no options trade is recommended.');
+    details.push('The AI options view did not complete on this refresh, so the listed chain is shown on its own.');
     return {
-      recommendation: 'Listed chain available',
-      bias: 'Data Available',
+      recommendation: 'Listed chain data',
+      bias: 'Data Only',
       score: null,
       impliedVolatility: 'Not supplied',
       timeframe: optionsChain.nearestExpiry || 'Nearest listed expiry',
       rationale: details.join(' '),
     };
+  }
+
+  // Grounds the AI options view in real listed contracts instead of guesswork.
+  function buildOptionsChainPromptBlock(optionsChain) {
+    if (!optionsChain || optionsChain.status !== 'available') {
+      return `LISTED OPTIONS CHAIN: unavailable (${(optionsChain && optionsChain.reason) || 'no rows returned'}). ` +
+        `Do not invent strikes, expiries, or premiums; say the chain was unavailable and keep the options view qualitative.\n`;
+    }
+    const atm = optionsChain.atTheMoney;
+    const activity = optionsChain.activity || {};
+    const lines = [
+      `LISTED OPTIONS CHAIN (${optionsChain.source}, retrieved ${optionsChain.retrievedAt}):`,
+      `- ${optionsChain.contractCount} rows across ${optionsChain.expiryCount} expiries; nearest expiry ${optionsChain.nearestExpiry || 'unknown'}`,
+    ];
+    if (atm) {
+      lines.push(
+        `- Nearest strike ${atm.strike.toFixed(2)}: call ${formatOptionMarket(atm.callBid, atm.callAsk, atm.callLast)}` +
+        `${atm.callVolume !== null ? ` (vol ${atm.callVolume}` : ''}${atm.callOpenInterest !== null ? `, OI ${atm.callOpenInterest})` : atm.callVolume !== null ? ')' : ''}; ` +
+        `put ${formatOptionMarket(atm.putBid, atm.putAsk, atm.putLast)}` +
+        `${atm.putVolume !== null ? ` (vol ${atm.putVolume}` : ''}${atm.putOpenInterest !== null ? `, OI ${atm.putOpenInterest})` : atm.putVolume !== null ? ')' : ''}`
+      );
+    }
+    if (activity.putCallVolumeRatio !== null && activity.putCallVolumeRatio !== undefined) {
+      lines.push(`- Chain volume: ${activity.callVolume} calls vs ${activity.putVolume} puts (put/call ${activity.putCallVolumeRatio.toFixed(3)})`);
+    }
+    if (activity.putCallOpenInterestRatio !== null && activity.putCallOpenInterestRatio !== undefined) {
+      lines.push(`- Chain open interest: ${activity.callOpenInterest} calls vs ${activity.putOpenInterest} puts (put/call ${activity.putCallOpenInterestRatio.toFixed(3)})`);
+    }
+    lines.push('- Implied volatility and Greeks are NOT supplied by this feed. Judge IV qualitatively from premiums relative to spot and say that it is inferred.');
+    return `${lines.join('\n')}\n`;
   }
 
   function buildDeterministicDeepDive(input = {}) {
@@ -304,15 +330,15 @@
         rating: 'Not Rated',
         score: null,
         conviction: 'Low',
-        horizon: 'No verified horizon',
-        fairValue: 'N/A - no verified valuation model',
-        thesis: 'No investment recommendation is issued without a verified valuation model.',
+        horizon: 'Not available',
+        fairValue: 'N/A',
+        thesis: 'The AI analyst narrative did not complete on this refresh. The live quote, fundamental, analyst-consensus, and options-chain data below are unaffected.',
       },
       options: buildOptionsData(optionsChain),
       technicalBias: 'Unrated',
-      entryZone: 'N/A - no verified trade plan',
-      stopLoss: 'N/A - no verified trade plan',
-      priceTarget: 'N/A - no verified valuation model',
+      entryZone: 'N/A',
+      stopLoss: 'N/A',
+      priceTarget: 'N/A',
       bullCase: observations.supporting,
       bearCase: observations.caution,
       catalysts: observations.watchItems,
@@ -355,9 +381,57 @@
     };
   }
 
+  // The AI supplies the analysis (ratings, levels, options view, cases). The deterministic
+  // dossier supplies the measured data and provenance underneath it. Measured fields always
+  // win so a model can never overwrite an observed quote, stat, or chain row; everything
+  // else is left to the analysis. Shared by both runtimes to keep Express and the Worker
+  // byte-identical here.
+  function mergeAnalysisWithDossier(baseline, analysis) {
+    return {
+      ...baseline,
+      ...analysis,
+      ticker: baseline.ticker,
+      company: analysis.company || baseline.company,
+      quote: baseline.quote,
+      stats: baseline.stats,
+      analystConsensus: baseline.analystConsensus,
+      equityData: baseline.equityData,
+      optionsChain: baseline.optionsChain,
+      dataSources: baseline.dataSources,
+      dataMode: 'ai-analysis-with-deterministic-data',
+      deterministic: false,
+      aiNarrativeStatus: 'ready',
+      aiNarrativeEligible: true,
+    };
+  }
+
+  // Used when generation or the evidence gate fails: keep every measured section, and let
+  // the dossier's own "not rated" wording stand instead of a half-populated analysis.
+  function mergeFallbackWithDossier(baseline, abstention) {
+    return {
+      ...baseline,
+      ...abstention,
+      investment: baseline.investment,
+      options: baseline.options,
+      technicalBias: baseline.technicalBias,
+      entryZone: baseline.entryZone,
+      stopLoss: baseline.stopLoss,
+      priceTarget: baseline.priceTarget,
+      equityData: baseline.equityData,
+      optionsChain: baseline.optionsChain,
+      dataSources: baseline.dataSources,
+      dataMode: 'deterministic-dossier',
+      deterministic: true,
+      aiNarrativeStatus: 'unavailable',
+    };
+  }
+
   const api = {
     DEEP_DIVE_SCHEMA_VERSION,
     buildDeterministicDeepDive,
+    buildOptionsChainPromptBlock,
+    mergeAnalysisWithDossier,
+    mergeFallbackWithDossier,
     formatMarketCap,
   };
 

@@ -833,12 +833,21 @@ function formatAiRuntimeSummary(policy) {
   let ddLoadedFor = null;
   let ddRequestId = 0;
 
+  const RATING_CLASS = (r) => {
+    const k = String(r || '').toLowerCase();
+    if (k.includes('strong buy')) return 'rate-strongbuy';
+    if (k.includes('buy')) return 'rate-buy';
+    if (k.includes('strong sell')) return 'rate-strongsell';
+    if (k.includes('sell')) return 'rate-sell';
+    if (k.includes('not rated')) return 'rate-partial';
+    return 'rate-hold';
+  };
   const BIAS_CLASS = (b) => {
     const k = String(b || '').toLowerCase();
     if (k === 'calls') return 'bias-calls';
     if (k === 'puts') return 'bias-puts';
     if (k === 'avoid') return 'bias-avoid';
-    if (k.includes('data available')) return 'bias-data';
+    if (k.includes('data')) return 'bias-data';
     if (k.includes('unavailable')) return 'bias-unavailable';
     return 'bias-straddle';
   };
@@ -923,18 +932,15 @@ function formatAiRuntimeSummary(policy) {
       ? new Date(policy.dataAsOf).toLocaleString()
       : '';
     const hasDeterministicDossier = data && data.deterministic === true;
-    const narrativePending = data && data.aiNarrativeStatus === 'pending';
-    const title = narrativePending
-      ? 'AI NARRATIVE PENDING'
-      : (policy.status === 'abstained'
-        ? (hasDeterministicDossier ? 'AI NARRATIVE WITHHELD' : 'RESEARCH WITHHELD')
-        : (policy.status === 'deterministic' ? 'DETERMINISTIC ANALYSIS' : 'EVIDENCE-GATED RESEARCH'));
+    const title = policy.status === 'abstained'
+      ? (hasDeterministicDossier ? 'AI ANALYSIS UNAVAILABLE — LIVE DATA SHOWN' : 'RESEARCH WITHHELD')
+      : (policy.status === 'deterministic' ? 'DETERMINISTIC ANALYSIS' : 'EVIDENCE-GROUNDED ANALYSIS');
     const count = Number(policy.evidenceCount || 0);
     const runtime = formatAiRuntimeSummary(policy);
-    return `<div class="policy-notice ${narrativePending ? 'is-pending' : (policy.status === 'abstained' ? 'is-abstained' : 'is-grounded')}">
+    return `<div class="policy-notice ${policy.status === 'abstained' ? 'is-abstained' : 'is-grounded'}">
       <div class="policy-notice-title">${title}</div>
       ${policy.reason ? `<div class="policy-notice-reason">${esc(policy.reason)}</div>` : ''}
-      ${policy.status === 'abstained' && hasDeterministicDossier ? `<div class="policy-notice-meta">${narrativePending ? 'The source-backed dossier is ready while independent verification continues.' : 'The source-backed deterministic company dossier remains available below.'}</div>` : ''}
+      ${policy.status === 'abstained' && hasDeterministicDossier ? `<div class="policy-notice-meta">The source-backed live data sections below are unaffected.</div>` : ''}
       <div class="policy-notice-meta">${count} qualifying source record${count === 1 ? '' : 's'}${asOf ? ` · as of ${esc(asOf)}` : ''} · ${esc(policy.verifier || 'policy check')}</div>
       ${runtime ? `<div class="policy-notice-meta">${esc(runtime)}</div>` : ''}
       ${sourceLinks ? `<div class="policy-notice-sources">${policy.status === 'grounded' ? 'Cited' : 'Available evidence'}: ${sourceLinks}</div>` : ''}
@@ -943,13 +949,13 @@ function formatAiRuntimeSummary(policy) {
   }
 
   function renderDeepDive(d) {
-    const opt = d.options || {}, st = d.stats || {};
+    const inv = d.investment || {}, opt = d.options || {}, st = d.stats || {};
     const equity = d.equityData || {};
     const chain = d.optionsChain || {};
-    const deterministicOnly = d.aiNarrativeStatus !== 'verified';
+    const deterministicOnly = d.aiNarrativeStatus !== 'ready';
     const caseLabels = deterministicOnly
       ? ['SUPPORTING OBSERVATIONS', 'CAUTION OBSERVATIONS', 'RECENT WATCH ITEMS', 'DATA LIMITS']
-      : ['BULL CASE', 'BEAR CASE', 'CATALYSTS', 'RISKS'];
+      : ['▲ BULL CASE', '▼ BEAR CASE', '⚡ CATALYSTS', '⚠ RISKS'];
     const usableLevel = (value) => value && !/^(n\/a|unrated)(\s|$)/i.test(String(value));
     const showLevels = [d.technicalBias, d.entryZone, d.stopLoss, d.priceTarget].some(usableLevel);
     const html = `
@@ -970,16 +976,24 @@ function formatAiRuntimeSummary(policy) {
         <p class="dd-summary">${esc(d.summary)}</p>
 
         <div class="dd-ratings">
+          ${deterministicOnly ? `
           <div class="dd-rating ${equity.status === 'available' ? 'rate-data' : 'rate-partial'}">
             <div class="dd-rating-top"><span class="dd-rating-kind">EQUITY DATA</span><span class="dd-rating-score">${equity.coverageScore != null ? equity.coverageScore : '—'}<i>/100 coverage</i></span></div>
             <div class="dd-rating-badge">${esc((equity.status || 'unavailable').toUpperCase())}</div>
             <div class="dd-rating-meta">${Number(equity.availableDatasets || 0)}/${Number(equity.totalDatasets || 4)} datasets returned · not a stock rating</div>
-            <div class="dd-rating-thesis">${esc(equity.summary || 'No equity dataset was returned for this refresh.')}<br><span class="dd-data-note">${esc(equity.disclaimer || 'Coverage is not an investment recommendation.')}</span></div>
-          </div>
+            <div class="dd-rating-thesis">${esc(equity.summary || 'No equity dataset was returned for this refresh.')}<br><span class="dd-data-note">${esc(inv.thesis || equity.disclaimer || '')}</span></div>
+          </div>` : `
+          <div class="dd-rating ${RATING_CLASS(inv.rating)}">
+            <div class="dd-rating-top"><span class="dd-rating-kind">STOCK</span><span class="dd-rating-score">${inv.score != null ? inv.score : '—'}<i>/100</i></span></div>
+            <div class="dd-rating-badge">${esc(inv.rating || '—')}</div>
+            <div class="dd-rating-meta">${esc(inv.conviction || '')} conviction · ${esc(inv.horizon || '')}</div>
+            <div class="dd-rating-thesis">${esc(inv.thesis || '')}</div>
+            ${inv.fairValue && !/^n\/a/i.test(String(inv.fairValue)) ? `<div class="dd-fair">Fair value: <b>${esc(inv.fairValue)}</b></div>` : ''}
+          </div>`}
           <div class="dd-rating ${BIAS_CLASS(opt.bias)}">
-            <div class="dd-rating-top"><span class="dd-rating-kind">OPTIONS DATA</span><span class="dd-rating-score">${chain.contractCount != null ? chain.contractCount : '—'}<i> rows</i></span></div>
+            <div class="dd-rating-top"><span class="dd-rating-kind">OPTIONS</span><span class="dd-rating-score">${opt.score != null ? opt.score : (chain.contractCount != null ? chain.contractCount : '—')}<i>${opt.score != null ? '/100' : ' rows'}</i></span></div>
             <div class="dd-rating-badge">${esc(opt.bias || '—')}</div>
-            <div class="dd-rating-meta">${Number(chain.expiryCount || 0)} observed expiries · nearest ${esc(opt.timeframe || 'not returned')} · IV ${esc(opt.impliedVolatility || 'not supplied')}</div>
+            <div class="dd-rating-meta">IV ${esc(opt.impliedVolatility || '?')} · ${esc(opt.timeframe || '')}${chain.contractCount ? ` · ${chain.contractCount} chain rows, ${Number(chain.expiryCount || 0)} expiries` : ''}</div>
             <div class="dd-rating-thesis"><b>${esc(opt.recommendation || '')}</b><br>${esc(opt.rationale || '')}</div>
             ${safeHttpUrl(chain.sourceUrl || '') ? `<a class="dd-data-link" href="${esc(safeHttpUrl(chain.sourceUrl))}" target="_blank" rel="noopener noreferrer">View source chain →</a>` : ''}
           </div>
@@ -1021,7 +1035,9 @@ function formatAiRuntimeSummary(policy) {
         ${deepDiveEvidence(d)}
 
         <button class="dd-open" data-ticker="${esc(d.ticker)}">Open ${esc(d.ticker)} in Terminal →</button>
-        <p class="dd-disclaimer">Policy-gated terminal research — educational only, not investment advice.</p>
+        <p class="dd-disclaimer">${deterministicOnly
+          ? 'Live terminal data — educational only, not investment advice.'
+          : 'AI-generated analysis from live quote, fundamental, options-chain, and news data — educational only, not investment advice.'}</p>
       </div>
 
       <div class="quant-lab" id="quantLab">
@@ -1507,33 +1523,6 @@ function formatAiRuntimeSummary(policy) {
     ctx2.fillText('$' + S0.toFixed(2), padL - 6, yOf(S0) + 3);
   }
 
-  function updateDeepDivePolicyNotice(data) {
-    const current = $('#ddResult .policy-notice');
-    if (!current) return;
-    const holder = document.createElement('div');
-    holder.innerHTML = policyNotice(data);
-    if (holder.firstElementChild) current.replaceWith(holder.firstElementChild);
-  }
-
-  async function loadVerifiedDeepDiveNarrative(query, requestId) {
-    try {
-      const data = await fetchJSON('/api/intel/deepdive?q=' + encodeURIComponent(query) + '&ai=1');
-      if (requestId !== ddRequestId) return;
-      if (data.error) throw new Error(data.message);
-      if (data.aiNarrativeStatus === 'verified') {
-        renderDeepDive(data);
-        $('#ddStatus').textContent = 'Dossier loaded with an independently verified AI narrative.';
-        return;
-      }
-      updateDeepDivePolicyNotice(data);
-      const reason = data.policy && data.policy.reason ? ` ${data.policy.reason}` : '';
-      $('#ddStatus').textContent = `Deterministic dossier ready. The optional AI narrative was withheld.${reason}`;
-    } catch (error) {
-      if (requestId !== ddRequestId) return;
-      $('#ddStatus').textContent = 'Deterministic dossier ready. The optional AI narrative could not be verified on this refresh.';
-    }
-  }
-
   async function loadDeepDive(query) {
     const q = String(query || '').trim();
     if (!q) return;
@@ -1541,7 +1530,7 @@ function formatAiRuntimeSummary(policy) {
     ddLoadedFor = q;
     $('#ddInput').value = q;
     $('#ddStatus').className = 'status';
-    $('#ddStatus').innerHTML = '<span class="spinner"></span>Building a source-backed dossier for ' + esc(q.toUpperCase()) + '… (pooled quote, fundamentals, analyst counts, and current evidence)';
+    $('#ddStatus').innerHTML = '<span class="spinner"></span>Running a full analyst deep dive on ' + esc(q.toUpperCase()) + '… (live quote, fundamentals, analyst consensus, options chain, and current news)';
     $('#ddResult').innerHTML = '';
     try {
       const data = await fetchJSON('/api/intel/deepdive?q=' + encodeURIComponent(q));
@@ -1549,14 +1538,9 @@ function formatAiRuntimeSummary(policy) {
       if (data.error) throw new Error(data.message);
       renderDeepDive(data);
       $('#ddStatus').className = 'status policy-status';
-      if (data.aiNarrativeStatus === 'pending') {
-        $('#ddStatus').textContent = 'Deterministic dossier loaded. Independent verification of the optional AI narrative is continuing in the background.';
-        void loadVerifiedDeepDiveNarrative(q, requestId);
-      } else {
-        $('#ddStatus').textContent = data.aiNarrativeStatus === 'verified'
-          ? 'Dossier loaded with an independently verified AI narrative.'
-          : 'Deterministic dossier loaded. The optional AI narrative was withheld; live data sections remain available.';
-      }
+      $('#ddStatus').textContent = data.aiNarrativeStatus === 'ready'
+        ? 'Deep dive complete — analyst ratings, levels, and options view generated from live data.'
+        : 'Live data loaded. The AI analysis did not complete on this refresh; the data sections below are unaffected.';
     } catch (err) {
       if (requestId !== ddRequestId) return;
       $('#ddStatus').className = 'status error';

@@ -100,7 +100,7 @@ Deploys to `https://market-terminal.wyjjdyxzsc.workers.dev`
 
 **AI evidence policy (2026-07-16 checkpoint, production verified)**:
 - `shared/ai-task-policy-core.js` defines task risk, approved provider tiers/names, evidence thresholds, citation validation, output constraints, and structured abstentions shared by Express and the Worker.
-- Supply-chain relationships, investment picks, and country risk scores are withheld until verified input adapters exist. Deep-dive, situation, price-action, and current-market chat outputs must pass their evidence/citation gate; deep-dive trade levels, valuation, and options construction remain disabled.
+- Supply-chain relationships, investment picks, and country risk scores are withheld until verified input adapters exist. Deep-dive, situation, price-action, and current-market chat outputs must pass their evidence/citation gate. (Deep-dive trade levels, valuation, and options construction were disabled at this checkpoint; see the 2026-08-11 entry below, which supersedes that.)
 - Generic educational chat uses the speed tier; current-market and high-risk tasks require policy-approved heavy providers and abstain when unavailable.
 - Source commit `5a10b79` is production verified: `24/24` unit tests, `28/28` local smoke contracts, `31/31` production smoke contracts, targeted policy-envelope probes, and an interactive browser pass completed. Independent verification was still open at that checkpoint and is superseded by the checkpoint 6 section below.
 
@@ -129,8 +129,16 @@ Deploys to `https://market-terminal.wyjjdyxzsc.workers.dev`
 **Market-data completeness (2026-08-04 checkpoint 9, production verified)**:
 - `/api/ticker` uses the canonical quote pool in both runtimes and retains source-attributed last-good values for 24 hours, preventing a Finnhub throttle from replacing valid tape prices with zeroes.
 - `shared/options-chain-core.js` normalizes a bounded Nasdaq at-the-money chain snapshot. Deep Dive schema `2026-08-04b` exposes returned rows, expiries, nearest strike, bid/ask, volume/open interest, and put/call ratios for optionable US stocks.
-- The UI labels its left card `EQUITY DATA` with a coverage score that explicitly is not investment merit; the right card labels observed options data instead of saying `Avoid`. IV, Greeks, fair value, targets, and trade construction remain unavailable without dedicated models/data.
+- The `EQUITY DATA` coverage card is now the *fallback* left card, shown only when the AI analysis does not complete; the analysis render shows the `STOCK` rating card instead. (Superseded in part by the 2026-08-11 entry below.)
 - Source commit `ebacf62` passed `58/58` unit tests, all `32/32` available local contracts, AI fixture thresholds, zero-vulnerability audit, and Wrangler `4.118.0` dry-run. Production served all seven `20260804d` assets, passed `34/34`, returned all seven tape prices from pooled providers, and rendered SPCX with 100/100 coverage and 47 options rows on desktop/mobile without overflow or console errors.
+
+**Deep Dive analysis restored (2026-08-11, local verification only)**:
+- The 2026-07-16 → 2026-08-04 checkpoints had stacked four independent suppressors on Deep Dive, so it could never render analysis: `constrainTaskOutput('intel.deep-dive')` overwrote the model's rating/options/levels with placeholders *after* generation; `DEEPDIVE_SYSTEM` instructed the model to emit those placeholders itself; `requiresIndependentVerifier` forced a second-provider check that never completed; and a two-phase `?ai=1` flow defaulted to a data-only dossier. All four are removed.
+- Task-policy schema `2026-08-11a` and Deep Dive schema `2026-08-11a`. `intel.deep-dive` keeps its evidence gate, citation requirement, heavy provider tier, and budgets — it just no longer requires a second independent provider, and its output is no longer clamped.
+- The analyst prompt is restored (rating, score, conviction, horizon, fair value, options idea, technical bias, entry/stop/target, bull/bear/catalysts/risks) and is now grounded in the **real Nasdaq chain** via `buildOptionsChainPromptBlock()` — strikes, expiries, bid/ask, volume, and open interest. The feed carries no IV or Greeks, so the prompt requires the model to mark IV as inferred.
+- `mergeAnalysisWithDossier()` / `mergeFallbackWithDossier()` in `shared/deep-dive-core.js` are shared by both runtimes: measured fields (quote, stats, consensus, chain, provenance) always win, so a model can never overwrite observed data. When generation fails the dossier is shown as an explicit fallback rather than a wall of "withheld".
+- Verified locally: `61/61` unit tests, `32/32` available local smoke contracts, AI fixture thresholds, Wrangler dry-run bundling, and a browser pass covering both the analysis and fallback renders with no Deep Dive console errors.
+- **Not yet verified in production, and the live AI path is unproven.** The local `.env` has only `GROQ_API_KEY` (speed tier); `intel.deep-dive` requires a heavy provider (`gemini`, `deepseek`, `cohere`, `github`, `cfai`, `ai21`, `openrouter`, or `huggingface`), so locally it always takes the fallback branch. The analysis render and merge were verified against a simulated payload through the real render path, not against a live model response.
 
 **Branches**: All work on `main` (no feature branches yet).
 
@@ -143,7 +151,7 @@ Deploys to `https://market-terminal.wyjjdyxzsc.workers.dev`
 | `public/app.js` | UI, drawChart(), loadSymbol(), panel logic |
 | `public/quant.js` | Math lib (no DOM), IIFE export |
 | `public/intel.js` | Deep Dive UI + QUANT LAB |
-| `shared/deep-dive-core.js` | Deterministic Deep Dive dossier and provenance contract |
+| `shared/deep-dive-core.js` | Deep Dive dossier, options-chain prompt grounding, and the shared analysis/fallback merges |
 | `shared/options-chain-core.js` | Bounded Nasdaq options-chain normalization and availability contract |
 | `shared/ticker-core.js` | Pooled ticker normalization and last-good fallback contract |
 | `public/index.html` | Layout, cache-buster versioning |

@@ -6,7 +6,7 @@
   const verificationCore = globalThis.MarketTerminalAiVerification ||
     (typeof require === 'function' ? require('./ai-verification-core.js') : null);
 
-  const AI_TASK_POLICY_SCHEMA_VERSION = '2026-07-30a';
+  const AI_TASK_POLICY_SCHEMA_VERSION = '2026-08-11a';
   const CHAT_EDUCATIONAL_PATTERN =
     /^(?:please\s+)?(?:what\s+(?:is|are|does)|define|explain(?:\s+(?:how|what))?|how\s+(?:does|do|is|are)|meaning\s+of|teach\s+me)\b/i;
   const CHAT_TEMPORAL_PATTERN =
@@ -213,7 +213,6 @@
       requiredInputs: ['quote', 'fundamentalData'],
       requiresCorroboration: true,
       requiresVerifier: true,
-      requiresIndependentVerifier: true,
       requireEvidenceIds: true,
       maxInputTokens: 22_000,
       maxOutputTokens: 4_000,
@@ -221,7 +220,7 @@
       maxEstimatedCostUsd: 0.15,
       cacheTtlSeconds: 900,
       label: 'company deep dive',
-      disclaimer: 'No price target, entry, stop, fair value, or options trade is issued without dedicated verified data.',
+      disclaimer: 'Analyst-style research generated from live quote, fundamental, options-chain, and news data — educational only, not investment advice.',
     }),
     'intel.investment-report': createPolicy('intel.investment-report', 'high', {
       providerTier: 'heavy',
@@ -725,34 +724,9 @@
   }
 
   function constrainTaskOutput(taskId, output) {
-    const constrained = taskId === 'intel.sector-analysis'
+    return taskId === 'intel.sector-analysis'
       ? constrainSectorOutput(output)
       : cloneJson(output);
-    if (taskId === 'intel.deep-dive') {
-      constrained.investment = { ...(constrained.investment || {}),
-        rating: 'Not Rated',
-        score: null,
-        conviction: 'Low',
-        horizon: 'No verified horizon',
-        fairValue: 'N/A - no verified valuation model',
-        thesis: 'No investment recommendation is issued without a verified valuation model.',
-      };
-      constrained.options = { ...(constrained.options || {}),
-        recommendation: 'Avoid - options-chain data is not connected',
-        bias: 'Avoid',
-        score: null,
-        impliedVolatility: 'Unknown',
-        timeframe: 'N/A',
-        rationale: 'No options-chain, strike, or expiry data was verified for this response.',
-      };
-      constrained.entryZone = 'N/A - no verified trade plan';
-      constrained.stopLoss = 'N/A - no verified trade plan';
-      constrained.priceTarget = 'N/A - no verified valuation model';
-      constrained.unknowns = [...new Set([...(constrained.unknowns || []),
-        'Price targets, entries, stops, fair values, and options ideas require dedicated verified inputs.',
-      ])];
-    }
-    return constrained;
   }
 
   function attachPolicy(preparation, output, options = {}) {
