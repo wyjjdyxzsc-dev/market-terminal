@@ -625,3 +625,8 @@ RESTART VERIFIED · HUMAN ACCEPTED
   labels during trading hours are covered by unit tests, not observed live); India AI
   narrative (abstains by policy, B-002/B-027); Yahoo search from Cloudflare (unused; Finnhub
   search serves NSE).
+
+### Closure deploy — 2026-09-20 — `99a2650` (assets 20260920i)
+- Production served nine `20260920i` refs. First `test:prod` run: 47/48 — `/api/map/weather`
+  502 (upstream NWS transient, untouched by TWINCORE: `git diff 7d65fc0..HEAD -- worker.js`
+  has zero `weather` hunks; direct probes went 502 → 200 → 200). Rerun: **48/48**.
