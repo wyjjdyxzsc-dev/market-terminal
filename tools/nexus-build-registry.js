@@ -235,4 +235,261 @@ async function build() {
   console.log(`[nexus] wrote ${OUT}`);
 }
 
-build().catch((err) => { console.error('[nexus] build failed:', err); process.exitCode = 1; });
+// ───────────────────────── Task 3: relationship edges ─────────────────────────
+
+function normalizeCompanyName(name) {
+  return String(name || '')
+    .toLowerCase()
+    .replace(/\b(inc|incorporated|corp|corporation|co|company|ltd|limited|plc|llc)\b\.?/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+function buildNameIndex(companies) {
+  const index = new Map();
+  for (const c of companies) {
+    const key = normalizeCompanyName(c.name);
+    if (key) index.set(key, c.id);
+  }
+  return index;
+}
+
+function matchCompanyByName(rawLabel, nameIndex) {
+  const key = normalizeCompanyName(rawLabel);
+  if (!key) return null;
+  if (nameIndex.has(key)) return nameIndex.get(key);
+  for (const [indexed, id] of nameIndex) {
+    if (indexed.length > 4 && (key.includes(indexed) || indexed.includes(key))) return id;
+  }
+  return null;
+}
+
+const CONCENTRATION_CONCEPTS = [
+  'ConcentrationRiskPercentage1',
+  'ConcentrationRiskPercentage',
+];
+
+// Optional env cap on how many CIK-bearing US companies to process in this run
+// (SEC XBRL fetch is a small number of HTTPS requests per company, rate-limited to
+// SEC's fair-use policy). Unset/0 means "no cap" — the full registry — so the
+// generator itself carries no baked-in permanent limit; NEXUS_TIER1_LIMIT is a
+// run-time choice only.
+const TIER1_LIMIT = Number(process.env.NEXUS_TIER1_LIMIT || 0) || Infinity;
+
+// IMPORTANT — why this does NOT use /api/xbrl/companyfacts/:
+// SEC's companyfacts (and frames) APIs only expose facts reported against a
+// filer's *default* (non-dimensional) context. Any concept a filer reports
+// exclusively with a dimensional breakdown (e.g. customer concentration tagged
+// per named customer via srt:MajorCustomersAxis, which is how essentially every
+// filer that names a real customer reports it) is silently ABSENT from
+// companyfacts — not null, not zero, just missing, with no "segment"/"dimensions"
+// field anywhere in that API's shape. Verified directly against real filings
+// (Cirrus Logic CIK 0000772406, Qorvo, Skyworks, Microchip, ON Semi all show zero
+// "Concentration*" concepts in companyfacts despite disclosing named customer
+// concentration in their actual 10-Ks). The dimensional member identity only
+// exists in the filing's own raw XBRL instance document, so tier-1 fetches that
+// document directly per company and parses <context>/<xbrldi:explicitMember>
+// segments itself.
+function camelToWords(s) {
+  return String(s || '')
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')
+    .trim();
+}
+
+// Finds the most recent 10-K's auto-generated XBRL instance document. EDGAR
+// names this <primaryDocumentBasename>_htm.xml for every inline-XBRL filing
+// (the standard since inline XBRL became mandatory) — e.g. primaryDocument
+// "crus-20240330.htm" -> instance "crus-20240330_htm.xml" alongside it.
+async function findLatest10KInstance(cik) {
+  const subs = JSON.parse(await get(`https://data.sec.gov/submissions/CIK${cik}.json`));
+  const recent = subs.filings && subs.filings.recent;
+  if (!recent || !Array.isArray(recent.form)) return null;
+  for (let i = 0; i < recent.form.length; i++) {
+    if (recent.form[i] !== '10-K') continue;
+    const primaryDoc = recent.primaryDocument[i];
+    const accessionNumber = recent.accessionNumber[i];
+    if (!primaryDoc || !accessionNumber || !primaryDoc.endsWith('.htm')) continue;
+    const accnNoDash = accessionNumber.replace(/-/g, '');
+    const instanceFile = primaryDoc.replace(/\.htm$/, '_htm.xml');
+    return {
+      url: `https://www.sec.gov/Archives/edgar/data/${Number(cik)}/${accnNoDash}/${instanceFile}`,
+      accessionNumber,
+      filed: recent.filingDate[i],
+    };
+  }
+  return null;
+}
+
+const CUSTOMER_AXIS_RE = /dimension="[a-z0-9.-]*:(?:MajorCustomersAxis|CustomerAxis)"[^>]*>\s*([A-Za-z0-9.:_-]+?)\s*<\/xbrldi:explicitMember>/gi;
+const CONTEXT_BLOCK_RE = /<context id="([^"]+)"[^>]*>([\s\S]*?)<\/context>/g;
+
+// Builds a contextId -> customer-member-localname map for every context whose
+// <segment> carries a MajorCustomersAxis/CustomerAxis explicitMember. Contexts
+// with no such member (the company-wide default) are simply absent from the map.
+function buildCustomerContextMap(xml) {
+  const map = new Map();
+  let m;
+  CONTEXT_BLOCK_RE.lastIndex = 0;
+  while ((m = CONTEXT_BLOCK_RE.exec(xml))) {
+    const [, contextId, body] = m;
+    CUSTOMER_AXIS_RE.lastIndex = 0;
+    const memberMatch = CUSTOMER_AXIS_RE.exec(body);
+    if (!memberMatch) continue;
+    const localName = memberMatch[1].split(':').pop().replace(/Member$/, '');
+    map.set(contextId, localName);
+  }
+  return map;
+}
+
+function extractConcentrationFacts(xml, contextMap) {
+  const found = [];
+  for (const concept of CONCENTRATION_CONCEPTS) {
+    // Match the opening tag for this exact concept (not a longer concept that
+    // happens to start with the same prefix, e.g. Percentage1 vs Percentage).
+    const tagRe = new RegExp(`<[a-z0-9.-]+:${concept}\\b([^>]*)>([^<]*)<`, 'gi');
+    let m;
+    while ((m = tagRe.exec(xml))) {
+      const [, attrs, rawVal] = m;
+      const ctxMatch = /contextRef="([^"]+)"/.exec(attrs);
+      if (!ctxMatch) continue;
+      const member = contextMap.get(ctxMatch[1]);
+      if (!member) continue; // default (non-dimensional) context — no customer identity
+      const val = Number(rawVal);
+      if (!Number.isFinite(val)) continue;
+      found.push({ concept, member, val });
+    }
+  }
+  return found;
+}
+
+async function fetchConcentrationEdges(usCompanies, nameIndex) {
+  const edges = [];
+  let processed = 0;
+  let withInstance = 0;
+  for (const company of usCompanies) {
+    if (!company.cik) continue;
+    if (processed >= TIER1_LIMIT) break;
+    processed += 1;
+    if (processed % 8 === 0) await new Promise((r) => setTimeout(r, 1100)); // stay under SEC's ~10 req/sec fair-use limit
+    try {
+      const filing = await findLatest10KInstance(company.cik);
+      if (!filing) continue;
+      const xml = await get(filing.url);
+      const contextMap = buildCustomerContextMap(xml);
+      if (!contextMap.size) continue;
+      withInstance += 1;
+      const facts = extractConcentrationFacts(xml, contextMap);
+      for (const fact of facts) {
+        const words = camelToWords(fact.member);
+        const targetId = matchCompanyByName(words, nameIndex);
+        if (!targetId || targetId === company.id) continue; // no match (anonymized "Customer A", foreign counterparty, etc.) — dropped, never guessed
+        edges.push(nexusCore.createRelationshipEdge({
+          sourceId: targetId,
+          targetId: company.id,
+          relation: 'customer',
+          tier: 1,
+          evidence: [{
+            source: 'SEC XBRL instance document (10-K)',
+            sourceUrl: filing.url,
+            datasetId: `us-gaap:${fact.concept}`,
+            observedAt: isoOrNull(filing.filed),
+            note: `${words} = ${(fact.val * 100).toFixed(1)}% concentration`,
+          }],
+        }));
+      }
+    } catch (err) {
+      // Missing/unreachable filing, no 10-K, non-inline-XBRL filer, etc. is expected and not an error worth failing the build over.
+    }
+  }
+  console.log(`[nexus] tier-1: processed ${processed} of ${usCompanies.filter((c) => c.cik).length} CIK-bearing US companies, ` +
+    `${withInstance} had a customer-dimensional context` +
+    (Number.isFinite(TIER1_LIMIT) ? ` (capped by NEXUS_TIER1_LIMIT=${TIER1_LIMIT})` : ' (full run, no cap)'));
+  return edges;
+}
+
+function isoOrNull(value) {
+  if (!value) return null;
+  const d = new Date(value);
+  return Number.isNaN(d.valueOf()) ? null : d.toISOString();
+}
+
+async function fetchOwnershipEdges(companies, nameIndex, validIds) {
+  // atlas-snapshot.js nests company records under datasets.companies (not a
+  // top-level `companies` array) — see the file-header note above.
+  const atlasCompanies = (atlasSnapshot && atlasSnapshot.datasets && atlasSnapshot.datasets.companies) || [];
+  const qids = atlasCompanies.map((c) => c.qid).filter(Boolean);
+  if (!qids.length) return [];
+  const edges = [];
+  const batchSize = 50;
+  for (let i = 0; i < qids.length; i += batchSize) {
+    const batch = qids.slice(i, i + batchSize);
+    const values = batch.map((q) => `wd:${q}`).join(' ');
+    const query = `SELECT ?company ?companyLabel ?parent ?parentLabel WHERE {
+      VALUES ?company { ${values} }
+      ?company wdt:P749 ?parent .
+      SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+    }`;
+    try {
+      const raw = JSON.parse(await get(
+        `https://query.wikidata.org/sparql?format=json&query=${encodeURIComponent(query)}`,
+        { Accept: 'application/sparql-results+json' }
+      ));
+      for (const row of raw.results?.bindings || []) {
+        const childQid = row.company.value.split('/').pop();
+        const parentLabel = row.parentLabel?.value || '';
+        const childCompany = atlasCompanies.find((c) => c.qid === childQid);
+        if (!childCompany) continue;
+        for (const inst of childCompany.instruments || []) {
+          if (!inst || !inst.market || !inst.exchange || !inst.symbol) continue; // many Wikidata records lack a known ticker
+          const childId = `${inst.market}:${inst.exchange}:${String(inst.symbol).toUpperCase()}`;
+          if (!validIds.has(childId)) continue; // atlas-snapshot's Wikidata instruments can list an exchange (e.g. BSE) that this run's own registry fetch didn't capture as a node — never emit an edge whose endpoint has no node
+          const parentId = matchCompanyByName(parentLabel, nameIndex);
+          if (!parentId || parentId === childId || !validIds.has(parentId)) continue;
+          edges.push(nexusCore.createRelationshipEdge({
+            sourceId: parentId,
+            targetId: childId,
+            relation: 'ownership',
+            tier: 3,
+            evidence: [{ source: 'Wikidata', sourceUrl: `https://www.wikidata.org/wiki/${childQid}`, datasetId: 'P749', observedAt: new Date().toISOString() }],
+          }));
+        }
+      }
+    } catch (err) {
+      console.warn('[nexus] Wikidata ownership batch failed:', err.message);
+    }
+    await new Promise((r) => setTimeout(r, 500));
+  }
+  return edges;
+}
+
+async function buildRelationships() {
+  const snapshot = require(OUT);
+  const nameIndex = buildNameIndex(snapshot.companies);
+  const validIds = new Set(snapshot.companies.map((c) => c.id));
+  const usCompanies = snapshot.companies.filter((c) => c.market === 'US' && c.cik);
+
+  console.log(`[nexus] fetching SEC XBRL concentration facts for ${usCompanies.length} US filers (rate-limited, this takes a while) ...`);
+  const tier1 = await fetchConcentrationEdges(usCompanies, nameIndex);
+  console.log(`[nexus] tier-1 edges: ${tier1.length}`);
+
+  console.log('[nexus] fetching Wikidata ownership (P749) ...');
+  const tier3 = await fetchOwnershipEdges(snapshot.companies, nameIndex, validIds);
+  console.log(`[nexus] tier-3 edges: ${tier3.length}`);
+
+  const relationships = [...tier1, ...tier3];
+  const updated = { ...snapshot, relationships, generatedAt: new Date().toISOString() };
+  fs.writeFileSync(OUT,
+    `// GENERATED by tools/nexus-build-registry.js — do not edit by hand.\n` +
+    `// Rerun: node tools/nexus-build-registry.js --relationships\n` +
+    `module.exports = ${JSON.stringify(updated)};\n` +
+    `if (typeof globalThis !== 'undefined') globalThis.MarketTerminalNexusSnapshot = module.exports;\n`
+  );
+  console.log(`[nexus] wrote ${relationships.length} relationships to ${OUT}`);
+}
+
+if (process.argv.includes('--relationships')) {
+  buildRelationships().catch((err) => { console.error('[nexus] relationship build failed:', err); process.exitCode = 1; });
+} else {
+  build().catch((err) => { console.error('[nexus] build failed:', err); process.exitCode = 1; });
+}

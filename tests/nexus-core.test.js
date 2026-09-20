@@ -88,3 +88,12 @@ test('nexus-snapshot.js registry has no orphaned canonical ids and reports cover
   }
   assert.ok(snapshot.coverage.byMarket.US, 'US market must be present in coverage');
 });
+
+test('nexus-snapshot.js relationships all carry evidence and valid tiers', () => {
+  const snapshot = require('../shared/nexus-snapshot.js');
+  for (const edge of snapshot.relationships) {
+    assert.ok(edge.evidence.length > 0, `edge ${edge.sourceId}->${edge.targetId} has no evidence`);
+    assert.ok([1, 2, 3].includes(edge.tier));
+    if (edge.relation === 'ownership') assert.equal(edge.tier, 3);
+  }
+});
