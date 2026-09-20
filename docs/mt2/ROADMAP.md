@@ -32,6 +32,12 @@ IN PROGRESS / PASS / PARTIAL / BLOCKED.
   with evidence recorded in EVIDENCE.md; no regression of the regression baseline.
 - OUT OF SCOPE: new UI system, India, Portfolio, Watchlist 2.0, watchers.
 
+## MT2-1A — REWIND RECONCILIATION — Deep Research vs Deep Dive identity check
+- STATUS: PASS (closed 2026-09-20, investigative; no code change)
+- OBJECTIVE: prove whether the OWNER's "Deep Research" is the DEEP DIVE surface restored in MT2-1.
+- RESULT: CASE A — same surface (DECISIONS D-007). MT2-1 remains PASS.
+- NOTE: authorized after MT2-2 QUARTZ had already closed in a separate session; QUARTZ untouched.
+
 ## MT2-2 — QUARTZ — Apple/macOS-derived UI system + new shell
 - STATUS: PASS (closed 2026-09-20, commit b46bbb2 + closure; B-002 still bounds generated-analysis acceptance)
 - OBJECTIVE: Introduce the MT2 design system and application shell alongside (not replacing) the

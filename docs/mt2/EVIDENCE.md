@@ -385,3 +385,23 @@ RESTART VERIFIED · HUMAN ACCEPTED
   command bar and nav (pane synthetic keys are unreliable — HUMAN check, same as B-012); the
   India mode switch (not implemented by design).
 - Closure commit bumps assets to `20260920f` (deploy rule), docs/seam only otherwise.
+
+---
+
+## MT2-1A REWIND RECONCILIATION — 2026-09-20 — HEAD `30bb5eb` (investigative)
+
+- Baseline: `main` @ `30bb5eb` (prompt expected `6ffb81c`; two QUARTZ commits `b46bbb2`,
+  `30bb5eb` landed in a separate session and are recorded PASS in the seam). Tracked tree
+  clean; 3 untracked owner files preserved. No reset; QUARTZ not touched.
+- Searches run (working tree + `git log --all`): case-insensitive `deep research`,
+  `deepresearch`, `deep-research`, `deep_research` in content (`-S`) and commit messages
+  (`--grep`); file adds/deletes/renames matching `research`; every historical `.ttab` label
+  (index.html at every commit); every `/api/intel/*` route string ever in server.js/worker.js;
+  every historical code hit for `research`; the OWNER's master prompt. Results in D-007.
+- Deep Dive continuity check at HEAD: `public/deepdive.js`, `shared/deep-dive-core.js`, and
+  both Deep Dive test files are byte-identical to the MT2-1 closure (`git diff 6ffb81c..HEAD`
+  empty for them); `index.html` loads `deepdive.js?v=20260920f`; render + core tests 11/11.
+- Production (read-only): `GET /` serves nine `20260920f` refs; `/api/intel/deepdive?q=AAPL`
+  → schema `2026-08-11a`, `deterministic-dossier`, `aiNarrativeStatus: unavailable`, Not Rated /
+  Data Only, policy `abstained` (B-002 unchanged). Level: LIVE TESTED (observation).
+- Classification: **CASE A — SAME SURFACE.** No code changed; docs/mt2 only.

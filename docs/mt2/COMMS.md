@@ -107,3 +107,19 @@ EVIDENCE POINTER: EVIDENCE.md "MT2-2 QUARTZ" + "Production acceptance"; DECISION
   BACKLOG B-014, B-015.
 ACTION REQUIRED: OWNER — authorize MT2-3 TWINCORE when ready. STOP.
 ---
+TIMESTAMP: 2026-09-20T06:30Z
+FROM: CLAUDE
+TO: OWNER
+CHECKPOINT: MT2-1A REWIND RECONCILIATION
+MESSAGE TYPE: CHECKPOINT CLOSURE — PASS (CASE A)
+SUMMARY: Full-history search (80 commits, all refs) finds no "Deep Research" tab, route, file,
+  prompt, or commit — ever. The only per-stock analyst surface is DEEP DIVE (`analyze`,
+  `/api/intel/deepdive`), unrenamed since 42af0f6; the OWNER's own master prompt titles it
+  "Deep Dive" (§8.4). MT2-1 restored the surface the OWNER meant; it remains PASS. Deep Dive is
+  intact after QUARTZ in repo and production. Baseline drift noted: HEAD was 30bb5eb (QUARTZ
+  closed in another session), not 6ffb81c; nothing reset or touched.
+DECISION / REQUEST: D-007 records the identity permanently; D-001's "AI RESEARCH" label for the
+  6fafe78 chat panel corrected to "ASK AI / AI ANALYST".
+EVIDENCE POINTER: EVIDENCE.md "MT2-1A"; DECISIONS D-007.
+ACTION REQUIRED: none. Owner requirement satisfied; next checkpoint awaits authorization.
+---

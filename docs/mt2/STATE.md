@@ -1,13 +1,14 @@
 # Project Meridian — STATE (recovery capsule)
 
 PROJECT: Market Terminal 2.0 — Project Meridian
-CHECKPOINT: MT2-2 QUARTZ
-STATUS: PASS (closed 2026-09-20; B-002 remains a bounded open item — high-risk AI surfaces still
+CHECKPOINT: MT2-1A REWIND RECONCILIATION (investigative; after MT2-2 QUARTZ PASS)
+STATUS: PASS (closed 2026-09-20; CASE A — "Deep Research" = DEEP DIVE, D-007; no code change)
+PREVIOUS: MT2-2 QUARTZ — PASS (closed 2026-09-20; B-002 remains a bounded open item — high-risk AI surfaces still
   abstain in production, so their QUARTZ states are the truthful abstention/fallback states)
 ROUTE: claude-opus-5 / effort not observable in-session (medium recorded) / SERIAL /
   bypass-permissions — verified from the live session; change required: NO.
-GIT: branch main, HEAD = closure commit on top of b46bbb2 (QUARTZ code + seam). Tracked tree
-  clean. Frontend assets 20260920f (QUARTZ deployment was 20260920e).
+GIT: branch main, HEAD = MT2-1A seam commit on top of 30bb5eb (QUARTZ closure). Tracked tree
+  clean. Frontend assets 20260920g (QUARTZ deployment was 20260920e; MT2-1A seam deploy bump).
   Untracked owner files preserved, untouched: MARKET_TERMINAL_TOTAL_PLATFORM_CODEX_MASTER_PROMPT.md,
   MARKET_TERMINAL_TOTAL_PLATFORM_CODEX_MASTER_PROMPT.txt, worker-startup.cpuprofile.
 OBJECTIVE: canonical MT2 design system + application shell + navigation architecture with enough
@@ -34,6 +35,8 @@ OPEN: B-001 (iCloud repo, owner action); B-002 (heavy provider secrets/policy, o
 BLOCKERS: none for MT2-2. MT2-3 TWINCORE requires explicit OWNER authorization.
 RUNNING PROCESSES: local preview server (port 3000) may still be running from the browser pane;
   safe to stop.
+DEEP DIVE vs DEEP RESEARCH: same surface (tab `analyze`, `/api/intel/deepdive`, `public/deepdive.js`);
+  no Deep Research surface ever existed — see D-007. Do not reopen.
 NEXT EXACT ACTION: await OWNER authorization for MT2-3 TWINCORE. TWINCORE entry requires a
   DECISIONS.md record on market identity (exchange, currency, calendar, symbol namespace); the
   shell already exposes `#marketMode` (shell.js MARKETS) and the MARKETS workspace as the

@@ -105,3 +105,34 @@ Do not pre-decide future architecture; add records only when a real decision is 
 - CONSEQUENCES: shell contract is nine synchronized assets; D-003's "intel.js appends QUANT LAB"
   is superseded for the lab's location only — the report renderer and its tests are untouched.
 - STATUS: ACCEPTED
+
+## D-007 · 2026-09-20 · MT2-1A · "Deep Research" and "Deep Dive" are the same surface
+- DECISION: the OWNER's phrase "Deep Research tab" refers to the per-stock analyst surface whose
+  only name in this repository has ever been **DEEP DIVE** (tab `analyze`, route
+  `/api/intel/deepdive`, renderer `public/deepdive.js`, core `shared/deep-dive-core.js`). There is
+  no separate Deep Research surface, past or present, and nothing was renamed.
+- EVIDENCE (git, 80 commits, all refs):
+  - `git log --all -i --grep="deep.\?research"` → no commits. `git log --all -i -S"deep research"`
+    (and `deepresearch`, `deep-research`, `deep_research`) → only the docs/mt2 seam commits from
+    `fa52e1a` onward, i.e. Claude's own records of the OWNER's phrase. No file ever named
+    `*research*` was added, deleted, or renamed.
+  - Every `.ttab` label that ever existed: TERMINAL, NEWS→GLOBAL INTEL, SECTORS, DEEP DIVE
+    (`analyze`), SUPPLY CHAIN, WATCHLIST, ALERTS. Every `/api/intel/*` route that ever existed:
+    alerts, analysis, candle(s), chat, company, deepdive, instability, news, priceaction, report,
+    situation, supplychain. Nothing research-named.
+  - The `analyze` tab and `/api/intel/deepdive` both first appear in `42af0f6` and exist
+    unchanged in identity through HEAD (QUARTZ registers `{ id: 'analyze', label: 'Deep Dive' }`).
+  - The OWNER's own master prompt (`MARKET_TERMINAL_TOTAL_PLATFORM_CODEX_MASTER_PROMPT.md`,
+    untracked) has no "Deep Research" section; §8.4 is titled **Deep Dive** and asks to
+    "upgrade the deep dive … to a structured research report" — the OWNER describes Deep Dive
+    as the research surface.
+  - Historical "research" strings are incidental: system-prompt wording ("equity research
+    analyst", initial commit), a GS "research" comment, a map label ("AI research hub"). The
+    `6fafe78` chat panel was labelled "ASK AI / AI ANALYST" (D-001's alternative (a) said
+    "AI RESEARCH" — corrected here; it is single-turn chat, not a research surface). The QUARTZ
+    shell's "Research" *workspace* (b46bbb2) is a new grouping that contains Sectors and Deep
+    Dive; it post-dates MT2-1 and is not a historical surface.
+- CONSEQUENCES: MT2-1 REWIND remains PASS and satisfied the OWNER requirement. Future
+  documents use "Deep Dive" for the surface and may say "(the OWNER's 'Deep Research')" once
+  when quoting. D-001 stands, with the label correction above.
+- STATUS: ACCEPTED
