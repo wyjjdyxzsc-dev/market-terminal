@@ -1679,9 +1679,13 @@ async function loadMarkets(force = false) {
     </tr>`;
   }).join('');
 
-  const overall = unavailable === rows.length ? 'unavailable' : live === rows.length ? 'live' : live > 0 ? 'partial' : 'snapshot';
+  // Overall badge = the dominant per-row truth (EOD on a closed day, not "Snapshot").
+  const keys = rows.map((r) => freshnessForQuote(r.q).key);
+  const dominant = [...new Set(keys)].sort((a, b) => keys.filter((k) => k === b).length - keys.filter((k) => k === a).length)[0] || 'unavailable';
+  const overall = unavailable === rows.length ? 'unavailable' : live === rows.length ? 'live' : live > 0 ? 'partial' : dominant;
+  const labelFor = { live: 'Live', delayed: 'Delayed', snapshot: 'Snapshot', eod: 'End of day', cached: 'Cached', 'last-good': 'Last good', unavailable: 'Unavailable' };
   fresh.dataset.fresh = overall === 'partial' ? 'delayed' : overall;
-  fresh.textContent = overall === 'partial' ? `Partial · ${live}/${rows.length} live` : overall === 'live' ? 'Live' : overall === 'unavailable' ? 'Unavailable' : 'Snapshot';
+  fresh.textContent = overall === 'partial' ? `Partial · ${live}/${rows.length} live` : (labelFor[overall] || 'Snapshot');
 
   body.querySelectorAll('tr[data-symbol]').forEach((tr) => {
     const open = () => { navigateTo('terminal'); loadSymbol(tr.dataset.symbol); };

@@ -2,8 +2,9 @@
 
 PROJECT: Market Terminal 2.0 — Project Meridian
 CHECKPOINT: MT2-3 TWINCORE — US / India dual-market architecture
-STATUS: IMPLEMENTED + UNIT/INTEGRATION/LOCAL-BROWSER TESTED; deploying for production acceptance
-  (2026-09-20T15:05Z). PASS/PARTIAL decided after `test:prod` + production browser pass.
+STATUS: PASS — CLOSED 2026-09-20T15:40Z. Deployed 19f0a7b (assets 20260920h) → test:prod 48/48 →
+  production browser pass US / INDIA / US→INDIA / INDIA→US / reload / desktop / mobile with
+  live India data; closure commit bumps assets to 20260920i (MARKETS badge truth label).
 PREVIOUS: POCKET side-track — PASS (7d65fc0, OWNER ACCEPTED). MT2-1A PASS. MT2-2 PASS.
 ROUTE: claude-opus-5 / SERIAL / bypass-permissions — re-derived for MT2-3 (MIXED change class:
   shared core + two runtimes + UI + tests + docs); sufficient; no ROUTING STOP.
@@ -28,7 +29,6 @@ ENVIRONMENT HAZARD: B-023 — iCloud evicted repo source + node_modules mid-chec
 OPEN: B-001/B-023 (owner), B-002, B-003, B-016…B-019, B-021, B-022, B-024 (NSE calendar verify),
   B-025 (local Yahoo 429), B-026 (watchlist/alerts not market-scoped — WATCHTOWER/SENTINEL),
   B-027 (no India fundamentals/news/options provider).
-NEXT EXACT ACTION: git commit; git push origin main (deploy); wait ~90 s; verify production serves
-  nine 20260920h assets; npm run test:prod; production browser pass (US, INDIA, US→INDIA,
-  INDIA→US, reload, desktop, mobile) with real India data (Yahoo from Cloudflare); record
-  EVIDENCE "Production acceptance"; COMMS closure; STATE → PASS/PARTIAL; STOP.
+NEXT EXACT ACTION: none. MT2-3 is closed. MT2-4 LEDGER requires explicit OWNER authorization
+  (entry: DECISIONS record on portfolio storage). Owner-side: B-001/B-023 repo relocation out of
+  iCloud is now a data-loss risk; B-024 verify the NSE 2026 calendar against the circular.

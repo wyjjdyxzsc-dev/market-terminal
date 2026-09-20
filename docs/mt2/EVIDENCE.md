@@ -594,3 +594,34 @@ RESTART VERIFIED · HUMAN ACCEPTED
   rendered once (IST axis 10:00 AM–2:00 PM) — exposed the 4-digit y-label clip → gutter fix.
 - Console: one "unknown error occurred when fetching the script" (service-worker fetch on
   localhost; pre-existing, unrelated to TWINCORE — verify on production).
+
+### Production acceptance — 2026-09-20 — deployed `19f0a7b` (assets 20260920h)
+- Deploy: push 7d65fc0..19f0a7b; production served nine `20260920h` refs after propagation
+  (first probe flickered between versions; waited for `/api/market` 200).
+- `npm run test:prod` → **48/48** including the India 1D chart (INR bars, `session.timezone
+  Asia/Kolkata`, `truth DELAYED`) that the developer Mac cannot fetch. Level: LIVE TESTED.
+- Production browser pass (built-in browser, desktop then 375×812 mobile):
+  - US boot on `20260920h`: AAPL 336.13 `USD` `eod`, ET clock, catalog with 31 US holidays,
+    `Beta vs SPY`.
+  - US → INDIA: `mt:market=IN`, `20:07 IST`, CLOSED, RELIANCE **1,226.40 ▼17.50 (−1.41%)**
+    `INR` `NSE` `End of day`, open/prev/high/low populated, 52w/PE/cap `—`, fundamentals
+    "Not available for NSE on current providers", company news unavailable notice, chart drawn on
+    the IST session, tape RELIANCE 1,226.40 [Cached] · TCS 2,105.00 · HDFCBANK 731.00 · INFY
+    1,051.40 · ICICIBANK 1,338.90 · SBIN 996.20 · ITC 262.30 [End of day], **Beta vs NIFTY 50
+    0.23** (computed against ^NSEI 1Y closes).
+  - Reload `#/markets`: India persisted; "India benchmarks · INR": ^NSEI 23,346.40 · ^BSESN
+    74,294.96 · ^NSEBANK 56,358.70 · ^INDIAVIX 11.39 (all `eod`); India sentiment **live
+    coverage** — 4 benchmarks · 18 headlines · 4 sources → Bullish "3 of 4 tracked benchmarks
+    are higher". (Overall table badge read "Snapshot" for all-EOD rows → fixed in closure.)
+  - Deep Dive RELIANCE (India context): fallback state (AI abstains — B-002/B-027), price
+    `₹1226.40`, chip `NSE · INR · CACHED`, summary "…pooled quote of ₹1226.40…", options
+    `NO CHAIN`; **no `$`-prefixed number anywhere in the card** (`/\$\d/` → false).
+  - INDIA → US: `10:38 ET`, AAPL 336.13 `USD`, exchange "NASDAQ NMS - GLOBAL MARKET", US tape,
+    15 company news items, `Beta vs SPY 0.68`, Deep Dive result cleared on switch.
+  - Mobile 375×812 US → INDIA: `scrollWidth 375`, RELIANCE 1,226.40, IST clock, chart drawn.
+  - Console: only the pre-existing B-003 aircraft CORS storm (the tab had the Global Map open
+    from the POCKET audit); no TWINCORE errors. Level: REAL BROWSER TESTED (production).
+- Not claimed: an OPEN-session India pass (Sunday — both markets CLOSED; REALTIME/DELAYED
+  labels during trading hours are covered by unit tests, not observed live); India AI
+  narrative (abstains by policy, B-002/B-027); Yahoo search from Cloudflare (unused; Finnhub
+  search serves NSE).

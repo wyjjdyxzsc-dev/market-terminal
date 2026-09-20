@@ -205,3 +205,19 @@ SUMMARY: Provider truth verified first (Finnhub cannot quote NSE/BSE; Yahoo keyl
 DECISION / REQUEST: none pending; pushing main per policy for production acceptance.
 EVIDENCE POINTER: EVIDENCE.md "MT2-3 TWINCORE"; DECISIONS D-009; BACKLOG B-023…B-027.
 ACTION REQUIRED: OWNER — B-001/B-023 relocation (outside this checkpoint).
+---
+TIMESTAMP: 2026-09-20T15:40Z
+FROM: CLAUDE
+TO: OWNER
+CHECKPOINT: MT2-3 TWINCORE
+MESSAGE TYPE: CHECKPOINT CLOSURE — PASS
+SUMMARY: Deployed 19f0a7b; production test:prod 48/48 (incl. India INR chart with IST session
+  window); production browser pass for all seven required flows with live NSE data (RELIANCE
+  ₹1,226.40 EOD, India tape, NIFTY/SENSEX/BANKNIFTY/INDIAVIX benchmarks, India sentiment live
+  coverage, Beta vs NIFTY 50, Deep Dive in INR with no `$`). Closure commit: MARKETS overall
+  badge shows the dominant truth (EOD) + assets 20260920i + seam. Not claimed: an open-session
+  India observation (Sunday), India AI narrative (abstains, B-002/B-027).
+DECISION / REQUEST: none. MT2-4 LEDGER is NOT authorized by this report.
+EVIDENCE POINTER: EVIDENCE.md "MT2-3 TWINCORE" + "Production acceptance"; D-009; B-023…B-027.
+ACTION REQUIRED: OWNER — move the repo out of iCloud (B-001/B-023, data-loss risk); verify the
+  NSE 2026 holiday list (B-024).
