@@ -4,7 +4,7 @@ PROJECT: Market Terminal 2.0 — Project Meridian
 CHECKPOINT: POCKET — iPhone delivery (SIDE-TRACK; does not renumber MT2-3…; MT2-1A remains the
   last main-roadmap checkpoint, PASS)
 STATUS: PASS — CLOSED 2026-09-20T10:32Z. OWNER ACCEPTANCE: PASS on the iPhone 17 Pro. Closure
-  commit pushed to main (see COMMS closure entry for HEAD and production health).
+  commit dc5020c pushed to main; production 200, assets 20260920g unchanged, test:prod 36/36.
 PREVIOUS: MT2-1A REWIND RECONCILIATION — PASS (D-007); MT2-2 QUARTZ — PASS; B-002 still open.
 ROUTE: claude-opus-5 / bypass-permissions / SERIAL — verified from the live session.
 GIT: branch main; start HEAD bd51724; POCKET commits 2eb8a84 (shell) + Xcode-phase commit

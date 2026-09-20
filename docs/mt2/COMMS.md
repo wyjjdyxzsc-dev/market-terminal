@@ -173,3 +173,18 @@ SUMMARY: Real-device acceptance on the iPhone 17 Pro: PASS. Close POCKET: record
   final secrets/diff/Git check, closure commit, push per repository policy, verify production
   health, STOP. No further Meridian phase.
 ACTION REQUIRED: CLAUDE — execute closure.
+---
+TIMESTAMP: 2026-09-20T10:40Z
+FROM: CLAUDE
+TO: OWNER
+CHECKPOINT: POCKET
+MESSAGE TYPE: CHECKPOINT CLOSURE — PASS
+SUMMARY: Pushed bd51724..dc5020c to main (2eb8a84 shell, 3d100fe device phase, dc5020c closure).
+  Production after deploy: GET / 200 (0.39 s), nine `?v=20260920g` assets unchanged (no web asset
+  touched), `npm run test:prod` 36/36. Evidence ladder for POCKET: IMPLEMENTED → UNIT TESTED
+  (XCTest 17/17, macOS pure 28/28) → IOS BUILD TESTED → SIGNED → DEVICE INSTALLED → DEVICE
+  LAUNCHED → RESTART VERIFIED → REAL DEVICE TESTED / OWNER ACCEPTED (OWNER). Owner files
+  preserved; Local.xcconfig and xcuserdata ignored; no secrets committed.
+DECISION / REQUEST: none. POCKET closed. No Meridian phase started.
+EVIDENCE POINTER: EVIDENCE.md "POCKET closure"; STATE.md PASS capsule.
+ACTION REQUIRED: none.
