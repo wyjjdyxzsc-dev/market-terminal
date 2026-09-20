@@ -70,3 +70,19 @@ DECISION / REQUEST: none required. Analysis-available state is verified through 
 EVIDENCE POINTER: EVIDENCE.md "MT2-1 REWIND"; DECISIONS D-003; BACKLOG B-013.
 ACTION REQUIRED: none — proceeding to push, test:prod, production browser acceptance.
 ---
+TIMESTAMP: 2026-09-20T05:50Z
+FROM: CLAUDE
+TO: OWNER
+CHECKPOINT: MT2-1 REWIND
+MESSAGE TYPE: CHECKPOINT CLOSURE — PASS
+SUMMARY: Commit f4a162a pushed (70bc973..f4a162a); production serves 20260920c (closure bumps to
+  20260920d); test:prod 36/36; production Deep Dive AAPL renders the restored 42af0f6 report
+  hierarchy in its truthful B-002 fallback state (NOT RATED / CHAIN ONLY with measured Nasdaq
+  rows, sources below the report), mobile reflow clean, all tabs load, console clean. Backend,
+  shared core, evidence gates, provider safety, and secrets untouched.
+DECISION / REQUEST: none. Generated-analysis production acceptance is not claimed (B-002).
+  Adding heavy-provider secrets would light up the analysis state with no further code change.
+EVIDENCE POINTER: EVIDENCE.md "MT2-1 REWIND" + "Production acceptance"; DECISIONS D-003;
+  BACKLOG B-013.
+ACTION REQUIRED: OWNER — authorize MT2-2 QUARTZ when ready. STOP.
+---

@@ -21,7 +21,8 @@ IN PROGRESS / PASS / PARTIAL / BLOCKED.
   new AI watchers; broker connections; trading execution.
 
 ## MT2-1 — REWIND — Original Deep Research restoration
-- STATUS: IN PROGRESS (authorized 2026-09-20; local verification complete, deploying)
+- STATUS: PASS (closed 2026-09-20, commit f4a162a + closure; generated-analysis production
+  acceptance not claimed while B-002 stands)
 - OBJECTIVE: Restore the original first-complete Claude Deep Research experience identified in
   MT2-0, reconciled with the current evidence/authority model rather than blindly reverted.
 - ENTRY REQUIREMENT: MT2-0 PASS (met) and origin confirmed by OWNER (D-001 CONFIRMED:

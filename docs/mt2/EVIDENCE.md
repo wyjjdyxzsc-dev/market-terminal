@@ -252,3 +252,31 @@ RESTART VERIFIED · HUMAN ACCEPTED
 - Stale-asset finding: with the version unchanged the pane served the cached `intel.js`
   (transfer 300 B) and ran the old focus handler — direct evidence for the bump-on-every-deploy
   rule; verified again after the bump (transfer 120 KB, exemption active).
+
+### Production acceptance — commit `f4a162a` → production
+- `git push origin main` → `70bc973..f4a162a` (normal push). Cloudflare GitHub build switched the
+  production shell from `20260920b` to `20260920c` at 09:41:25 IST (≈2.5 min after push);
+  `GET /` carries eight `20260920c` refs; `GET /deepdive.js?v=20260920c` → 200, 17,702 B.
+- `npm run test:prod` → **36/36 passed** (eight-asset shell contract, deep-dive contract, all
+  route contracts). Level: LIVE TESTED.
+- Production browser (built-in pane, desktop): `?tab=analyze` renders NVDA fallback (evidence
+  gate: 1 normalized source); ANALYZE with `AAPL` → AAPL fallback in ~3 s with the truthful B-002
+  strip "Configured provider attempts completed, but no output passed the task schema and evidence
+  checks · no model output accepted after 2 attempts (github, cfai)"; restored hierarchy: head →
+  strip → summary → STOCK `NOT RATED —/100` + OPTIONS `CHAIN ONLY 48 rows` (ATM 335.00 call
+  2.27/2.56 · put 1.29/1.70, put/call 0.455, nearest September 21, 2026, Nasdaq source link) →
+  observed inputs → quadrants → stats ($4.91T, P/E 38.0, P/B 51.0, β 1.09, 52W 344.57/236.65,
+  92.2%) → consensus (53) → KEY DATA & SOURCES (5 tiles, 6 evidence rows with https publisher /
+  known-redirect links) → Open in Terminal → disclaimer → QUANT LAB. Status line empty. No
+  horizontal overflow. Console: **no errors**. Level: REAL BROWSER TESTED (production).
+- Production mobile 375×812: no horizontal overflow; input, notice, cards, quadrants reflow;
+  all script tags `20260920c`.
+- Production navigation: Terminal, Global Intel, Sectors, Supply Chain, Watchlist, Alerts, Deep
+  Dive all activate and render their headers/content; chart canvas present; console clean.
+- Pane artifact noted (not a product defect): a synthetic Return in `#ddInput` did not submit
+  the form in the built-in pane (same symptom as B-012); the ANALYZE button — the same submit
+  handler — works. Physical Enter remains a HUMAN check.
+- **Not claimed:** generated-analysis acceptance in production. B-002 is unchanged (github fails,
+  cfai produces no accepted output); the analysis state is REAL BROWSER TESTED locally through the
+  real render path with a simulated payload and UNIT TESTED, not LIVE TESTED.
+- Closure commit bumps assets to `20260920d` (deploy rule), docs/seam only otherwise.
