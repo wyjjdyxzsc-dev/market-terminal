@@ -188,3 +188,20 @@ SUMMARY: Pushed bd51724..dc5020c to main (2eb8a84 shell, 3d100fe device phase, d
 DECISION / REQUEST: none. POCKET closed. No Meridian phase started.
 EVIDENCE POINTER: EVIDENCE.md "POCKET closure"; STATE.md PASS capsule.
 ACTION REQUIRED: none.
+---
+TIMESTAMP: 2026-09-20T15:05Z
+FROM: CLAUDE
+TO: OWNER
+CHECKPOINT: MT2-3 TWINCORE
+MESSAGE TYPE: STATUS — implementation complete, deploying for production acceptance
+SUMMARY: Provider truth verified first (Finnhub cannot quote NSE/BSE; Yahoo keyless works from
+  Cloudflare for NSE/BSE + Indian indices; Nasdaq US-only). shared/market-core.js is the
+  canonical market/identity/session/truth/cache/provider layer; both runtimes and the QUARTZ
+  shell consume it. 18 core tests incl. the six required negative controls (one caught a real
+  `$` leak in the Deep Dive summary). Unit 96/96, ai-eval pass, local smoke 45/45, local browser
+  pass for all seven required flows. ENVIRONMENT HAZARD: iCloud evicted the repo and
+  node_modules mid-work (B-023, disk pressure from Xcode + simulator); mitigated, but B-001 is
+  now a data-loss risk — please move the repo out of iCloud.
+DECISION / REQUEST: none pending; pushing main per policy for production acceptance.
+EVIDENCE POINTER: EVIDENCE.md "MT2-3 TWINCORE"; DECISIONS D-009; BACKLOG B-023…B-027.
+ACTION REQUIRED: OWNER — B-001/B-023 relocation (outside this checkpoint).

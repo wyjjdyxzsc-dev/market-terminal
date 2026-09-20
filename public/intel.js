@@ -994,6 +994,16 @@ function formatAiRuntimeSummary(policy) {
     if (force || s.ticker !== quantMountedFor) mountQuantLab(s.ticker, s.price);
   }
   window.MTIntel = Object.assign(window.MTIntel || {}, { mountQuantLab, ensureQuantLab });
+  // A market switch invalidates the Deep Dive subject and any mounted lab: the Quant
+  // workspace follows the Terminal into the new market; Deep Dive re-runs on submit.
+  document.addEventListener('mt:market', () => {
+    quantOverride = null;
+    ddLoadedFor = null; ddLoadedTicker = null; ddLoadedPrice = null;
+    quantMountedFor = null;
+    const ddResult = $('#ddResult'); if (ddResult) ddResult.innerHTML = '';
+    const ddStatus = $('#ddStatus'); if (ddStatus) ddStatus.textContent = '';
+    if (typeof currentView !== 'undefined' && currentView === 'quant') setTimeout(() => ensureQuantLab(true), 1500);
+  });
   const quantSubjectBtn = $('#quantSubjectBtn');
   if (quantSubjectBtn) quantSubjectBtn.addEventListener('click', () => {
     const sym = (typeof state !== 'undefined' && state.symbol) ? state.symbol : null;
@@ -1058,7 +1068,8 @@ function formatAiRuntimeSummary(policy) {
     let lastMcResult = null; // store for Malliavin re-use
 
     try {
-      const data = await fetchJSON(`/api/chart?symbol=${encodeURIComponent(ticker)}&range=1Y`);
+      const marketId = (window.MarketTerminal?.getMarketContext?.() || {}).id || 'US';
+      const data = await fetchJSON(`/api/chart?symbol=${encodeURIComponent(ticker)}&range=1Y&market=${encodeURIComponent(marketId)}`);
       if (data.points && data.points.length > 20) {
         points  = data.points;
         closes  = points.map((p) => p.c);
@@ -1434,7 +1445,8 @@ function formatAiRuntimeSummary(policy) {
     $('#ddStatus').innerHTML = '<span class="spinner"></span>Running deep analysis on ' + esc(q.toUpperCase()) + '… (gathering live quote, fundamentals, analyst views, options chain &amp; news, then reasoning)';
     $('#ddResult').innerHTML = '';
     try {
-      const data = await fetchJSON('/api/intel/deepdive?q=' + encodeURIComponent(q));
+      const ddMarket = (window.MarketTerminal?.getMarketContext?.() || {}).id || 'US';
+      const data = await fetchJSON('/api/intel/deepdive?q=' + encodeURIComponent(q) + '&market=' + encodeURIComponent(ddMarket));
       if (requestId !== ddRequestId) return;
       if (data.error) throw new Error(data.message);
       // Original behaviour: the status line clears and the report speaks for itself. The

@@ -191,3 +191,18 @@ test('render never emits unsafe provider URLs or unescaped model text', () => {
   );
   assert.doesNotMatch(renderDeepDiveReport(chainBad), /javascript:/);
 });
+
+test('NEGATIVE CONTROL (TWINCORE): an INR dossier never renders a dollar sign, a legacy one still does', () => {
+  const ind = buildDeterministicDeepDive({
+    ticker: 'RELIANCE', company: 'Reliance Industries', quote: { c: 1226.4, d: -17.5, dp: -1.4, pc: 1243.9, src: 'yahoo' },
+    metrics: { '52WeekHigh': 1600, '52WeekLow': 1100 }, evidence: [],
+    market: { id: 'IN', exchange: 'NSE', currency: 'INR', currencySymbol: '₹', quoteTruth: 'DELAYED' },
+  });
+  const html = renderDeepDiveReport(mergeFallbackWithDossier(ind, {}));
+  assert.doesNotMatch(html, /\$\d/, 'no $-prefixed number for an INR instrument');
+  assert.match(html, /₹1226\.40/);
+  assert.match(html, /dd-market-chip">NSE</);
+  assert.match(html, /data-fresh="delayed"/);
+  const us = buildDeterministicDeepDive({ ticker: 'AAPL', quote: { c: 336.13, d: -0.87, dp: -0.26, pc: 337, src: 'finnhub' }, evidence: [] });
+  assert.match(renderDeepDiveReport(mergeFallbackWithDossier(us, {})), /\$336\.13/);
+});

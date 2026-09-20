@@ -171,3 +171,43 @@ accessibility/degraded-state defect · P3 minor.
   ios/README.md / the POCKET brief is the OWNER's to run.
 - SUGGESTED: on the next Xcode update, rebuild with the iOS 27 SDK; record the OWNER's checklist
   result in EVIDENCE.md as HUMAN ACCEPTED or as defects.
+
+## B-023 · P0 · ENVIRONMENT · iCloud eviction now removes repo source and node_modules (B-001 escalation)
+- OBSERVATION (2026-09-20, MT2-3): with free disk at ~13 GB after Xcode + the 16 GB simulator
+  runtime, iCloud "Optimize Mac Storage" evicted `server.js`, `worker.js`, `public/app.js`,
+  `shared/market-core.js` and 1,900+ `node_modules` files to dataless placeholders **while they
+  were being edited and run**. `node server.js` blocked indefinitely inside `read()` of an evicted
+  module (sampled); `sed` on app.js stalled 120 s. Mitigated in-session by deleting the simulator
+  runtime and DerivedData (16 GB back), `brctl download`, and running the local server from a
+  non-iCloud mirror (`~/Library/Developer/market-terminal-run`, `npm ci`, `.env` copied).
+- RISK: git objects can be evicted the same way; a commit or push could stall or see a partial
+  tree. Data-loss class.
+- SUGGESTED: OWNER moves the repository out of iCloud Desktop (B-001) — this is no longer
+  optional. Until then keep ≥30 GB free and never build inside the repo (B-021).
+
+## B-024 · P2 · DATA · NSE 2026 holiday calendar is embedded, not fetched
+- OBSERVATION: `shared/market-core.js` carries 15 NSE weekday holidays for 2026 from memory of the
+  exchange circular; `sessionState().calendarSource` and `/api/market` say so explicitly.
+- SUGGESTED: verify against the NSE circular; add 2027 when published; consider a KV-backed
+  override so a wrong date can be corrected without a deploy.
+
+## B-025 · P3 · ENVIRONMENT · Yahoo throttles the developer Mac (429) — India routes skip locally
+- OBSERVATION: `query1/query2.finance.yahoo.com` returns 429 from this IP; production (Cloudflare)
+  is unaffected. Local smoke marks the India chart as a network skip; India quotes/tape locally
+  show LAST_GOOD/UNAVAILABLE truthfully. Production `test:prod` is the acceptance vantage.
+- SUGGESTED: none in-repo; note for local development expectations.
+
+## B-026 · P2 · FRONTEND · Watchlist and Alerts are not market-scoped
+- OBSERVATION: the Watchlist stores bare symbols and quotes them through the US path; an Indian
+  symbol added while in India mode would be re-quoted as US after a switch. Alerts are US-news
+  only by design. Both belong to MT2-6 WATCHTOWER / MT2-7 SENTINEL.
+- SUGGESTED: store canonical identities (`IN:NSE:RELIANCE`) in the watchlist and quote with
+  `market=`; out of TWINCORE scope by the brief.
+
+## B-027 · P2 · PROVIDER · No Indian fundamentals / company news / options provider
+- OBSERVATION: Finnhub free tier paywalls NSE/BSE profile, metrics, recommendations and company
+  news ("You don't have access to this resource"); Nasdaq options are US-only. TWINCORE returns
+  explicit `UNAVAILABLE` for these and the Deep Dive lists them as limitations; the India Deep
+  Dive AI narrative therefore also abstains (evidence gate + B-002).
+- SUGGESTED: evaluate a keyed India provider (or Yahoo quoteSummary with crumb handling) in a
+  later data checkpoint; Yahoo search from Cloudflare is unverified (Finnhub search covers NSE).

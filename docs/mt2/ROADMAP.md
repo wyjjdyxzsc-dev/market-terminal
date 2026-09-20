@@ -48,7 +48,7 @@ IN PROGRESS / PASS / PARTIAL / BLOCKED.
 - OUT OF SCOPE: full migration (MT2-8), market/portfolio features.
 
 ## MT2-3 — TWINCORE — US / India market architecture + MARKETS workspace
-- STATUS: NOT STARTED
+- STATUS: IN PROGRESS → see STATE.md (2026-09-20)
 - OBJECTIVE: Market-identity architecture (exchange, currency, calendar, symbol namespace) for US
   and India, and a MARKETS workspace.
 - ENTRY REQUIREMENT: MT2-2 closed; DECISIONS.md record on market identity architecture; explicit

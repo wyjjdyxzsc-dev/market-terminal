@@ -94,7 +94,7 @@ test('deterministic deep dive turns observed provider data into a useful safe do
     generatedAt: '2026-08-04T00:00:00Z',
   });
 
-  assert.equal(DEEP_DIVE_SCHEMA_VERSION, '2026-08-11a');
+  assert.equal(DEEP_DIVE_SCHEMA_VERSION, '2026-09-20a');
   assert.equal(dossier.deepDiveSchemaVersion, DEEP_DIVE_SCHEMA_VERSION);
   assert.equal(dossier.dataMode, 'deterministic-dossier');
   assert.equal(dossier.deterministic, true);
@@ -245,4 +245,20 @@ test('market-cap formatting follows the provider million-dollar unit', () => {
   assert.equal(formatMarketCap(25_500), '$25.5B');
   assert.equal(formatMarketCap(800), '$800M');
   assert.equal(formatMarketCap(null), null);
+});
+
+test('TWINCORE: dossier carries a measured market block that survives both merges and defaults to US', () => {
+  const us = buildDeterministicDeepDive({ ticker: 'AAPL', quote: { c: 10, d: 1, dp: 1, pc: 9, src: 'finnhub' }, evidence: [] });
+  assert.equal(us.market.id, 'US');
+  assert.equal(us.market.currency, 'USD');
+  const ind = buildDeterministicDeepDive({
+    ticker: 'RELIANCE', quote: { c: 1226.4, d: -17.5, dp: -1.4, pc: 1243.9, src: 'yahoo' }, evidence: [],
+    market: { id: 'IN', exchange: 'NSE', exchangeLabel: 'NSE · BSE', currency: 'INR', currencySymbol: '₹', tzLabel: 'IST', canonical: 'IN:NSE:RELIANCE', quoteTruth: 'DELAYED', limitations: ['fundamentals'] },
+  });
+  assert.equal(ind.market.currency, 'INR');
+  assert.equal(ind.market.quoteTruth, 'DELAYED');
+  const merged = mergeAnalysisWithDossier(ind, { market: { id: 'US', currency: 'USD' }, investment: { rating: 'Buy' } });
+  assert.equal(merged.market.currency, 'INR', 'a model cannot rewrite the measured market block');
+  const fallback = mergeFallbackWithDossier(ind, { market: 'nonsense' });
+  assert.equal(fallback.market.id, 'IN');
 });

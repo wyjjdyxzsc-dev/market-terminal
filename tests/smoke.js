@@ -121,13 +121,50 @@ async function checkHtml(label, url) {
   await checkHtml('GET /', `${BASE}/`);
 
   // Quote / market data (skipError — need Finnhub key + network)
-  await check('GET /api/quote?symbol=AAPL', `${BASE}/api/quote?symbol=AAPL`,
-    { skipError: true, validate: d => typeof d.c === 'number' || typeof d.pc === 'number' || d.error });
+  // ── MT2-3 TWINCORE market contract ──────────────────────────────────────
+  await check('GET /api/market (catalog: US + IN, sessions, provider matrix)', `${BASE}/api/market`, {
+    validate: d => d.marketSchemaVersion === '2026-09-20a' && Array.isArray(d.markets) &&
+      d.markets.map(m => m.id).join(',') === 'US,IN' &&
+      d.markets.every(m => m.currency && m.timezone && m.session && m.state && ['OPEN', 'PRE', 'POST', 'CLOSED'].includes(m.state.phase) && Array.isArray(m.calendar.holidays) && m.calendar.source) &&
+      d.markets[1].currency === 'INR' && d.markets[1].tzLabel === 'IST' && d.markets[1].quantBenchmark.symbol === '^NSEI' &&
+      !JSON.stringify(d.markets[1]).includes('"SPY"') &&
+      d.providers.finnhub.IN.quote === null && d.providers.yahoo.IN.quote === 'DELAYED',
+  });
+  await check('GET /api/market?id=XX → 404 JSON', `${BASE}/api/market?id=XX`, { allowStatuses: [404], allowErrorPayload: true, validate: d => Array.isArray(d.markets) });
+
+  await check('GET /api/quote?symbol=AAPL (legacy call → US envelope, backward compatible)', `${BASE}/api/quote?symbol=AAPL`,
+    { skipError: true, validate: d => d.error || ((typeof d.c === 'number' || typeof d.pc === 'number') && d.market === 'US' && d.currency === 'USD' && d.canonical === 'US:US:AAPL' && typeof d.truth === 'string') });
+
+  // India via the keyless Yahoo fallback: envelope must be IN/INR and never REALTIME
+  // (Yahoo is DELAYED at best). Local vantage may be throttled by Yahoo → skipped, not failed.
+  await check('GET /api/quote?symbol=RELIANCE&market=IN (IN envelope, INR, not REALTIME)', `${BASE}/api/quote?symbol=RELIANCE&market=IN`,
+    { skipError: true, validate: d => d.error || (d.market === 'IN' && d.exchange === 'NSE' && d.currency === 'INR' && d.canonical === 'IN:NSE:RELIANCE' && d.symbol === 'RELIANCE' && d.providerSymbol === 'RELIANCE.NS' && d.truth !== 'REALTIME' && (d.c === 0 || d.src === 'yahoo')) });
+  await check('GET /api/quote?symbol=RELIANCE.NS (suffix infers IN without market param)', `${BASE}/api/quote?symbol=RELIANCE.NS`,
+    { skipError: true, validate: d => d.error || (d.market === 'IN' && d.symbol === 'RELIANCE' && !String(d.canonical).includes('.NS')) });
+  await check('GET /api/profile?symbol=RELIANCE&market=IN (truthful UNAVAILABLE, 200)', `${BASE}/api/profile?symbol=RELIANCE&market=IN`,
+    { validate: d => d.unavailable === true && d.truth === 'UNAVAILABLE' && d.market === 'IN' && d.capability === 'profile' && typeof d.reason === 'string' });
+  await check('GET /api/metrics?symbol=TCS&market=IN (truthful UNAVAILABLE, 200)', `${BASE}/api/metrics?symbol=TCS&market=IN`,
+    { validate: d => d.unavailable === true && d.truth === 'UNAVAILABLE' });
+  await check('GET /api/news?symbol=INFY&market=IN (truthful UNAVAILABLE, 200)', `${BASE}/api/news?symbol=INFY&market=IN`,
+    { validate: d => d.unavailable === true && d.capability === 'news' });
+  await check('GET /api/search?q=reliance&market=IN (NSE/BSE only, canonical symbols, no suffix)', `${BASE}/api/search?q=reliance&market=IN`,
+    { skipError: true, validate: d => d.error || (d.market === 'IN' && Array.isArray(d.result) && d.result.length > 0 && d.result.every(r => r.market === 'IN' && ['NSE', 'BSE'].includes(r.exchange) && !/\.(NS|BO)$/.test(r.symbol) && /\.(NS|BO)$/.test(r.providerSymbol) && r.currency === 'INR')) });
+  await check('GET /api/search?q=Apple&market=IN (US listing never appears under India)', `${BASE}/api/search?q=Apple&market=IN`,
+    { skipError: true, validate: d => d.error || (Array.isArray(d.result) && d.result.every(r => r.market === 'IN' && r.symbol !== 'AAPL')) });
+  await check('GET /api/ticker?market=IN (India basket, INR, no US symbols)', `${BASE}/api/ticker?market=IN`, {
+    skipError: true,
+    validate: d => d.error || (Array.isArray(d) && d.length === 7 && d.every(item => item.market === 'IN' && item.currency === 'INR' && typeof item.truth === 'string' && item.truth !== 'REALTIME' && !['AAPL', 'MSFT', 'NVDA', 'AMZN', 'GOOGL', 'META', 'TSLA'].includes(item.symbol))),
+  });
+  await check('GET /api/chart?symbol=RELIANCE&range=1D&market=IN (INR bars, IST session window)', `${BASE}/api/chart?symbol=RELIANCE&range=1D&market=IN`,
+    { skipError: true, validate: d => d.error || (d.market === 'IN' && d.currency === 'INR' && d.session && d.session.timezone === 'Asia/Kolkata' && d.session.tzLabel === 'IST' && d.truth === 'DELAYED' && Array.isArray(d.points)) });
+  await check('GET /api/sentiment/market?market=IN (India benchmark universe only)', `${BASE}/api/sentiment/market?market=IN`,
+    { skipError: true, validate: d => d.error || (d.market === 'IN' && d.currency === 'INR' && Array.isArray(d.benchmarks) && d.benchmarks.every(b => ['^NSEI', '^BSESN', '^NSEBANK', '^INDIAVIX'].includes(b.symbol)) && !JSON.stringify(d.methodology.benchmarkUniverse).includes('SPY')) });
 
   await check('GET /api/ticker', `${BASE}/api/ticker`, {
     validate: d => Array.isArray(d) && d.length === 7 && d.every(item =>
       typeof item.symbol === 'string' && Number(item.price) > 0 &&
-      item.available === true && typeof item.source === 'string' && typeof item.stale === 'boolean'),
+      item.available === true && typeof item.source === 'string' && typeof item.stale === 'boolean' &&
+      item.market === 'US' && item.currency === 'USD' && typeof item.truth === 'string'),
   });
 
   await check('GET /api/chart?symbol=AAPL&range=1D', `${BASE}/api/chart?symbol=AAPL&range=1D`,
@@ -235,7 +272,7 @@ async function checkHtml(label, url) {
   // Deep-dive — uses ?q= param
   await check('GET /api/intel/deepdive?q=AAPL', `${BASE}/api/intel/deepdive?q=AAPL`,
     { validate: d => hasPolicy(d, 'intel.deep-dive') &&
-      d.deepDiveSchemaVersion === '2026-08-11a' &&
+      d.deepDiveSchemaVersion === '2026-09-20a' &&
       /^(deterministic-dossier|ai-analysis-with-deterministic-data)$/.test(d.dataMode || '') &&
       typeof d.summary === 'string' && d.summary.length > 40 &&
       Number(d.quote?.price) > 0 && typeof d.quote?.source === 'string' &&

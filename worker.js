@@ -28,6 +28,7 @@ import './shared/map-provenance-core.js';
 import './shared/ai-provider-registry.js';
 import './shared/ai-verification-core.js';
 import './shared/ai-task-policy-core.js';
+import './shared/market-core.js';
 
 const FINNHUB_BASE = 'https://finnhub.io/api/v1';
 const CACHE_MS = 15 * 60 * 1000; // news refreshes every 15 min
@@ -63,6 +64,7 @@ const {
 } = globalThis.MarketTerminalDeepDive;
 const { normalizeNasdaqOptionChain, unavailableOptionsChain } = globalThis.MarketTerminalOptionsChain;
 const { TICKER_SCHEMA_VERSION, DEFAULT_TICKER_BASKET, mergeTickerBasket } = globalThis.MarketTerminalTicker;
+const marketCore = globalThis.MarketTerminalMarket;
 
 const { buildDeterministicCandleAnalysis } = globalThis.MarketTerminalCandleAnalysis;
 const { analyzeMarketSentiment } = globalThis.MarketTerminalMarketSentiment;
@@ -256,7 +258,7 @@ const _makeFhQuoter = (keyName, label) => async (env, sym) => {
   if (!r.ok) return null;
   const q = await r.json();
   if (!q || (!q.c && !q.pc)) return null;
-  return { c: q.c, d: q.d, dp: q.dp, h: q.h, l: q.l, o: q.o, pc: q.pc, src: label };
+  return { c: q.c, d: q.d, dp: q.dp, h: q.h, l: q.l, o: q.o, pc: q.pc, t: q.t || undefined, src: label };
 };
 const _fhQ1 = _makeFhQuoter('FINNHUB_API_KEY',   'finnhub');
 const _fhQ2 = _makeFhQuoter('FINNHUB_API_KEY_2',  'finnhub2');
@@ -307,8 +309,35 @@ async function _quoteYahoo(_env, sym) {
     const j = await r.json();
     const meta = j?.chart?.result?.[0]?.meta; if (!meta || !meta.regularMarketPrice) return null;
     const c = meta.regularMarketPrice, pc = meta.chartPreviousClose || meta.previousClose || null;
-    return { c, d: pc ? c - pc : null, dp: pc ? ((c - pc) / pc) * 100 : null, h: meta.regularMarketDayHigh || c, l: meta.regularMarketDayLow || c, o: meta.regularMarketOpen || c, pc, src: 'yahoo' };
+    return { c, d: pc ? c - pc : null, dp: pc ? ((c - pc) / pc) * 100 : null, h: meta.regularMarketDayHigh || c, l: meta.regularMarketDayLow || c, o: meta.regularMarketOpen || c, pc, t: meta.regularMarketTime || undefined, src: 'yahoo' };
   } catch { return null; }
+}
+
+/** Market-aware search normalisation (parity: server.js normalizeSearchResults). */
+function normalizeSearchResults(raw, marketId) {
+  const list = Array.isArray(raw) ? raw : [];
+  const out = [];
+  const seen = new Set();
+  for (const r of list) {
+    if (!r || !r.symbol) continue;
+    let identity;
+    if (marketId === 'IN') {
+      if (!/\.(NS|BO)$/i.test(r.symbol)) continue;
+      identity = marketCore.parseInstrument(r.symbol, 'IN');
+    } else {
+      if (r.symbol.includes('.')) continue;
+      identity = marketCore.parseInstrument(r.symbol, 'US');
+    }
+    if (!identity || identity.market !== marketId || seen.has(identity.canonical)) continue;
+    seen.add(identity.canonical);
+    out.push({
+      description: r.description, displaySymbol: identity.display, symbol: identity.symbol, type: r.type,
+      market: identity.market, exchange: identity.exchange, canonical: identity.canonical,
+      providerSymbol: identity.provider.finnhub, currency: identity.currency,
+    });
+    if (out.length >= 12) break;
+  }
+  return out;
 }
 
 function quotePool(env) {
@@ -325,13 +354,39 @@ function quotePool(env) {
   pool.push({ name: 'yahoo', fn: _quoteYahoo });
   return pool;
 }
-async function getQuotePooled(env, sym) {
+async function getQuotePooled(env, identity) {
   let lastErr;
-  for (const { fn } of quotePool(env)) {
-    try { const q = await fn(env, sym); if (q) return q; } catch (e) { lastErr = e; }
+  // Capability-filtered: an Indian instrument never hits a US-only provider (market-core matrix).
+  for (const { name, fn } of quotePool(env)) {
+    if (!marketCore.providerTruth(name, identity.market, 'quote')) continue;
+    try { const q = await fn(env, identity.provider.yahoo); if (q) return q; } catch (e) { lastErr = e; }
   }
   if (lastErr) throw lastErr;
   return { c: 0, d: 0, dp: 0, h: 0, l: 0, o: 0, pc: 0, src: 'none' };
+}
+
+/** Attach the canonical market envelope + data truth to a raw pooled quote (parity: server.js). */
+function decorateQuote(identity, q, { fromCache = false, lastGood = false } = {}) {
+  if (!q) return q;
+  const asOf = q.t ? Number(q.t) * 1000 : (q.asOf || Date.now());
+  const truth = marketCore.classifyDataTruth({ provider: q.src, market: identity.market, price: q.c, asOf, fromCache, lastGood });
+  return {
+    ...q, asOf,
+    market: identity.market, exchange: identity.exchange, symbol: identity.symbol, canonical: identity.canonical,
+    currency: identity.currency, providerSymbol: identity.provider.yahoo, truth,
+    marketSchemaVersion: marketCore.MARKET_SCHEMA_VERSION,
+  };
+}
+
+/** Truthful 200 payload for provider capabilities that do not cover the market (parity: server.js). */
+function marketUnavailable(identity, capability, provider = 'finnhub') {
+  return {
+    unavailable: true, truth: marketCore.DATA_TRUTH.UNAVAILABLE,
+    market: identity.market, exchange: identity.exchange, symbol: identity.symbol, canonical: identity.canonical,
+    capability, provider,
+    reason: `${provider} does not serve ${capability} for ${identity.exchange}/${identity.market} on the configured tier.`,
+    marketSchemaVersion: marketCore.MARKET_SCHEMA_VERSION,
+  };
 }
 
 // In-isolate micro-cache for quotes. The terminal polls every ~2s for a live
@@ -341,15 +396,18 @@ async function getQuotePooled(env, sym) {
 // seconds coalesces the burst onto one provider and one stable price.
 const _quoteMemo = new Map(); // sym -> { data, exp }
 const QUOTE_MEMO_MS = 3000;
-async function getQuoteCached(env, sym) {
+async function getQuoteCached(env, symOrIdentity, marketHint) {
+  const identity = typeof symOrIdentity === 'string' ? marketCore.parseInstrument(symOrIdentity, marketHint) : symOrIdentity;
+  if (!identity) return { c: 0, d: 0, dp: 0, h: 0, l: 0, o: 0, pc: 0, src: 'none' };
+  const key = marketCore.cacheKey('quote', identity);
   const now = Date.now();
-  const hit = _quoteMemo.get(sym);
-  if (hit && hit.exp > now) return hit.data;
-  const data = await getQuotePooled(env, sym);
+  const hit = _quoteMemo.get(key);
+  if (hit && hit.exp > now) return decorateQuote(identity, hit.data, { fromCache: true });
+  const data = await getQuotePooled(env, identity);
   // Only cache a usable quote — never let a transient all-providers-failed null
   // stick around and blank the price for the next few seconds.
-  if (data && data.c) _quoteMemo.set(sym, { data, exp: now + QUOTE_MEMO_MS });
-  return data;
+  if (data && data.c) _quoteMemo.set(key, { data, exp: now + QUOTE_MEMO_MS });
+  return decorateQuote(identity, data);
 }
 
 // ───────────────────────── chart (Yahoo -> Nasdaq) ─────────────────────────
@@ -494,22 +552,41 @@ function countOhlcPoints(points) {
   ).length;
 }
 
-async function getChart(env, ctx, symbol, rangeKey, options = {}) {
+/** Market envelope for chart payloads (parity: server.js decorateChart). */
+function decorateChart(identity, data, src) {
+  const points = data.points || [];
+  const last = points.length ? points[points.length - 1].t : Date.now();
+  const bounds = marketCore.sessionBoundsUTC(identity.market, last);
+  return {
+    ...data, source: src,
+    market: identity.market, exchange: identity.exchange, symbol: identity.symbol, canonical: identity.canonical,
+    currency: (data.meta && data.meta.currency) || identity.currency,
+    truth: marketCore.providerTruth(src, identity.market, 'chart') || marketCore.DATA_TRUTH.SNAPSHOT,
+    session: { openUTC: bounds.openUTC, closeUTC: bounds.closeUTC, timezone: bounds.timezone, tzLabel: bounds.tzLabel, localDate: bounds.localDate },
+    marketSchemaVersion: marketCore.MARKET_SCHEMA_VERSION,
+  };
+}
+
+async function getChart(env, ctx, symbolOrIdentity, rangeKey, options = {}) {
+  const identity = typeof symbolOrIdentity === 'string' ? marketCore.parseInstrument(symbolOrIdentity, options.market) : symbolOrIdentity;
+  if (!identity) throw new Error('No chart data available: unrecognised symbol.');
   const requireOhlc = options.requireOhlc === true;
   let preferred = 'yahoo';
   try { preferred = (await env.MT_KV.get('chartsrc')) || 'yahoo'; } catch {}
-  const order = rangeKey === '1D'
-    ? ['yahoo', 'nasdaq']
+  // Nasdaq is US-only (capability matrix); India charts come from Yahoo alone.
+  const sources = ['yahoo', 'nasdaq'].filter((src) => marketCore.providerTruth(src, identity.market, 'chart'));
+  const order = rangeKey === '1D' || !sources.includes('nasdaq')
+    ? sources
     : (preferred === 'nasdaq' ? ['nasdaq', 'yahoo'] : ['yahoo', 'nasdaq']);
   let lastErr;
   for (const src of order) {
     try {
-      const data = src === 'yahoo' ? await chartFromYahoo(symbol, rangeKey) : await chartFromNasdaq(symbol, rangeKey);
+      const data = src === 'yahoo' ? await chartFromYahoo(identity.provider.yahoo, rangeKey) : await chartFromNasdaq(identity.provider.nasdaq, rangeKey);
       const hasEnoughPoints = data.points && data.points.length >= 2;
       const hasEnoughOhlc = !requireOhlc || countOhlcPoints(data.points) >= 3;
       if (hasEnoughPoints && hasEnoughOhlc) {
-        if (src !== preferred) ctx.waitUntil(env.MT_KV.put('chartsrc', src).catch(() => {}));
-        return { ...data, source: src };
+        if (identity.market === 'US' && src !== preferred) ctx.waitUntil(env.MT_KV.put('chartsrc', src).catch(() => {}));
+        return decorateChart(identity, data, src);
       }
       lastErr = !hasEnoughPoints
         ? new Error(`${src} returned too few points`)
@@ -645,29 +722,41 @@ const MARKET_SENTIMENT_BENCHMARKS = Object.freeze([
   { symbol: '^VIX', inverse: true },
 ]);
 
-async function fetchMarketSentiment(env) {
+/** Market-scoped headline pull for sentiment (feeds from shared/market-core.js). */
+async function fetchMarketHeadlinesFor(marketId) {
+  const m = marketCore.market(marketId);
+  if (!m || m.id === 'US') return fetchMarketHeadlines();
+  const lists = await Promise.all(m.sentimentFeeds.map((u) => fetchFeed(u, 18)));
+  return mergeHeadlines(lists).slice(0, 32);
+}
+
+async function fetchMarketSentiment(env, marketId = 'US') {
+  const m = marketCore.market(marketId) || marketCore.market('US');
   const [quoteResults, headlines] = await Promise.all([
-    Promise.allSettled(MARKET_SENTIMENT_BENCHMARKS.map(async (benchmark) => {
-      const quote = await getQuoteCached(env, benchmark.symbol);
+    Promise.allSettled(m.sentimentBenchmarks.map(async (benchmark) => {
+      if (marketCore.isForeignBenchmark(m.id, benchmark.symbol)) throw new Error(`benchmark ${benchmark.symbol} does not belong to ${m.id}`);
+      const quote = await getQuoteCached(env, marketCore.parseInstrument(benchmark.symbol, m.id));
       if (!quote || Number(quote.c) <= 0 || !Number.isFinite(Number(quote.dp))) return null;
       return {
         ...benchmark,
         changePercent: quote.dp,
         source: quote.src || 'unknown',
+        truth: quote.truth,
       };
     })),
-    fetchMarketHeadlines(),
+    fetchMarketHeadlinesFor(m.id),
   ]);
   const benchmarks = quoteResults
     .filter((result) => result.status === 'fulfilled')
     .map((result) => result.value)
     .filter((benchmark) => benchmark && Number.isFinite(Number(benchmark.changePercent)));
 
-  return analyzeMarketSentiment({
+  const result = analyzeMarketSentiment({
     benchmarks,
     headlines: headlines.slice(0, 18),
     generatedAt: new Date().toISOString(),
   });
+  return { ...result, market: m.id, currency: m.currency, session: marketCore.sessionState(m.id), marketSchemaVersion: marketCore.MARKET_SCHEMA_VERSION };
 }
 
 // Per-company evidence combines searchable RSS with Finnhub's symbol feed.
@@ -1586,30 +1675,43 @@ async function fetchSupplyChain(env, query) {
 
 // Deep-dive: always produce a deterministic company dossier, then optionally
 // augment its non-actionable narrative through the verified AI pipeline.
-async function fetchDeepDive(env, query) {
-  let ticker = /^[A-Z.]{1,6}$/.test(query) ? query.toUpperCase() : '';
+async function fetchDeepDive(env, query, marketId = 'US') {
+  const mkt = marketCore.market(marketId) || marketCore.market('US');
+  const symbolLike = mkt.id === 'IN' ? /^[A-Z0-9&.-]{1,12}$/ : /^[A-Z.]{1,6}$/;
+  let identity = symbolLike.test(query.toUpperCase()) ? marketCore.parseInstrument(query, mkt.id) : null;
+  if (identity && identity.market !== mkt.id) identity = null;
   let profile = null;
-  if (!ticker) {
+  if (!identity) {
     try {
       const s = await finnhub(env, '/search', { q: query });
-      const hit = (s.result || []).find((r) => r.symbol && !r.symbol.includes('.'));
-      if (hit) ticker = hit.symbol.toUpperCase();
+      const hit = normalizeSearchResults(s && s.result, mkt.id)[0];
+      if (hit) identity = marketCore.parseInstrument(hit.canonical);
     } catch {}
   }
-  if (!ticker) throw new Error('Could not resolve a US-listed ticker for that company.');
+  if (!identity) throw new Error(`Could not resolve a ${mkt.exchangeLabel}-listed ticker for that company.`);
+  const ticker = identity.symbol;
+  const caps = marketCore.PROVIDER_CAPABILITIES.finnhub[mkt.id];
 
-  // Pull everything in parallel.
+  // Pull everything in parallel; capabilities the market lacks are skipped, not faked.
   const [prof, quote, metricData, recs, headlines] = await Promise.all([
-    finnhub(env, '/stock/profile2', { symbol: ticker }).catch(() => ({})),
-    getQuoteCached(env, ticker).catch(() => null),
-    finnhub(env, '/stock/metric', { symbol: ticker, metric: 'all' }).catch(() => ({})),
-    finnhub(env, '/stock/recommendation', { symbol: ticker }).catch(() => []),
-    fetchCompanyHeadlines(env, ticker, 16),
+    caps.profile ? finnhub(env, '/stock/profile2', { symbol: ticker }).catch(() => ({})) : Promise.resolve({}),
+    getQuoteCached(env, identity).catch(() => null),
+    caps.metrics ? finnhub(env, '/stock/metric', { symbol: ticker, metric: 'all' }).catch(() => ({})) : Promise.resolve({}),
+    caps.metrics ? finnhub(env, '/stock/recommendation', { symbol: ticker }).catch(() => []) : Promise.resolve([]),
+    fetchCompanyHeadlines(env, mkt.id === 'IN' ? `${ticker} NSE` : ticker, 16),
   ]);
   profile = prof || {};
   const m = (metricData && metricData.metric) || {};
   const rec = Array.isArray(recs) && recs.length ? recs[0] : null;
-  const optionsChain = await getOptionsChain(ticker, quote && quote.c);
+  const optionsChain = identity.provider.nasdaq
+    ? await getOptionsChain(ticker, quote && quote.c)
+    : unavailableOptionsChain(ticker, `Options chain data is not available for ${mkt.exchangeLabel} listings from the configured providers.`, new Date().toISOString());
+  const marketContext = {
+    id: mkt.id, exchange: identity.exchange, exchangeLabel: mkt.exchangeLabel, currency: mkt.currency,
+    currencySymbol: mkt.currencySymbol, tzLabel: mkt.tzLabel, canonical: identity.canonical,
+    quoteTruth: quote ? quote.truth : marketCore.DATA_TRUTH.UNAVAILABLE,
+    limitations: mkt.id === 'IN' ? ['fundamentals', 'analyst consensus', 'options chain', 'provider company news'] : [],
+  };
   const preparation = prepareAiTask('intel.deep-dive', headlines, {
     inputs: {
       quote: Boolean(quote && Number(quote.c) > 0),
@@ -1624,6 +1726,7 @@ async function fetchDeepDive(env, query) {
     recommendation: rec,
     evidence: preparation.evidence,
     optionsChain,
+    market: marketContext,
   });
   const fallback = (reason) => policyAbstention(preparation, reason, {
     ...baseline,
@@ -1632,7 +1735,7 @@ async function fetchDeepDive(env, query) {
   });
   if (!preparation.canGenerate) return fallback('The current evidence did not meet the deep-dive grounding policy.');
   const dataBlock =
-    `LIVE DATA for ${profile.name || ticker} (${ticker}):\n` +
+    `LIVE DATA for ${profile.name || ticker} (${ticker}) — market ${mkt.name}, exchange ${identity.exchange}, currency ${mkt.currency}; all prices below are ${mkt.currency} and the quote is ${marketContext.quoteTruth}:\n` +
     `- Price: ${quote?.c ?? 'N/A'} (change ${quote?.d ?? 'N/A'}, ${quote?.dp ?? 'N/A'}% today)\n` +
     `- Day range: ${quote?.l ?? '?'}-${quote?.h ?? '?'}; Prev close ${quote?.pc ?? '?'}\n` +
     `- 52-week range: ${m['52WeekLow'] ?? '?'}–${m['52WeekHigh'] ?? '?'}\n` +
@@ -3079,7 +3182,8 @@ async function handleApi(request, env, ctx, url) {
   // ── Market sentiment ─────────────────────────────────────────────────────
   if (p === '/api/sentiment/market' || p === '/api/sentiment/twitter') {
     try {
-      const { data, fresh } = await getData(env, ctx, 'sentiment:market', () => fetchMarketSentiment(env), 900 * 1000);
+      const marketId = marketCore.resolveMarketId(qs.get('market'));
+      const { data, fresh } = await getData(env, ctx, `sentiment:market:${marketId}`, () => fetchMarketSentiment(env, marketId), 900 * 1000);
       const headers = p === '/api/sentiment/twitter'
         ? { Deprecation: 'true', Link: '</api/sentiment/market>; rel="successor-version"' }
         : undefined;
@@ -3183,18 +3287,33 @@ async function handleApi(request, env, ctx, url) {
   }
 
   // --- Terminal (Finnhub) ---
+  const instrument = () => (sym() ? marketCore.parseInstrument(sym(), qs.get('market')) : null);
+  if (p === '/api/market') {
+    const now = new Date();
+    const id = (qs.get('id') || '').trim();
+    if (id) {
+      const m = marketCore.market(id);
+      if (!m) return json({ error: `unknown market ${id}`, markets: marketCore.MARKET_IDS }, 404);
+      const cat = marketCore.catalog(now);
+      return json({ marketSchemaVersion: cat.marketSchemaVersion, market: cat.markets.find((x) => x.id === m.id), providers: cat.providers, dataTruth: cat.dataTruth, generatedAt: cat.generatedAt });
+    }
+    return json(marketCore.catalog(now));
+  }
   if (p === '/api/quote') {
-    if (!sym()) return json({ error: 'symbol is required' }, 400);
+    const identity = instrument();
+    if (!identity) return json({ error: 'symbol is required' }, 400);
     if (!quotePool(env).length) return json({ error: 'No market-data provider configured.' }, 500);
-    return json(await getQuoteCached(env, sym()));
+    return json(await getQuoteCached(env, identity));
   }
   if (p === '/api/data-status') {
     const pool = quotePool(env);
     return json({ providers: pool.map((p) => p.name), count: pool.length });
   }
   if (p === '/api/profile') {
-    if (!sym()) return json({ error: 'symbol is required' }, 400);
-    const s = sym();
+    const identity = instrument();
+    if (!identity) return json({ error: 'symbol is required' }, 400);
+    if (!marketCore.PROVIDER_CAPABILITIES.finnhub[identity.market].profile) return json(marketUnavailable(identity, 'profile'));
+    const s = identity.symbol;
     const fh = await finnhub(env, '/stock/profile2', { symbol: s }).catch(() => ({}));
     // If Finnhub returned empty critical fields (common for ETFs / foreign tickers), enrich
     // with TwelveData profile, then Alpha Vantage OVERVIEW as a second fallback.
@@ -3226,53 +3345,65 @@ async function handleApi(request, env, ctx, url) {
         } catch {}
       }
     }
-    return json(fh || {});
+    return json({ ...(fh || {}), market: identity.market, currency: (fh && fh.currency) || identity.currency });
   }
   if (p === '/api/metrics') {
-    if (!sym()) return json({ error: 'symbol is required' }, 400);
-    const data = await finnhub(env, '/stock/metric', { symbol: sym(), metric: 'all' });
+    const identity = instrument();
+    if (!identity) return json({ error: 'symbol is required' }, 400);
+    if (!marketCore.PROVIDER_CAPABILITIES.finnhub[identity.market].metrics) return json(marketUnavailable(identity, 'metrics'));
+    const data = await finnhub(env, '/stock/metric', { symbol: identity.symbol, metric: 'all' });
     const m = (data && data.metric) || {};
     return json({ high52: m['52WeekHigh'] ?? null, low52: m['52WeekLow'] ?? null, pe: m.peTTM ?? m.peNormalizedAnnual ?? m.peBasicExclExtraTTM ?? null });
   }
   if (p === '/api/news') {
-    if (!sym()) return json({ error: 'symbol is required' }, 400);
-    const items = await finnhub(env, '/company-news', { symbol: sym(), from: isoDaysAgo(30), to: isoDaysAgo(0) });
+    const identity = instrument();
+    if (!identity) return json({ error: 'symbol is required' }, 400);
+    if (!marketCore.PROVIDER_CAPABILITIES.finnhub[identity.market].news) return json(marketUnavailable(identity, 'news'));
+    const items = await finnhub(env, '/company-news', { symbol: identity.symbol, from: isoDaysAgo(30), to: isoDaysAgo(0) });
     const list = Array.isArray(items) ? items : [];
     return json(list.slice(0, 15).map((n) => ({ headline: n.headline, source: n.source, url: n.url, datetime: n.datetime, summary: n.summary, image: n.image })));
   }
   if (p === '/api/search') {
     const q = (qs.get('q') || '').trim();
-    if (!q) return json({ result: [] });
+    const marketId = marketCore.resolveMarketId(qs.get('market'));
+    if (!q) return json({ result: [], market: marketId });
     const data = await finnhub(env, '/search', { q });
-    const result = (data && Array.isArray(data.result) ? data.result : [])
-      .filter((r) => r.symbol && !r.symbol.includes('.')).slice(0, 12)
-      .map((r) => ({ description: r.description, displaySymbol: r.displaySymbol, symbol: r.symbol, type: r.type }));
-    return json({ result });
+    return json({ result: normalizeSearchResults(data && data.result, marketId), market: marketId });
   }
   if (p === '/api/ticker') {
     // 15s stale-while-revalidate: the tape polls often, but the basket only needs
     // to change every few seconds. The last-good cache prevents a provider
     // throttle from replacing valid prices with zeroes.
-    const { data } = await getData(env, ctx, `ticker:${TICKER_SCHEMA_VERSION}`, async () => {
+    const tapeMarket = marketCore.market(marketCore.resolveMarketId(qs.get('market')));
+    const basket = tapeMarket.tape;
+    const lastGoodKey = `ticker:last-good:${TICKER_SCHEMA_VERSION}:${tapeMarket.id}`;
+    const { data } = await getData(env, ctx, `ticker:${TICKER_SCHEMA_VERSION}:${tapeMarket.id}`, async () => {
       let previous = [];
-      try { previous = JSON.parse(await env.MT_KV.get(`ticker:last-good:${TICKER_SCHEMA_VERSION}`) || '[]'); } catch {}
+      try { previous = JSON.parse(await env.MT_KV.get(lastGoodKey) || '[]'); } catch {}
       const currentQuotes = {};
-      await Promise.all(DEFAULT_TICKER_BASKET.map(async (symbol) => {
-        try { currentQuotes[symbol] = await getQuoteCached(env, symbol); } catch { currentQuotes[symbol] = null; }
+      await Promise.all(basket.map(async (symbol) => {
+        try { currentQuotes[symbol] = await getQuoteCached(env, marketCore.parseInstrument(symbol, tapeMarket.id)); } catch { currentQuotes[symbol] = null; }
       }));
-      const items = mergeTickerBasket(DEFAULT_TICKER_BASKET, currentQuotes, previous);
+      const items = mergeTickerBasket(basket, currentQuotes, previous).map((item) => {
+        const q = currentQuotes[item.symbol];
+        return {
+          ...item, market: tapeMarket.id, currency: tapeMarket.currency,
+          truth: item.available ? (item.stale ? marketCore.DATA_TRUTH.LAST_GOOD : (q && q.truth) || marketCore.DATA_TRUTH.SNAPSHOT) : marketCore.DATA_TRUTH.UNAVAILABLE,
+        };
+      });
       if (items.some((item) => item.available && !item.stale)) {
-        await env.MT_KV.put(`ticker:last-good:${TICKER_SCHEMA_VERSION}`, JSON.stringify(items.filter((item) => item.available)), { expirationTtl: 86_400 }).catch(() => {});
+        await env.MT_KV.put(lastGoodKey, JSON.stringify(items.filter((item) => item.available)), { expirationTtl: 86_400 }).catch(() => {});
       }
       return items;
     }, 15 * 1000);
     return json(data);
   }
   if (p === '/api/chart') {
-    if (!sym()) return json({ error: 'symbol is required' }, 400);
+    const identity = instrument();
+    if (!identity) return json({ error: 'symbol is required' }, 400);
     const rangeKey = (qs.get('range') || '1D').toUpperCase();
     if (!YAHOO_RANGE[rangeKey]) return json({ error: 'invalid range' }, 400);
-    return json(await getChart(env, ctx, sym(), rangeKey));
+    return json(await getChart(env, ctx, identity, rangeKey));
   }
 
   // --- Intelligence (Groq) ---
@@ -3301,7 +3432,8 @@ async function handleApi(request, env, ctx, url) {
   if (p === '/api/intel/deepdive') {
     const query = (qs.get('q') || '').trim().slice(0, 60);
     if (!query) return json({ error: true, message: 'Missing company name or ticker.' }, 400);
-    try { const { data, fresh } = await getData(env, ctx, `deepdive:${DEEP_DIVE_SCHEMA_VERSION}:${AI_TASK_POLICY_SCHEMA_VERSION}:${query.toLowerCase()}`, () => fetchDeepDive(env, query)); return json({ cached: !fresh, ...data }); }
+    const ddMarket = marketCore.resolveMarketId(qs.get('market'));
+    try { const { data, fresh } = await getData(env, ctx, `deepdive:${DEEP_DIVE_SCHEMA_VERSION}:${AI_TASK_POLICY_SCHEMA_VERSION}:${ddMarket}:${query.toLowerCase()}`, () => fetchDeepDive(env, query, ddMarket)); return json({ cached: !fresh, ...data }); }
     catch (err) { return json({ error: true, message: friendlyError(err) }, 500); }
   }
   if (p === '/api/intel/candle') {

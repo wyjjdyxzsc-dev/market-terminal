@@ -519,3 +519,78 @@ RESTART VERIFIED · HUMAN ACCEPTED
   `ios/Config/Local.xcconfig` and `xcuserdata/` hold owner-specific state and both are ignored;
   the three untracked owner files are untouched; no `public/` change → no `?v=` bump.
 - Push + production health recorded in COMMS closure entry.
+
+---
+
+## MT2-3 TWINCORE — 2026-09-20 — start HEAD `7d65fc0`
+
+### Gates
+- Baseline: `main` @ `7d65fc0` = `origin/main`, tracked tree clean, 3 untracked owner files
+  preserved. Phase identity: MT2-3 TWINCORE (roadmap objective + OWNER brief agree); entry
+  requirement satisfied by D-009. Change type: **MIXED** (STRUCTURAL market core + BEHAVIORAL
+  routes/UI + TEST-ONLY invariants + DOCUMENTATION). Route from zero: claude-opus-5, SERIAL,
+  bypass-permissions — verified live; sufficient for a shared-core + two-runtime change with
+  browser acceptance; no ROUTING STOP. POCKET's route was not inherited (re-derived).
+
+### Provider verification (before wiring India — LIVE TESTED, observation)
+- Finnhub (local key): `/quote?symbol=RELIANCE.NS` → `{"error":"You don't have access to this
+  resource."}`; `NSE:RELIANCE` → all zeros; `/search?q=reliance` → `RELIANCE.NS`, `RPOWER.NS`,
+  `RELINFRA.NS`, `RIIL.NS` (search covers NSE, quotes do not).
+- Yahoo from this Mac: HTTP 429 on chart, search and ^NSEI (local vantage throttle, B-025).
+- Yahoo from production (Cloudflare, pre-TWINCORE routes): `/api/chart?symbol=RELIANCE.NS&range=1D`
+  → 73 INR 5-minute bars 09:15→15:15 IST on 2026-09-18, `meta.currency: "INR"`; `/api/quote?
+  symbol=RELIANCE.NS` → `c 1226.4, src yahoo`; `^NSEI 23346.4`, `^BSESN 74294.96`, `^INDIAVIX
+  11.385` all `src yahoo`; `NIFTY` (bare) → zeros (not a Yahoo symbol).
+- Conclusion encoded in `PROVIDER_CAPABILITIES`: India = Yahoo DELAYED quotes/charts + Finnhub
+  search only; fundamentals/news/options UNAVAILABLE (B-027).
+
+### Implemented
+- `shared/market-core.js` (schema `2026-09-20a`): markets, identity parser, cache keys, session/
+  calendar, money formatting, data truth, provider matrix, invariant helper, catalog.
+- server.js + worker.js (parity): `/api/market`; identity-aware `getQuote`/`getQuoteCached`
+  (capability-filtered cascade, market-scoped cache, US-only WS cache), `decorateQuote`
+  envelope (market, exchange, symbol, canonical, currency, providerSymbol, truth, asOf);
+  chart (`decorateChart` with session window; Nasdaq US-only; `chartsrc` tuning US-only);
+  search normalisation (US no-dot filter kept; IN keeps NSE/BSE, canonicalises, dedupes);
+  ticker per market (basket, last-good, truth); profile/metrics/news `marketUnavailable`;
+  sentiment per market (benchmarks + feeds, `isForeignBenchmark` guard, `sentiment:market:<id>`);
+  Deep Dive `?market=` with measured `market` block, INR-aware summary, options/fundamentals
+  skipped not faked; `shared/api-contract.js` registers `/api/market`.
+- Frontend: `shell.js` two active markets + `mt:market` persistence + per-market last-symbol key;
+  `app.js` `Market` context (catalog from `/api/market`, offline fallback), mode buttons and
+  registry rows switch markets, IST/ET clock + status from the market's own calendar, market-
+  aware tape/quote/profile/metrics/news/chart/search/sentiment/MARKETS table/quant benchmark
+  (`Beta vs NIFTY 50`), INR digit grouping, currency chip + truth badge in the security band,
+  1D canvas on the market session window, tooltip in market tz, label-aware chart gutter;
+  `intel.js` Deep Dive + Quant Lab carry `market=` and reset on `mt:market`; `deepdive.js`
+  currency-aware money + exchange/currency/truth chip; `index.html` assets `20260920h`.
+
+### Tests (UNIT TESTED)
+- `tests/market-core.test.js` 18 tests incl. the six required negative controls: SPY under
+  India, INR rendered as USD, India using NYSE holidays (and US using NSE holidays), market
+  missing from cache identity, provider suffix in canonical identity, delayed Indian data as
+  REALTIME. `tests/deep-dive-render.test.js` INR-never-`$` control **caught a real leak** in the
+  dossier summary (`formatPrice` hardcoded `$`) → fixed in `shared/deep-dive-core.js`.
+- Full unit suite 96/96; ai-eval thresholds pass; Wrangler dry-run bundles (472 KiB).
+- Local smoke (server from the non-iCloud mirror, B-023): **45/45**, skips = India 1D chart
+  (Yahoo 429 locally), fires, webcams. New contracts: catalog, 404, legacy US envelope,
+  IN quote envelope + suffix inference, three UNAVAILABLE routes, IN search (no suffix, NSE/BSE
+  only, AAPL never under IN), IN ticker, IN chart session window, IN sentiment universe.
+
+### Local browser pass (REAL BROWSER TESTED, localhost, desktop 800×600 + mobile 375×812)
+- US boot: catalog loaded, `USD` chip, truth badge, `Beta vs SPY`, ET clock.
+- US → INDIA (mode button): `mt:market=IN`, clock `19:58 IST`, status title `NSE · BSE · IST ·
+  09:15–15:30 IST`, RELIANCE 1,226.40 ▼17.50 (−1.41%) `INR`, `NSE` exchange, fundamentals
+  "Not available for NSE on current providers", company news unavailable notice, tape =
+  RELIANCE/TCS/HDFCBANK/INFY/ICICIBANK/SBIN/ITC with per-item truth ("End of day quote · INR
+  from yahoo" / LAST GOOD / No quote), `Beta vs NIFTY 50`, `mt:lastSymbol:IN=RELIANCE` while
+  `mt:lastSymbol=NVDA` kept. Chart: "Yahoo responded 429" (local throttle, B-025).
+- Reload (`#/markets`): India persisted; "India benchmarks · INR" ^NSEI/^BSESN/^NSEBANK/
+  ^INDIAVIX (unavailable under throttle); India sentiment "18 headlines · 4 sources · degraded";
+  registry shows US "Available · switch".
+- INDIA → US (registry row): SPY/QQQ/DIA/IWM `eod`, `USD`, US sentiment, US tape, NVDA restored.
+- India search "infosys": INFY NSE, HCL-INSYS NSE, SLONE NSE, 530801 BSE, 511597 BSE.
+- Mobile 375×812: `scrollWidth 375` in both markets; mode pills fit (103 px); India 1D chart
+  rendered once (IST axis 10:00 AM–2:00 PM) — exposed the 4-digit y-label clip → gutter fix.
+- Console: one "unknown error occurred when fetching the script" (service-worker fetch on
+  localhost; pre-existing, unrelated to TWINCORE — verify on production).

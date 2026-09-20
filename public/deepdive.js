@@ -24,7 +24,10 @@
   }
 
   const num = (v) => (v === null || v === undefined || v === '' || Number.isNaN(Number(v)) ? null : Number(v));
-  const money = (v) => (num(v) === null ? null : `$${num(v).toFixed(2)}`);
+  // Currency comes from the measured market block (never assumed); legacy payloads are USD.
+  let currencySymbol = '$';
+  const TRUTH_FRESH = { REALTIME: 'live', DELAYED: 'delayed', SNAPSHOT: 'snapshot', EOD: 'eod', CACHED: 'cached', LAST_GOOD: 'last-good', UNAVAILABLE: 'unavailable' };
+  const money = (v) => (num(v) === null ? null : `${currencySymbol}${num(v).toFixed(2)}`);
   const liList = (arr) => (Array.isArray(arr) ? arr : []).map((x) => `<li>${esc(x)}</li>`).join('');
   const usableLevel = (value) => Boolean(value) && !/^(n\/a|unrated|not available)(\s|$)/i.test(String(value));
 
@@ -50,7 +53,7 @@
   function quoteHtml(q) {
     if (!q || num(q.price) === null) return '';
     const up = (num(q.change) || 0) >= 0;
-    return `<span class="dd-price">$${num(q.price).toFixed(2)}</span>` +
+    return `<span class="dd-price">${currencySymbol}${num(q.price).toFixed(2)}</span>` +
       `<span class="dd-chg ${up ? 'up' : 'down'}">${up ? '▲' : '▼'} ${Math.abs(num(q.change) || 0).toFixed(2)} (${Math.abs(num(q.percent) || 0).toFixed(2)}%)</span>`;
   }
 
@@ -237,6 +240,8 @@
 
   function renderDeepDiveReport(d) {
     const data = d || {};
+    const mkt = data.market && typeof data.market === 'object' ? data.market : null;
+    currencySymbol = (mkt && mkt.currencySymbol) || '$';
     const st = data.stats || {};
     const fallback = data.aiNarrativeStatus !== 'ready';
     const logo = safeHttpUrl(st.logo || '');
@@ -250,6 +255,7 @@
         <div class="dd-id">
           <div class="dd-ticker" data-ticker="${ticker}">${ticker}</div>
           <div class="dd-name">${esc(data.company)}${st.industry ? ` · ${esc(st.industry)}` : ''}</div>
+          ${mkt ? `<div class="dd-market"><span class="dd-market-chip">${esc(mkt.exchange)}</span><span>${esc(mkt.currency)}</span><span class="fresh" data-fresh="${TRUTH_FRESH[mkt.quoteTruth] || 'unavailable'}">${esc(mkt.quoteTruth || 'UNAVAILABLE')}</span></div>` : ''}
         </div>
         <div class="dd-quote">${quoteHtml(data.quote)}</div>
       </div>

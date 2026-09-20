@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const DEEP_DIVE_SCHEMA_VERSION = '2026-08-11a';
+  const DEEP_DIVE_SCHEMA_VERSION = '2026-09-20a';
 
   function finiteNumber(value) {
     if (value === null || value === undefined || value === '') return null;
@@ -14,8 +14,8 @@
     return Math.round(value * factor) / factor;
   }
 
-  function formatPrice(value) {
-    return `$${Number(value).toFixed(2)}`;
+  function formatPrice(value, currencySymbol = '$') {
+    return `${currencySymbol}${Number(value).toFixed(2)}`;
   }
 
   // Finnhub reports company market capitalization in USD millions.
@@ -112,10 +112,10 @@
     return { records, sourceCount: sources.size, trustedCount: trusted.length, newestAt };
   }
 
-  function buildSummary(company, ticker, quote, stats, consensus, optionsChain) {
+  function buildSummary(company, ticker, quote, stats, consensus, optionsChain, currencySymbol = '$') {
     const sentences = [];
     if (quote) {
-      let sentence = `${company} (${ticker}) has a latest pooled quote of ${formatPrice(quote.price)}`;
+      let sentence = `${company} (${ticker}) has a latest pooled quote of ${formatPrice(quote.price, currencySymbol)}`;
       if (quote.percent !== null) {
         const direction = quote.percent > 0 ? 'up' : quote.percent < 0 ? 'down' : 'unchanged';
         sentence += direction === 'unchanged' ? ', unchanged for the session' : `, ${direction} ${Math.abs(quote.percent).toFixed(2)}% for the session`;
@@ -123,7 +123,7 @@
       sentences.push(`${sentence}.`);
     }
     if (quote && stats.rangePosition !== null && stats.low52 !== null && stats.high52 !== null) {
-      sentences.push(`The quote is ${stats.rangePosition.toFixed(1)}% through the reported 52-week range of ${formatPrice(stats.low52)} to ${formatPrice(stats.high52)}.`);
+      sentences.push(`The quote is ${stats.rangePosition.toFixed(1)}% through the reported 52-week range of ${formatPrice(stats.low52, currencySymbol)} to ${formatPrice(stats.high52, currencySymbol)}.`);
     }
     const fundamentals = [];
     if (stats.marketCap) fundamentals.push(`market cap ${stats.marketCap}`);
@@ -309,9 +309,25 @@
     const optionsChain = input.optionsChain && typeof input.optionsChain === 'object' ? input.optionsChain : null;
     const observations = buildObservations(quote, stats, analystConsensus, coverage, company, ticker, optionsChain);
     const equityData = buildEquityData(quote, fundamentalCount, analystConsensus, coverage, generatedAt);
+    // (market block below is computed before the summary so prices carry the right currency)
+    // Market context is measured identity, not analysis: it always comes from the caller's
+    // resolved instrument and defaults to the US consolidated tape for legacy callers.
+    const marketIn = input.market && typeof input.market === 'object' ? input.market : {};
+    const market = {
+      id: String(marketIn.id || 'US'),
+      exchange: String(marketIn.exchange || (marketIn.id === 'IN' ? 'NSE' : 'US')),
+      exchangeLabel: String(marketIn.exchangeLabel || (marketIn.id === 'IN' ? 'NSE · BSE' : 'NYSE · Nasdaq')),
+      currency: String(marketIn.currency || (marketIn.id === 'IN' ? 'INR' : 'USD')),
+      currencySymbol: String(marketIn.currencySymbol || (marketIn.id === 'IN' ? '₹' : '$')),
+      tzLabel: String(marketIn.tzLabel || (marketIn.id === 'IN' ? 'IST' : 'ET')),
+      canonical: String(marketIn.canonical || `${marketIn.id || 'US'}:${marketIn.exchange || 'US'}:${ticker}`),
+      quoteTruth: String(marketIn.quoteTruth || (quote ? 'SNAPSHOT' : 'UNAVAILABLE')),
+      limitations: Array.isArray(marketIn.limitations) ? marketIn.limitations.map(String) : [],
+    };
 
     return {
       deepDiveSchemaVersion: DEEP_DIVE_SCHEMA_VERSION,
+      market,
       dataMode: 'deterministic-dossier',
       deterministic: true,
       aiNarrativeStatus: 'not-attempted',
@@ -323,7 +339,7 @@
       analystConsensus,
       equityData,
       optionsChain,
-      summary: buildSummary(company, ticker, quote, stats, analystConsensus, optionsChain),
+      summary: buildSummary(company, ticker, quote, stats, analystConsensus, optionsChain, market.currencySymbol),
       newsSentiment: 'unrated',
       keyDrivers: `Observed inputs include ${quote ? `a pooled quote from ${quote.source}` : 'no usable pooled quote'}, ${fundamentalCount} numeric fundamental fields, and ${coverage.records.length} qualifying headline records across ${coverage.sourceCount} normalized sources. No causal driver is inferred automatically.`,
       investment: {
@@ -398,6 +414,7 @@
       equityData: baseline.equityData,
       optionsChain: baseline.optionsChain,
       dataSources: baseline.dataSources,
+      market: baseline.market,
       dataMode: 'ai-analysis-with-deterministic-data',
       deterministic: false,
       aiNarrativeStatus: 'ready',
@@ -420,6 +437,7 @@
       equityData: baseline.equityData,
       optionsChain: baseline.optionsChain,
       dataSources: baseline.dataSources,
+      market: baseline.market,
       dataMode: 'deterministic-dossier',
       deterministic: true,
       aiNarrativeStatus: 'unavailable',

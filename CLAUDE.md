@@ -155,6 +155,14 @@ Deploys to `https://market-terminal.wyjjdyxzsc.workers.dev`
 - Standard vocabularies: freshness badge `.fresh[data-fresh=live|delayed|snapshot|eod|cached|last-good|unavailable]`; `.status` line states (`error`, `policy-status`, `empty`, `data-state`); interpretation register (`.interp`, amber left rule) vs measured data vs `.evidence`. No emoji in navigation or labels; SVG icons only where they aid recognition.
 - Shell contract is **nine** synchronized `?v=` assets (production 20260920f after closure) (`tests/smoke.js` also checks nav/workspace ids and `shell.js`). Unit suite 75 tests.
 
+**MT2-3 TWINCORE — dual-market architecture (2026-09-20)**:
+- `shared/market-core.js` (schema `2026-09-20a`) is the single source of market truth: `MARKETS.US` / `MARKETS.IN`, `parseInstrument()` → `{ market, exchange, symbol, canonical: 'IN:NSE:RELIANCE', currency, provider: { yahoo: 'RELIANCE.NS', … } }` (suffixes never in identity), `cacheKey()` (throws without a market), `sessionState()` / `sessionBoundsUTC()` (ET vs IST, NYSE vs NSE calendars), `formatMoney()`, `classifyDataTruth()` + `PROVIDER_CAPABILITIES` (ceiling per provider × market; runtime only downgrades), `catalog()` served by `/api/market`.
+- **Provider truth (verified)**: Finnhub free tier = US quotes/stream/fundamentals/news + global search; Yahoo keyless = DELAYED quotes/charts for US and NSE/BSE (+ ^NSEI/^BSESN/^NSEBANK/^INDIAVIX) — works from Cloudflare, 429-throttled from the dev Mac; Nasdaq = US charts/options only. India fundamentals/news/options are `UNAVAILABLE` (200 payload), never faked.
+- **Contract**: `?market=US|IN` on quote/chart/search/ticker/profile/metrics/news/sentiment/deepdive; omitted → US. Responses carry `market, exchange, symbol, canonical, currency, providerSymbol, truth, asOf`; charts add `session { openUTC, closeUTC, timezone, tzLabel }`. Cache keys are market-scoped (`quote:IN:NSE:RELIANCE`, `ticker:<schema>:IN`, `sentiment:market:IN`). Deep Dive dossier has a measured `market` block; renderer/summary use its currency symbol.
+- **Frontend**: `shell.js` MARKETS (both active, `mt:market` persisted, `lastSymbolKey(market)`); `app.js` `Market` context + `setMarket()` (dispatches `mt:market`), `fmtPrice` uses the market locale, `Market.qs()` on every market-scoped fetch, clock/status per market calendar, 1D canvas on the market session, quant beta vs `quantBenchmark` (SPY / NIFTY 50); `intel.js` passes `market=` to Deep Dive and Quant Lab. The Finnhub trade stream is US-only.
+- **Invariant tests** (`tests/market-core.test.js`, negative controls): no SPY under India, INR never `$`, no NYSE holidays for NSE, no market-less cache key, no suffix in canonical identity, Yahoo India never REALTIME. Keep them green when touching any market-scoped path.
+- **Do not build or run inside the repo folder** — it is iCloud-synced and gets evicted under disk pressure (B-001/B-023). Run the local server from a non-iCloud mirror (`~/Library/Developer/market-terminal-run`: rsync + `npm ci` + copy `.env`).
+
 **Branches**: All work on `main` (no feature branches yet).
 
 ## Key Files
@@ -172,6 +180,7 @@ Deploys to `https://market-terminal.wyjjdyxzsc.workers.dev`
 | `shared/deep-dive-core.js` | Deep Dive dossier, options-chain prompt grounding, and the shared analysis/fallback merges |
 | `shared/options-chain-core.js` | Bounded Nasdaq options-chain normalization and availability contract |
 | `shared/ticker-core.js` | Pooled ticker normalization and last-good fallback contract |
+| `shared/market-core.js` | Canonical US/India market definitions, instrument identity, cache keys, sessions, money, data truth, provider matrix |
 | `public/index.html` | Application shell, workspace sections, cache-buster versioning |
 | `shared/ai-provider-registry.js` | Current provider/model lifecycle, eligibility, pricing, and health metadata |
 | `shared/ai-verification-core.js` | Bounded generation, independent verification, runtime usage/cost telemetry |

@@ -24,7 +24,37 @@ const state = {
   showMC: false,    // Monte Carlo forward fan
 };
 
+// ───────────────────────── market context (MT2-3 TWINCORE) ─────────────────────────
+// The canonical definitions live in shared/market-core.js and arrive via /api/market.
+// This fallback only carries what the shell needs to boot offline; holidays and
+// benchmarks come from the catalog, so without it the status is weekday-only.
+const MARKET_FALLBACK = {
+  US: { id: 'US', label: 'US', currency: 'USD', currencySymbol: '$', locale: 'en-US', timezone: 'America/New_York', tzLabel: 'ET', exchangeLabel: 'NYSE · Nasdaq', sessionLabel: 'NYSE · Nasdaq · ET', session: { open: '09:30', close: '16:00', preOpen: '04:00', postClose: '20:00', earlyClose: '13:00' }, calendar: { holidays: [], earlyClose: [] }, defaultSymbol: 'AAPL', benchmarks: [], quantBenchmark: { symbol: 'SPY', label: 'SPY' } },
+  IN: { id: 'IN', label: 'India', currency: 'INR', currencySymbol: '₹', locale: 'en-IN', timezone: 'Asia/Kolkata', tzLabel: 'IST', exchangeLabel: 'NSE · BSE', sessionLabel: 'NSE · BSE · IST', session: { open: '09:15', close: '15:30', preOpen: '09:00', postClose: '16:00', earlyClose: null }, calendar: { holidays: [], earlyClose: [] }, defaultSymbol: 'RELIANCE', benchmarks: [], quantBenchmark: { symbol: '^NSEI', label: 'NIFTY 50' } },
+};
+const Market = {
+  id: 'US',
+  catalog: null,
+  def() {
+    const fromCatalog = this.catalog && Array.isArray(this.catalog.markets) && this.catalog.markets.find((m) => m.id === this.id);
+    return fromCatalog || MARKET_FALLBACK[this.id] || MARKET_FALLBACK.US;
+  },
+  qs() { return `&market=${encodeURIComponent(this.id)}`; },
+  tz() { return this.def().timezone; },
+  tzLabel() { return this.def().tzLabel; },
+};
+// Truth vocabulary → QUARTZ `.fresh` keys (mirrors market-core TRUTH_TO_FRESH).
+const TRUTH_FRESH = { REALTIME: 'live', DELAYED: 'delayed', SNAPSHOT: 'snapshot', EOD: 'eod', CACHED: 'cached', LAST_GOOD: 'last-good', UNAVAILABLE: 'unavailable' };
+const TRUTH_LABEL = { REALTIME: 'Live', DELAYED: 'Delayed', SNAPSHOT: 'Snapshot', EOD: 'End of day', CACHED: 'Cached', LAST_GOOD: 'Last good', UNAVAILABLE: 'Unavailable' };
+function truthBadge(el, truth) {
+  if (!el) return;
+  const key = TRUTH_FRESH[truth] || 'unavailable';
+  el.dataset.fresh = key;
+  el.textContent = TRUTH_LABEL[truth] || 'Unavailable';
+}
+
 window.MarketTerminal = window.MarketTerminal || {};
+window.MarketTerminal.getMarketContext = () => ({ id: Market.id, ...Market.def() });
 window.MarketTerminal.getSymbolContext = () => ({
   symbol: state.symbol,
   lastPrice: Number.isFinite(Number(state.quote?.c)) ? Number(state.quote.c) : null,
@@ -66,10 +96,17 @@ async function getJSON(url) {
 
 function fmtPrice(n) {
   if (n === null || n === undefined || Number.isNaN(n)) return '—';
-  return Number(n).toLocaleString('en-US', {
+  // Digit grouping follows the active market (en-IN → 1,22,640.40); the currency
+  // itself is shown as a code/symbol next to the number, never assumed.
+  return Number(n).toLocaleString(Market.def().locale || 'en-US', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
+}
+
+function fmtMoney(n) {
+  const v = fmtPrice(n);
+  return v === '—' ? v : `${Market.def().currencySymbol || ''}${v}`;
 }
 
 function fmtSigned(n, decimals = 2) {
@@ -110,10 +147,12 @@ function colorClass(n) {
 function tickClock() {
   const now = new Date();
   const timeStr = now.toLocaleTimeString('en-US', {
-    timeZone: 'America/New_York',
+    timeZone: Market.tz(),
     hour12: false,
   });
-  $('clock').textContent = `${timeStr} ET`;
+  const clock = $('clock');
+  clock.textContent = `${timeStr} ${Market.tzLabel()}`;
+  clock.setAttribute('aria-label', Market.tzLabel() === 'IST' ? 'India Standard Time' : 'Eastern time');
   updateMarketStatus(now);
 }
 
@@ -142,9 +181,10 @@ const NYSE_EARLY_CLOSE = new Set([
 ]);
 
 function updateMarketStatus(now) {
-  // Work in America/New_York wall-clock time.
+  // Work in the active market's wall-clock time with its own calendar (never the other's).
+  const m = Market.def();
   const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/New_York',
+    timeZone: m.timezone,
     year: 'numeric', month: '2-digit', day: '2-digit',
     weekday: 'short',
     hour: 'numeric',
@@ -154,37 +194,41 @@ function updateMarketStatus(now) {
 
   const get = (t) => parts.find((p) => p.type === t)?.value;
   const weekday = get('weekday');
-  const etDate = `${get('year')}-${get('month')}-${get('day')}`;
+  const localDate = `${get('year')}-${get('month')}-${get('day')}`;
   let hour = parseInt(get('hour'), 10);
   if (hour === 24) hour = 0;
   const minute = parseInt(get('minute'), 10);
   const mins = hour * 60 + minute;
+  const hm = (t) => { const [h, mm] = String(t).split(':').map(Number); return h * 60 + mm; };
 
+  const holidays = (m.calendar && m.calendar.holidays) || [];
+  const earlyCloses = (m.calendar && m.calendar.earlyClose) || [];
   const isWeekday = !['Sat', 'Sun'].includes(weekday);
-  const isHoliday = NYSE_HOLIDAYS.has(etDate);
-  const isEarlyClose = NYSE_EARLY_CLOSE.has(etDate);
-  const open = 9 * 60 + 30;  // 09:30
-  const close = isEarlyClose ? 13 * 60 : 16 * 60; // 13:00 early / 16:00 normal
-  const preStart = 4 * 60;    // 04:00
-  const afterEnd = 20 * 60;   // 20:00
+  const isHoliday = holidays.includes(localDate);
+  const isEarlyClose = earlyCloses.includes(localDate);
+  const open = hm(m.session.open);
+  const close = isEarlyClose && m.session.earlyClose ? hm(m.session.earlyClose) : hm(m.session.close);
+  const preStart = hm(m.session.preOpen);
+  const afterEnd = hm(m.session.postClose);
 
   const el = $('marketStatus');
   let cls = 'closed', text = 'CLOSED';
 
   if (isWeekday && !isHoliday) {
-    if (mins >= open && mins < close) { cls = 'open'; text = isEarlyClose ? 'OPEN (EARLY CLOSE 1PM)' : 'OPEN'; }
+    if (mins >= open && mins < close) { cls = 'open'; text = isEarlyClose ? 'OPEN (EARLY CLOSE)' : 'OPEN'; }
     else if (mins >= preStart && mins < open) { cls = 'ext'; text = 'PRE-MKT'; }
     else if (mins >= close && mins < afterEnd) { cls = 'ext'; text = 'AFTER-HRS'; }
   }
 
   el.className = 'market-status ' + cls;
+  el.title = `${m.sessionLabel} · ${m.session.open}–${m.session.close} ${m.tzLabel}${isHoliday ? ' · holiday' : ''}`;
   $('statusText').textContent = text;
 }
 
 // ───────────────────────── ticker tape ─────────────────────────
 async function loadTape() {
   try {
-    const items = await getJSON('/api/ticker');
+    const items = await getJSON('/api/ticker?market=' + encodeURIComponent(Market.id));
     if (!Array.isArray(items)) throw new Error('Ticker payload was not an array');
     const track = $('tapeTrack');
     const html = items.map(renderTapeItem).join('');
@@ -205,7 +249,7 @@ function renderTapeItem(it) {
   }
   const cls = colorClass(it.percent);
   const arrow = it.percent > 0 ? '▲' : it.percent < 0 ? '▼' : '';
-  const detail = `${it.stale ? 'Last good' : 'Live pooled'} quote${it.source ? ` from ${it.source}` : ''}${it.asOf ? ` · ${new Date(it.asOf).toLocaleString()}` : ''}`;
+  const detail = `${it.truth ? (TRUTH_LABEL[it.truth] || it.truth) : (it.stale ? 'Last good' : 'Pooled')} quote${it.currency ? ` · ${it.currency}` : ''}${it.source ? ` from ${it.source}` : ''}${it.asOf ? ` · ${new Date(it.asOf).toLocaleString()}` : ''}`;
   return (
     `<span class="tape-item${it.stale ? ' is-stale' : ''}" title="${escHtml(detail)}">` +
     `<span class="t-sym">${symbol}</span>` +
@@ -234,7 +278,7 @@ async function loadSymbol(rawSymbol) {
   loadNews(symbol);
   loadChart(symbol, state.range);
   loadQuantPanel(symbol);
-  subscribeLive(symbol); // real-time trade ticks via Finnhub WS
+  if (Market.id === 'US') subscribeLive(symbol); // real-time trade ticks via Finnhub WS (US tape only)
   // Auto-refresh "Why is it moving?" if the panel is already open
   if (whyPanelOpen) loadPriceAction(symbol);
 }
@@ -293,7 +337,7 @@ function extendLiveChart(price, tms) {
   // the market is closed (evening/weekend/holiday) carries a timestamp days or
   // hours past the last bar; appending it would drag the 1D x-domain across
   // multiple days and render as a long flat line with no hour labels.
-  const b = etSessionBounds(last.t);
+  const b = marketSessionBounds(last.t, state.chart && state.chart.session);
   if (tms < b.openUTC - 60000 || tms > b.closeUTC + 60000) return;
   if (Math.floor(tms / 60000) > Math.floor(last.t / 60000)) pts.push({ t: tms, c: price });
   else last.c = price;
@@ -320,7 +364,7 @@ function applyLivePrice(price, tms) {
 
 async function loadQuote(symbol) {
   try {
-    const q = await getJSON('/api/quote?symbol=' + encodeURIComponent(symbol));
+    const q = await getJSON('/api/quote?symbol=' + encodeURIComponent(symbol) + Market.qs());
     if (state.symbol !== symbol) return; // user moved on
 
     // A transient all-providers-failed response (no price) during a fast poll must
@@ -339,7 +383,7 @@ async function loadQuote(symbol) {
     notifySymbolContext();
     // Persist only symbols that actually quoted, so a typo (or company name
     // typed as a ticker) is never restored on the next page load.
-    try { localStorage.setItem('mt:lastSymbol', symbol); } catch { /* private mode */ }
+    try { localStorage.setItem(Shell ? Shell.lastSymbolKey(Market.id) : 'mt:lastSymbol', symbol); } catch { /* private mode */ }
 
     const cls = colorClass(q.d);
     $('qPrice').textContent = fmtPrice(q.c);
@@ -356,8 +400,10 @@ async function loadQuote(symbol) {
     // trade stream / carries liveness on its own when the stream is unavailable).
     extendLiveChart(q.c, q.t ? q.t * 1000 : Date.now());
 
-    const t = q.t ? new Date(q.t * 1000).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour12: false }) : '';
-    setStatus(`● LIVE · ${symbol} ${t ? t + ' ET' : ''}`);
+    const t = q.t ? new Date(q.t * 1000).toLocaleTimeString('en-US', { timeZone: Market.tz(), hour12: false }) : '';
+    truthBadge($('qFresh'), q.truth || 'SNAPSHOT');
+    const curr = $('qCurrency'); if (curr) curr.textContent = q.currency || Market.def().currency;
+    setStatus(`● ${TRUTH_LABEL[q.truth] ? TRUTH_LABEL[q.truth].toUpperCase() : 'QUOTE'} · ${symbol} ${t ? t + ' ' + Market.tzLabel() : ''}`);
   } catch (err) {
     if (state.symbol !== symbol) return;
     $('qChange').textContent = 'Quote error: ' + err.message;
@@ -471,9 +517,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
 async function loadProfile(symbol) {
   try {
-    const p = await getJSON('/api/profile?symbol=' + encodeURIComponent(symbol));
+    const p = await getJSON('/api/profile?symbol=' + encodeURIComponent(symbol) + Market.qs());
     if (state.symbol !== symbol) return;
 
+    if (p.unavailable) {
+      // Truthful degradation: the market's providers do not serve fundamentals.
+      $('qName').textContent = symbol;
+      $('qExch').textContent = `${p.exchange || Market.def().exchangeLabel}`;
+      ['cIndustry', 'cCountry', 'cIpo'].forEach((id) => ($(id).textContent = '—'));
+      $('sCap').textContent = '—';
+      $('cIndustry').textContent = `Not available for ${p.exchange || Market.def().exchangeLabel} on current providers`;
+      const w = $('cWeb'); w.textContent = '—'; w.removeAttribute('href');
+      const lg = $('cLogo'); lg.hidden = true; lg.removeAttribute('src');
+      return;
+    }
     $('qName').textContent = p.name || symbol;
     $('qExch').textContent = p.exchange || '';
     $('cIndustry').textContent = p.finnhubIndustry || '—';
@@ -502,8 +559,9 @@ async function loadProfile(symbol) {
 
 async function loadMetrics(symbol) {
   try {
-    const m = await getJSON('/api/metrics?symbol=' + encodeURIComponent(symbol));
+    const m = await getJSON('/api/metrics?symbol=' + encodeURIComponent(symbol) + Market.qs());
     if (state.symbol !== symbol) return;
+    if (m.unavailable) { ['s52h', 's52l', 'sPE'].forEach((id) => ($(id).textContent = '—')); return; }
     $('s52h').textContent = fmtPrice(m.high52);
     $('s52l').textContent = fmtPrice(m.low52);
     $('sPE').textContent = (m.pe === null || m.pe === undefined) ? '—' : Number(m.pe).toFixed(2);
@@ -519,8 +577,12 @@ async function loadNews(symbol) {
   const body = $('newsBody');
   body.innerHTML = '<div class="news-loading">Loading headlines…</div>';
   try {
-    const items = await getJSON('/api/news?symbol=' + encodeURIComponent(symbol));
+    const items = await getJSON('/api/news?symbol=' + encodeURIComponent(symbol) + Market.qs());
     if (state.symbol !== symbol) return;
+    if (items && items.unavailable) {
+      body.innerHTML = `<div class="news-loading">Company news is not available for ${escHtml(items.exchange || Market.def().exchangeLabel)} listings on the current providers.</div>`;
+      return;
+    }
     if (!items.length) {
       body.innerHTML = '<div class="news-loading">No recent news for this symbol.</div>';
       return;
@@ -549,7 +611,7 @@ async function loadChart(symbol, range) {
   if (!state.chart) { msg.hidden = false; msg.textContent = 'Loading chart…'; }
   try {
     const data = await getJSON(
-      `/api/chart?symbol=${encodeURIComponent(symbol)}&range=${encodeURIComponent(range)}`
+      `/api/chart?symbol=${encodeURIComponent(symbol)}&range=${encodeURIComponent(range)}${Market.qs()}`
     );
     if (state.symbol !== symbol || state.range !== range) return;
     if (!data.points || data.points.length < 2) {
@@ -600,12 +662,13 @@ function drawChart() {
   const range = state.range;
   const prev = data.meta && data.meta.prevClose;
 
-  // 1D renders the regular session on a FIXED 9:30–16:00 ET canvas (Google style):
-  // the live line sits in its true position in the day and grows rightward into
-  // empty future space, instead of stretching edge-to-edge.
+  // 1D renders the regular session on a FIXED canvas (Google style) — 09:30–16:00 ET
+  // for US, 09:15–15:30 IST for India: the live line sits in its true position in
+  // the day and grows rightward into empty future space, instead of stretching
+  // edge-to-edge.
   let points, t0, t1;
   if (range === '1D' && data.points.length) {
-    const b = etSessionBounds(data.points[data.points.length - 1].t);
+    const b = marketSessionBounds(data.points[data.points.length - 1].t, data.session);
     t0 = b.openUTC; t1 = b.closeUTC;
     points = data.points.filter((p) => p.t >= t0 - 60000 && p.t <= t1 + 60000);
     if (points.length < 2) { points = data.points; t0 = points[0].t; t1 = points[points.length - 1].t; }
@@ -620,7 +683,11 @@ function drawChart() {
   // them; the wide right margin only exists for the prev-close label and the
   // MC forward fan, neither of which fits at that size anyway.
   const narrow = W < 420 && !state.showMC;
-  const padL = narrow ? 44 : 52, padR = narrow ? 12 : 66, padT = 14;
+  // Left gutter scales with the widest price label so four/five-digit prices
+  // (INR large caps, BKNG-class US names) never clip on narrow canvases.
+  ctx.font = '11px "SF Mono", Menlo, monospace';
+  const labelW = Math.max(...data.points.map((p) => p.c)).toFixed(2).length * 6.8 + 10;
+  const padL = Math.max(narrow ? 44 : 52, Math.ceil(labelW)), padR = narrow ? 12 : 66, padT = 14;
   const padB = 24 + lowerPaneH + oscGap; // total bottom padding includes lower pane
   const plotW = W - padL - padR;
   const plotH = H - padT - padB;
@@ -678,7 +745,7 @@ function drawChart() {
   const minGapPx = labelMaxWidth + 14;
   let lastLabelX = -Infinity;
   if (range === '1D') {
-    const b = etSessionBounds(t1);
+    const b = marketSessionBounds(t1, state.chart && state.chart.session);
     for (let h = 10; h <= 16; h++) {
       const tx = b.hourEpoch(h);
       if (tx < t0 || tx > t1) continue;
@@ -1075,33 +1142,43 @@ function scheduleMcFan(points, lastX, padL, padR, padT, plotH, W, min, max, xOf,
   _mc.rafId = requestAnimationFrame(drawChunk);
 }
 
-// US-market charts always render in Eastern time (like Google Finance), not the
-// viewer's local zone — otherwise a user in IST sees the session shifted ~9h.
-const MKT_TZ = 'America/New_York';
+// Charts always render in the active market's exchange time (like Google Finance),
+// not the viewer's local zone — otherwise a user in IST sees a US session shifted
+// ~9h, and vice versa.
+function marketTZ() { return Market.tz(); }
 function formatTick(ms, range) {
   const d = new Date(ms);
-  if (range === '1D') return d.toLocaleTimeString('en-US', { timeZone: MKT_TZ, hour: 'numeric', minute: '2-digit' });
-  if (range === '5D') return d.toLocaleDateString('en-US', { timeZone: MKT_TZ, month: 'numeric', day: 'numeric' });
-  if (range === '5Y' || range === '1Y') return d.toLocaleDateString('en-US', { timeZone: MKT_TZ, month: 'short', year: '2-digit' });
-  return d.toLocaleDateString('en-US', { timeZone: MKT_TZ, month: 'short', day: 'numeric' });
+  const tz = marketTZ();
+  if (range === '1D') return d.toLocaleTimeString('en-US', { timeZone: tz, hour: 'numeric', minute: '2-digit' });
+  if (range === '5D') return d.toLocaleDateString('en-US', { timeZone: tz, month: 'numeric', day: 'numeric' });
+  if (range === '5Y' || range === '1Y') return d.toLocaleDateString('en-US', { timeZone: tz, month: 'short', year: '2-digit' });
+  return d.toLocaleDateString('en-US', { timeZone: tz, month: 'short', day: 'numeric' });
 }
 
-// Minutes US-Eastern is behind UTC for a given instant (240 EDT / 300 EST).
-function etOffsetMin(date) {
-  const parts = new Intl.DateTimeFormat('en-US', { timeZone: MKT_TZ, timeZoneName: 'shortOffset' }).formatToParts(date);
-  const tz = (parts.find((p) => p.type === 'timeZoneName') || {}).value || 'GMT-5';
-  const m = tz.match(/GMT([+-]\d+)/);
-  return m ? -parseInt(m[1], 10) * 60 : 300;
+// Minutes the market zone is behind UTC for a given instant (240 EDT / 300 EST / -330 IST).
+function marketOffsetMin(date) {
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone: marketTZ(), timeZoneName: 'longOffset' }).formatToParts(date);
+  const tz = (parts.find((p) => p.type === 'timeZoneName') || {}).value || 'GMT-05:00';
+  const m = tz.match(/GMT([+-])(\d{1,2})(?::(\d{2}))?/);
+  if (!m) return 300;
+  const sign = m[1] === '-' ? 1 : -1;
+  return sign * (parseInt(m[2], 10) * 60 + (m[3] ? parseInt(m[3], 10) : 0));
 }
-// Regular-session bounds (9:30 AM – 4:00 PM ET) for the calendar day of `sampleMs`,
-// returned as true UTC epochs, plus a builder for hour-aligned tick marks. Lets the
-// 1D chart use a fixed full-day canvas like Google Finance.
-function etSessionBounds(sampleMs) {
-  const off = etOffsetMin(new Date(sampleMs));
-  const [y, mo, d] = new Intl.DateTimeFormat('en-CA', { timeZone: MKT_TZ, year: 'numeric', month: '2-digit', day: '2-digit' })
+// Regular-session bounds for the calendar day of `sampleMs` in the market zone,
+// returned as true UTC epochs, plus a builder for hour-aligned tick marks. Prefers the
+// server's `session` block (computed by shared/market-core.js) and recomputes locally
+// from the market definition otherwise. Lets the 1D chart use a fixed full-day canvas.
+function marketSessionBounds(sampleMs, serverSession) {
+  const off = marketOffsetMin(new Date(sampleMs));
+  const [y, mo, d] = new Intl.DateTimeFormat('en-CA', { timeZone: marketTZ(), year: 'numeric', month: '2-digit', day: '2-digit' })
     .format(new Date(sampleMs)).split('-').map(Number);
   const at = (h, mn) => Date.UTC(y, mo - 1, d, h, mn) + off * 60000;
-  return { openUTC: at(9, 30), closeUTC: at(16, 0), hourEpoch: (h) => at(h, 0) };
+  const sess = Market.def().session;
+  const [oh, om] = sess.open.split(':').map(Number);
+  const [ch, cm] = sess.close.split(':').map(Number);
+  const openUTC = serverSession && Number.isFinite(serverSession.openUTC) ? serverSession.openUTC : at(oh, om);
+  const closeUTC = serverSession && Number.isFinite(serverSession.closeUTC) ? serverSession.closeUTC : at(ch, cm);
+  return { openUTC, closeUTC, hourEpoch: (h) => at(h, 0) };
 }
 
 // Hover crosshair + tooltip (redraws on top of cached chart).
@@ -1146,12 +1223,12 @@ function drawCrosshair() {
   // tooltip — market time (ET), with the suffix on intraday ranges
   const intraday = state.range === '1D' || state.range === '5D';
   const dateStr = new Date(nearest.t).toLocaleString('en-US', {
-    timeZone: MKT_TZ,
+    timeZone: marketTZ(),
     month: 'short', day: 'numeric',
     hour: intraday ? 'numeric' : undefined,
     minute: intraday ? '2-digit' : undefined,
-  }) + (intraday ? ' ET' : '');
-  const priceStr = '$' + fmtPrice(nearest.c);
+  }) + (intraday ? ' ' + Market.tzLabel() : '');
+  const priceStr = fmtMoney(nearest.c);
   ctx.font = '11px "SF Mono", Menlo, monospace';
   const tw = Math.max(ctx.measureText(dateStr).width, ctx.measureText(priceStr).width);
   const boxW = tw + 16;
@@ -1254,14 +1331,15 @@ function chooseSymbol(sym) {
 
 async function runSearch(q) {
   try {
-    const data = await getJSON('/api/search?q=' + encodeURIComponent(q));
+    const data = await getJSON('/api/search?q=' + encodeURIComponent(q) + Market.qs());
+    if (data.market && data.market !== Market.id) { hideAC(); return; } // stale response after a mode switch
     const ac = $('autocomplete');
     const results = data.result || [];
     if (!results.length) { hideAC(); return; }
     acIndex = -1;
     ac.innerHTML = results.map((r) =>
-      `<li role="option" data-symbol="${r.symbol}">` +
-      `<span class="ac-sym">${r.symbol}</span>` +
+      `<li role="option" data-symbol="${escHtml(r.symbol)}">` +
+      `<span class="ac-sym">${escHtml(r.symbol)}${r.exchange && r.exchange !== 'US' ? ` <small class="ac-exch">${escHtml(r.exchange)}</small>` : ''}</span>` +
       `<span class="ac-desc">${String(r.description || '').replace(/</g, '&lt;')}</span>` +
       `</li>`
     ).join('');
@@ -1415,13 +1493,48 @@ function renderShellNav() {
   }).join('');
   nav.setAttribute('role', 'tablist');
 
+  renderMarketMode();
+}
+
+function renderMarketMode() {
   const mode = document.getElementById('marketMode');
-  if (mode) {
-    mode.innerHTML = Shell.MARKETS.map((m) => {
-      if (m.active) return `<button type="button" aria-pressed="true" title="${escHtml(m.session || '')}">${escHtml(m.label)}</button>`;
-      return `<button type="button" aria-pressed="false" aria-disabled="true" title="${escHtml(m.note || '')}">${escHtml(m.label)}<span class="mode-note">Soon</span></button>`;
-    }).join('');
-  }
+  if (!mode || !Shell) return;
+  mode.innerHTML = Shell.MARKETS.map((m) => {
+    if (!m.active) return `<button type="button" aria-pressed="false" aria-disabled="true" title="${escHtml(m.note || '')}">${escHtml(m.label)}<span class="mode-note">Soon</span></button>`;
+    const on = m.id === Market.id;
+    return `<button type="button" data-market="${m.id}" aria-pressed="${on}" title="${escHtml(m.session || '')}">${escHtml(m.label)}</button>`;
+  }).join('');
+  mode.querySelectorAll('button[data-market]').forEach((btn) => {
+    btn.addEventListener('click', () => setMarket(btn.dataset.market));
+  });
+}
+
+let benchmarkClosesCache = {}; // market id → benchmark closes (quant panel)
+
+/** Switch the global market context. Persisted; every market-scoped surface reloads. */
+function setMarket(id, { persist = true, reload = true } = {}) {
+  const next = Shell ? Shell.resolveMarketId(id) : 'US';
+  if (next === Market.id && reload) return;
+  Market.id = next;
+  if (persist) { try { localStorage.setItem(Shell.MARKET_STORAGE_KEY, next); } catch { /* private mode */ } }
+  document.documentElement.dataset.market = next;
+  renderMarketMode();
+  tickClock();
+  hideAC();
+  $('symbolInput').placeholder = next === 'IN'
+    ? 'Symbol or company — RELIANCE, TCS, Infosys'
+    : 'Symbol or company — AAPL, NVDA, Tesla';
+  document.dispatchEvent(new CustomEvent('mt:market', { detail: { id: next, market: Market.def() } }));
+  if (!reload) return;
+  // Drop the other market's live stream state; the US tape resumes on its own.
+  state.quote = null; state.chart = null; clearCanvas();
+  loadTape();
+  marketsLoadedAt = 0;
+  if (currentView === 'markets') { renderMarketRegistry(); loadMarkets(true); }
+  loadSentiment();
+  let last = null;
+  try { last = localStorage.getItem(Shell.lastSymbolKey(next)); } catch { /* private mode */ }
+  loadSymbol(last || Market.def().defaultSymbol);
 }
 
 function renderSubnav(workspaceId, activeItem) {
@@ -1500,26 +1613,33 @@ function setupTabs() {
   syncShellNav('terminal', currentGiSub);
 }
 
-// ───────────────────────── MARKETS workspace (US overview) ─────────────────────────
+// ───────────────────────── MARKETS workspace ─────────────────────────
 // Uses the same pooled /api/quote route the Terminal uses — no new data authority.
-// India and other markets are shell reservations (shell.js MARKETS) and render disabled.
-const MARKET_BENCHMARKS = [
+// The benchmark table is the active market's own universe (shared/market-core.js via
+// /api/market); a US benchmark can never appear under India and vice versa.
+const US_BENCHMARKS_FALLBACK = [
   { symbol: 'SPY', name: 'S&P 500 · SPDR' },
   { symbol: 'QQQ', name: 'Nasdaq-100 · Invesco' },
   { symbol: 'DIA', name: 'Dow Jones · SPDR' },
   { symbol: 'IWM', name: 'Russell 2000 · iShares' },
 ];
+function marketBenchmarks() {
+  const def = Market.def();
+  if (Array.isArray(def.benchmarks) && def.benchmarks.length) return def.benchmarks;
+  return Market.id === 'US' ? US_BENCHMARKS_FALLBACK : [];
+}
 let marketsLoadedAt = 0;
 
 function freshnessForQuote(q) {
-  // Truthful vocabulary from what the payload carries: a quote timestamp and a price.
+  // Truthful vocabulary: prefer the server's explicit data truth, else infer from timestamp.
   if (!q || q.c == null || (q.c === 0 && q.pc === 0)) return { key: 'unavailable', label: 'Unavailable' };
+  if (q.truth && TRUTH_FRESH[q.truth]) return { key: TRUTH_FRESH[q.truth], label: TRUTH_LABEL[q.truth] };
   const ageMs = q.t ? Date.now() - q.t * 1000 : null;
   const status = $('marketStatus');
   const open = status && status.classList.contains('open');
   if (ageMs != null && ageMs < 5 * 60_000 && open) return { key: 'live', label: 'Live' };
   if (ageMs != null && ageMs < 20 * 60_000) return { key: 'delayed', label: 'Delayed' };
-  return { key: 'snapshot', label: q.t ? 'Snapshot · ' + new Date(q.t * 1000).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: '2-digit', minute: '2-digit' }) + ' ET' : 'Snapshot' };
+  return { key: 'snapshot', label: q.t ? 'Snapshot · ' + new Date(q.t * 1000).toLocaleTimeString('en-US', { timeZone: Market.tz(), hour: '2-digit', minute: '2-digit' }) + ' ' + Market.tzLabel() : 'Snapshot' };
 }
 
 async function loadMarkets(force = false) {
@@ -1528,11 +1648,14 @@ async function loadMarkets(force = false) {
   if (!body) return;
   if (!force && Date.now() - marketsLoadedAt < 60_000) return; // cached view; the tape and quote poll carry liveness
   fresh.dataset.fresh = 'loading'; fresh.textContent = 'Loading';
+  const marketId = Market.id;
+  const title = $('mkBenchTitle'); if (title) title.textContent = `${Market.def().label} benchmarks · ${Market.def().currency}`;
 
-  const rows = await Promise.all(MARKET_BENCHMARKS.map(async (b) => {
-    try { return { ...b, q: await getJSON('/api/quote?symbol=' + b.symbol) }; }
+  const rows = await Promise.all(marketBenchmarks().map(async (b) => {
+    try { return { ...b, q: await getJSON('/api/quote?symbol=' + encodeURIComponent(b.symbol) + Market.qs()) }; }
     catch (err) { return { ...b, q: null, err: err.message }; }
   }));
+  if (marketId !== Market.id) return; // mode switched mid-flight; the new load owns the table
   marketsLoadedAt = Date.now();
 
   let live = 0, unavailable = 0;
@@ -1543,8 +1666,8 @@ async function loadMarkets(force = false) {
     const q = r.q || {};
     const cls = colorClass(q.d);
     const cell = (v) => (Number.isFinite(v) ? fmtPrice(v) : '—');
-    return `<tr data-symbol="${r.symbol}" data-href="terminal" tabindex="0">
-      <td class="sym">${r.symbol}<small>${escHtml(r.name)}</small></td>
+    return `<tr data-symbol="${escHtml(r.symbol)}" data-href="terminal" tabindex="0">
+      <td class="sym">${escHtml(r.symbol)}<small>${escHtml(r.name)}</small></td>
       <td class="num">${cell(q.c)}</td>
       <td class="num ${cls}">${Number.isFinite(q.d) ? fmtSigned(q.d) : '—'}</td>
       <td class="num ${cls}">${Number.isFinite(q.dp) ? fmtSigned(q.dp) + '%' : '—'}</td>
@@ -1572,10 +1695,16 @@ function renderMarketRegistry() {
   if (!body || !Shell) return;
   const status = $('marketStatus');
   const session = status ? ($('statusText').textContent || '—') : '—';
-  body.innerHTML = Shell.MARKETS.map((m) => m.active
-    ? `<tr class="is-active"><td class="sym">${escHtml(m.label)}<small>${escHtml(m.session || '')}</small></td><td class="num">${escHtml(session)}</td><td><span class="mk-status is-active">Active · data context</span></td></tr>`
-    : `<tr><td class="sym">${escHtml(m.label)}<small>${escHtml(m.note || '')}</small></td><td class="num">—</td><td><span class="mk-status is-reserved">Not yet active</span></td></tr>`
-  ).join('');
+  body.innerHTML = Shell.MARKETS.map((m) => {
+    if (!m.active) return `<tr><td class="sym">${escHtml(m.label)}<small>${escHtml(m.note || '')}</small></td><td class="num">—</td><td><span class="mk-status is-reserved">Not yet active</span></td></tr>`;
+    const on = m.id === Market.id;
+    return `<tr class="${on ? 'is-active' : ''}" data-market="${m.id}" tabindex="0"><td class="sym">${escHtml(m.label)}<small>${escHtml(m.session || '')} · ${escHtml(m.currency || '')}</small></td><td class="num">${on ? escHtml(session) : '—'}</td><td><span class="mk-status ${on ? 'is-active' : 'is-available'}">${on ? 'Active · data context' : 'Available · switch'}</span></td></tr>`;
+  }).join('');
+  body.querySelectorAll('tr[data-market]').forEach((tr) => {
+    const pick = () => setMarket(tr.dataset.market);
+    tr.addEventListener('click', pick);
+    tr.addEventListener('keydown', (e) => { if (e.key === 'Enter') pick(); });
+  });
 }
 
 document.addEventListener('tabshown', (e) => {
@@ -1590,18 +1719,24 @@ document.addEventListener('DOMContentLoaded', () => {
 // ───────────────────────── quant lab (terminal panel) ─────────────────────────
 // Risk metrics + technical-indicator mini-chart, computed client-side from
 // /api/chart 1Y daily closes — no new server endpoints needed.
-let spyClosesCache = null; // benchmark series, fetched once per session
 let quantDailyPoints = null; // last-loaded 1Y daily points for the active symbol
 let quantActiveInd = null;   // 'boll' | 'rsi' | 'macd' | null
 
-async function getSpyCloses() {
-  if (spyClosesCache) return spyClosesCache;
+// Benchmark closes for the ACTIVE market (SPY for US, NIFTY 50 for India), cached per
+// market so a mode switch can never compute an Indian beta against SPY.
+async function getBenchmarkCloses() {
+  const marketId = Market.id;
+  const bench = Market.def().quantBenchmark;
+  const label = $('qrBetaLabel'); if (label) label.textContent = `Beta vs ${bench.label}`;
+  if (benchmarkClosesCache[marketId]) return benchmarkClosesCache[marketId];
   try {
-    const data = await getJSON('/api/chart?symbol=SPY&range=1Y');
-    if (data.points && data.points.length > 5) spyClosesCache = data.points.map((p) => p.c);
+    const data = await getJSON(`/api/chart?symbol=${encodeURIComponent(bench.symbol)}&range=1Y&market=${marketId}`);
+    if (data.market && data.market !== marketId) return null;
+    if (data.points && data.points.length > 5) benchmarkClosesCache[marketId] = data.points.map((p) => p.c);
   } catch {}
-  return spyClosesCache;
+  return benchmarkClosesCache[marketId] || null;
 }
+const getSpyCloses = getBenchmarkCloses; // legacy name
 
 async function loadQuantPanel(symbol) {
   const msg = $('quantMsg');
@@ -1615,8 +1750,8 @@ async function loadQuantPanel(symbol) {
 
   try {
     const [data, spyCloses] = await Promise.all([
-      getJSON(`/api/chart?symbol=${encodeURIComponent(symbol)}&range=1Y`),
-      getSpyCloses(),
+      getJSON(`/api/chart?symbol=${encodeURIComponent(symbol)}&range=1Y${Market.qs()}`),
+      getBenchmarkCloses(),
     ]);
     if (state.symbol !== symbol) return;
     if (!data.points || data.points.length < 20) {
@@ -1737,6 +1872,17 @@ function setupQuantPanel() {
 
 // ───────────────────────── boot ─────────────────────────
 function boot() {
+  // Market context first: everything below is market-scoped.
+  let storedMarket = null;
+  try { storedMarket = localStorage.getItem(Shell ? Shell.MARKET_STORAGE_KEY : 'mt:market'); } catch { /* private mode */ }
+  const startMarket = new URLSearchParams(location.search).get('market') || storedMarket;
+  setMarket(startMarket, { persist: Boolean(startMarket), reload: false });
+  getJSON('/api/market').then((cat) => {
+    Market.catalog = cat;
+    tickClock();
+    if (currentView === 'markets') { renderMarketRegistry(); loadMarkets(true); }
+  }).catch(() => { /* fallback definitions keep the shell usable */ });
+
   tickClock();
   setInterval(tickClock, 1000);
 
@@ -1788,10 +1934,10 @@ function boot() {
   if (startTarget) navigateTo(startTarget, { pushHash: false });
   else if (startTab) showView(startTab === 'analysis' ? 'sectors' : startTab);
 
-  // Auto-load the last viewed symbol (or AAPL) so the terminal never opens empty.
+  // Auto-load the last viewed symbol for the active market so the terminal never opens empty.
   let lastSym = null;
-  try { lastSym = localStorage.getItem('mt:lastSymbol'); } catch { /* private mode */ }
-  loadSymbol(lastSym || 'AAPL');
+  try { lastSym = localStorage.getItem(Shell ? Shell.lastSymbolKey(Market.id) : 'mt:lastSymbol'); } catch { /* private mode */ }
+  loadSymbol(lastSym || Market.def().defaultSymbol);
 
   // Redraw chart on resize (debounced).
   let resizeTimer = null;
@@ -1827,7 +1973,7 @@ async function loadSentiment() {
   sentScore.textContent = '';
 
   let d;
-  try { d = await getJSON('/api/sentiment/market'); }
+  try { d = await getJSON('/api/sentiment/market?market=' + encodeURIComponent(Market.id)); if (d.market && d.market !== Market.id) return; }
   catch {
     sentSummary.textContent = 'Sentiment unavailable.';
     const coverage = $('sentTweets');

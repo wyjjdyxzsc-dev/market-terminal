@@ -44,12 +44,23 @@ test('reserved workspaces (Portfolio) can never resolve to a view', () => {
   assert.equal(shell.enabledTargets().includes('portfolio'), false);
 });
 
-test('market-mode registry exposes exactly one active market during QUARTZ', () => {
+test('market-mode registry exposes US and India as first-class markets (TWINCORE)', () => {
   const active = shell.MARKETS.filter((m) => m.active);
-  assert.deepEqual(active.map((m) => m.id), ['US']);
+  assert.deepEqual(active.map((m) => m.id), ['US', 'IN']);
   const india = shell.MARKETS.find((m) => m.id === 'IN');
-  assert.equal(india.active, false);
-  assert.match(india.note, /MT2-3/);
+  assert.equal(india.currency, 'INR');
+  assert.equal(india.tzLabel, 'IST');
+  assert.equal(india.defaultSymbol, 'RELIANCE');
+});
+
+test('market persistence resolves safely and keeps the legacy US symbol key', () => {
+  assert.equal(shell.resolveMarketId('IN'), 'IN');
+  assert.equal(shell.resolveMarketId('in'), 'IN');
+  assert.equal(shell.resolveMarketId(null), 'US');
+  assert.equal(shell.resolveMarketId('XX'), 'US', 'unknown stored value never breaks boot');
+  assert.equal(shell.lastSymbolKey('US'), 'mt:lastSymbol');
+  assert.equal(shell.lastSymbolKey('IN'), 'mt:lastSymbol:IN');
+  assert.equal(shell.MARKET_STORAGE_KEY, 'mt:market');
 });
 
 test('research and intelligence group the existing surfaces without dropping any', () => {

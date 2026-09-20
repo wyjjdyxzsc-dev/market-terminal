@@ -169,3 +169,39 @@ Do not pre-decide future architecture; add records only when a real decision is 
   `Config/Local.xcconfig`.
 - STATUS: ACCEPTED (engineering default under the POCKET authorization; OWNER may override the
   bundle id via `Config/Local.xcconfig`).
+
+## D-009 · 2026-09-20 · MT2-3 · Market identity architecture (US / India)
+- DECISION: one canonical market core (`shared/market-core.js`, schema `2026-09-20a`) shared by
+  Express, the Worker and the browser (via `/api/market`). A market is `{ id, currency, locale,
+  timezone, exchanges, defaultExchange, session, calendar, tape, benchmarks, sentimentBenchmarks,
+  quantBenchmark, indexSymbols, providerSuffix, sentimentFeeds }`. An instrument identity is
+  `{ market, exchange, symbol, kind, canonical: 'MKT:EXCH:SYMBOL', currency, provider: { yahoo,
+  finnhub, nasdaq } }`; provider suffixes (`.NS`, `.BO`) exist only in `provider.*`, never in
+  `symbol`/`canonical`. US uses the consolidated-tape marker `US` as its exchange segment
+  (`US:US:AAPL`) because listing venue is only known after a profile loads; India defaults to NSE
+  (`IN:NSE:RELIANCE`, `IN:BSE:…` when `.BO`/`BSE:` is given).
+- DATA TRUTH: `REALTIME | DELAYED | SNAPSHOT | EOD | CACHED | LAST_GOOD | UNAVAILABLE` with fixed
+  precedence; the provider capability matrix gives the ceiling per provider × market and runtime
+  state only downgrades. Verified matrix: Finnhub = US quotes/stream/profile/metrics/news + global
+  search; Yahoo (keyless) = DELAYED quotes/charts for both markets incl. ^NSEI/^BSESN/^NSEBANK/
+  ^INDIAVIX; Nasdaq = US charts/options only; keyed fallbacks = US only as configured.
+- CACHE IDENTITY: every quote/chart/ticker/sentiment/deep-dive key carries the market
+  (`quote:IN:NSE:RELIANCE`, `chart:IN:BSE:TCS:1D`, `ticker:<schema>:IN`, `sentiment:market:IN`,
+  `deepdive:…:IN:<q>`); `cacheKey()` throws on a market-less identity.
+- API CONTRACT: `?market=US|IN` on quote/chart/search/ticker/profile/metrics/news/sentiment/
+  deepdive; omitted → US (backward compatible); a suffixed symbol infers its market. New
+  `/api/market` (catalog + live session state + matrix). Capabilities a market lacks return
+  `200 { unavailable: true, truth: 'UNAVAILABLE', reason }` instead of a provider error.
+- CALENDARS: embedded NYSE 2025–2027 (moved from app.js) and NSE 2026 weekday holidays; the
+  NSE list is marked "verify against the current NSE circular" in the payload (B-024).
+- WHY: the brief's invariants (no SPY under India, INR never as USD, no NYSE holidays for NSE,
+  no market-less cache keys, no suffix leakage, no delayed-as-realtime) are only enforceable
+  from one shared definition with negative-control tests, not from per-runtime strings.
+- ALTERNATIVES: (a) suffix-only routing (`RELIANCE.NS` everywhere) — rejected: leaks provider
+  spelling into identity and cache keys; (b) per-market frontend forks — rejected: QUARTZ is one
+  shell; (c) an India-specific provider (NSE site API) — rejected: undocumented, cookie-gated,
+  unverified; Yahoo from Cloudflare is the only empirically working keyless source today.
+- CONSEQUENCES: Deep Dive schema `2026-09-20a` carries a measured `market` block; the renderer
+  and dossier summary format prices with the market's currency symbol; the terminal quant panel's
+  beta benchmark is per market; the live trade stream is US-only (Finnhub cannot carry NSE/BSE).
+- STATUS: ACCEPTED

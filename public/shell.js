@@ -44,12 +44,32 @@
     { id: 'alerts',       label: 'Alerts',       view: 'alerts' },
   ]);
 
-  // Global market-mode registry. Only US carries data during QUARTZ; every other
-  // entry is a shell reservation for MT2-3 TWINCORE and is rendered disabled.
+  // Global market-mode registry (MT2-3 TWINCORE). Both markets are first-class; the
+  // canonical definitions (currency, calendar, benchmarks, provider matrix) live in
+  // shared/market-core.js and reach the browser through /api/market. The shell only
+  // needs identity, labels and persistence.
   const MARKETS = Object.freeze([
-    { id: 'US', label: 'US',    active: true,  session: 'NYSE · Nasdaq · ET' },
-    { id: 'IN', label: 'India', active: false, note: 'Not yet active — market context arrives with MT2-3 TWINCORE.' },
+    { id: 'US', label: 'US',    active: true, session: 'NYSE · Nasdaq · ET', currency: 'USD', tzLabel: 'ET',  defaultSymbol: 'AAPL' },
+    { id: 'IN', label: 'India', active: true, session: 'NSE · BSE · IST',    currency: 'INR', tzLabel: 'IST', defaultSymbol: 'RELIANCE' },
   ]);
+  const DEFAULT_MARKET = 'US';
+  const MARKET_STORAGE_KEY = 'mt:market';
+
+  function market(id) {
+    const key = String(id || '').trim().toUpperCase();
+    return MARKETS.find((m) => m.id === key && m.active) || null;
+  }
+
+  /** Persisted selection → market id (falls back to US; never returns an inactive market). */
+  function resolveMarketId(stored) {
+    const m = market(stored);
+    return m ? m.id : DEFAULT_MARKET;
+  }
+
+  /** Per-market last-symbol storage key. US keeps the legacy key so existing users keep their symbol. */
+  function lastSymbolKey(marketId) {
+    return resolveMarketId(marketId) === 'US' ? 'mt:lastSymbol' : `mt:lastSymbol:${resolveMarketId(marketId)}`;
+  }
 
   const DEFAULT_WORKSPACE = 'terminal';
 
@@ -137,6 +157,11 @@
     SHELL_CONTRACT_VERSION,
     WORKSPACES,
     MARKETS,
+    DEFAULT_MARKET,
+    MARKET_STORAGE_KEY,
+    market,
+    resolveMarketId,
+    lastSymbolKey,
     DEFAULT_WORKSPACE,
     workspace,
     isEnabled,

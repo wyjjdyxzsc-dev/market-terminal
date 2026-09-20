@@ -39,6 +39,7 @@ const mapProvenanceCore = require('./shared/map-provenance-core.js');
 const aiProviderRegistry = require('./shared/ai-provider-registry.js');
 const aiVerificationCore = require('./shared/ai-verification-core.js');
 const aiTaskPolicyCore = require('./shared/ai-task-policy-core.js');
+const marketCore = require('./shared/market-core.js');
 
 // Optional WebSocket for Finnhub live feed.  npm i ws  to enable.
 let WS;
@@ -706,7 +707,7 @@ async function _quoteFinnhub(symbol) {
   if (!r.ok) return null;
   const q = await r.json();
   if (!q || (!q.c && !q.pc)) return null;
-  return { c: q.c, d: q.d, dp: q.dp, h: q.h, l: q.l, o: q.o, pc: q.pc, src: 'finnhub' };
+  return { c: q.c, d: q.d, dp: q.dp, h: q.h, l: q.l, o: q.o, pc: q.pc, t: q.t || undefined, src: 'finnhub' };
 }
 
 async function _quoteTwelveData(symbol) {
@@ -790,7 +791,7 @@ async function _quoteYahoo(symbol) {
     if (!meta?.regularMarketPrice) return null;
     const c  = meta.regularMarketPrice;
     const pc = meta.chartPreviousClose || meta.previousClose || null;
-    return { c, d: pc ? c - pc : null, dp: pc ? ((c - pc) / pc) * 100 : null, h: meta.regularMarketDayHigh || c, l: meta.regularMarketDayLow || c, o: meta.regularMarketOpen || c, pc, src: 'yahoo' };
+    return { c, d: pc ? c - pc : null, dp: pc ? ((c - pc) / pc) * 100 : null, h: meta.regularMarketDayHigh || c, l: meta.regularMarketDayLow || c, o: meta.regularMarketOpen || c, pc, t: meta.regularMarketTime || undefined, src: 'yahoo' };
   } catch { return null; }
 }
 
@@ -800,31 +801,92 @@ const QUOTE_CASCADE = [
   _quoteTwelveData, _quoteFMP, _quoteAlphaVantage, _quotePolygon, _quoteYahoo,
 ];
 
-/**
- * getQuote(symbol) — unified entry point.
- * Checks WS cache → KV REST cache → REST cascade.
- */
-async function getQuote(symbol) {
-  const sym = symbol.toUpperCase();
+// Provider name per cascade slot, used to consult the market capability matrix.
+const QUOTE_PROVIDER_NAME = new Map([
+  [_quoteFinnhub, 'finnhub'], [_quoteTwelveData, 'twelvedata'], [_quoteFMP, 'fmp'],
+  [_quoteAlphaVantage, 'alphavantage'], [_quotePolygon, 'polygon'], [_quoteYahoo, 'yahoo'],
+]);
 
-  // 1. Finnhub WS live cache (sub-5 s)
-  const ws = _wsQuoteCache.get(sym);
-  if (ws && Date.now() - ws.t < 5000) return ws;
+/** Attach the canonical market envelope + data truth to a raw pooled quote. */
+function decorateQuote(identity, q, { fromCache = false, lastGood = false } = {}) {
+  if (!q) return q;
+  const asOf = q.t ? Number(q.t) * 1000 : (q.asOf || Date.now());
+  const truth = marketCore.classifyDataTruth({
+    provider: q.src, market: identity.market, price: q.c, asOf, fromCache, lastGood,
+  });
+  return {
+    ...q,
+    asOf,
+    market: identity.market,
+    exchange: identity.exchange,
+    symbol: identity.symbol,
+    canonical: identity.canonical,
+    currency: identity.currency,
+    providerSymbol: identity.provider.yahoo,
+    truth,
+    marketSchemaVersion: marketCore.MARKET_SCHEMA_VERSION,
+  };
+}
+
+/**
+ * getQuote(symbolOrIdentity) — unified entry point.
+ * Accepts a raw symbol ('AAPL', 'RELIANCE.NS', '^NSEI') or a market-core identity.
+ * Checks WS cache (US only) → KV REST cache (market-scoped key) → REST cascade filtered by
+ * the provider capability matrix, so an Indian instrument never hits a US-only provider.
+ */
+async function getQuote(symbolOrIdentity, marketHint) {
+  const identity = typeof symbolOrIdentity === 'string'
+    ? marketCore.parseInstrument(symbolOrIdentity, marketHint)
+    : symbolOrIdentity;
+  if (!identity) throw new Error('No quote available: unrecognised symbol.');
+  const providerSym = identity.provider.yahoo; // suffix form shared by every provider here
+  const key = marketCore.cacheKey('quote', identity);
+
+  // 1. Finnhub WS live cache (sub-5 s) — US only; the stream cannot carry NSE/BSE.
+  if (identity.market === 'US') {
+    const ws = _wsQuoteCache.get(identity.symbol);
+    if (ws && Date.now() - ws.t < 5000) return decorateQuote(identity, ws);
+  }
 
   // 2. KV REST cache (5 s TTL)
-  const cached = kvGet(`quote:${sym}`);
-  if (cached) return cached;
+  const cached = kvGet(key);
+  if (cached) return decorateQuote(identity, cached, { fromCache: true });
 
-  // 3. Serial REST cascade
+  // 3. Serial REST cascade, capability-filtered per market.
   for (const fetcher of QUOTE_CASCADE) {
+    const name = QUOTE_PROVIDER_NAME.get(fetcher);
+    if (!marketCore.providerTruth(name, identity.market, 'quote')) continue;
     try {
-      const q = await fetcher(sym);
-      if (q && q.c) { kvPut(`quote:${sym}`, q, TTL.QUOTE); return q; }
+      const q = await fetcher(providerSym);
+      if (q && q.c) { kvPut(key, q, TTL.QUOTE); return decorateQuote(identity, q); }
     } catch (err) {
       console.error(`[quote] ${fetcher.name} failed:`, err.message);
     }
   }
-  throw new Error(`No quote available for ${sym} from any provider.`);
+  throw new Error(`No quote available for ${identity.canonical} from any configured provider.`);
+}
+
+/** Resolve `?symbol=&market=` into a canonical identity (null when absent/invalid). */
+function requestInstrument(req) {
+  const symbol = String(req.query.symbol || '').trim();
+  if (!symbol) return null;
+  return marketCore.parseInstrument(symbol, req.query.market);
+}
+
+/** Truthful 200 payload for provider capabilities that do not cover the market. */
+function marketUnavailable(identity, capability, provider = 'finnhub') {
+  return {
+    unavailable: true,
+    truth: marketCore.DATA_TRUTH.UNAVAILABLE,
+    market: identity.market,
+    exchange: identity.exchange,
+    symbol: identity.symbol,
+    canonical: identity.canonical,
+    capability,
+    provider,
+    reason: `${provider} does not serve ${capability} for ${identity.exchange}/${identity.market} on the configured tier.`,
+    marketSchemaVersion: marketCore.MARKET_SCHEMA_VERSION,
+  };
 }
 
 // ── 4c: Finnhub REST wrapper (for non-quote endpoints) ────────────────────
@@ -986,22 +1048,47 @@ function countOhlcPoints(points) {
   ).length;
 }
 
-async function getChart(symbol, rangeKey, options = {}) {
+/** Market envelope for chart payloads: identity, currency, truth and the session window. */
+function decorateChart(identity, data, src) {
+  const points = data.points || [];
+  const last = points.length ? points[points.length - 1].t : Date.now();
+  const bounds = marketCore.sessionBoundsUTC(identity.market, last);
+  return {
+    ...data,
+    source: src,
+    market: identity.market,
+    exchange: identity.exchange,
+    symbol: identity.symbol,
+    canonical: identity.canonical,
+    currency: (data.meta && data.meta.currency) || identity.currency,
+    truth: marketCore.providerTruth(src, identity.market, 'chart') || marketCore.DATA_TRUTH.SNAPSHOT,
+    session: { openUTC: bounds.openUTC, closeUTC: bounds.closeUTC, timezone: bounds.timezone, tzLabel: bounds.tzLabel, localDate: bounds.localDate },
+    marketSchemaVersion: marketCore.MARKET_SCHEMA_VERSION,
+  };
+}
+
+async function getChart(symbolOrIdentity, rangeKey, options = {}) {
+  const identity = typeof symbolOrIdentity === 'string'
+    ? marketCore.parseInstrument(symbolOrIdentity, options.market)
+    : symbolOrIdentity;
+  if (!identity) throw new Error('No chart data available: unrecognised symbol.');
   const requireOhlc = options.requireOhlc === true;
-  const order = rangeKey === '1D'
-    ? ['yahoo', 'nasdaq']
+  // Nasdaq is a US-only source (capability matrix); India charts come from Yahoo alone.
+  const sources = ['yahoo', 'nasdaq'].filter((src) => marketCore.providerTruth(src, identity.market, 'chart'));
+  const order = rangeKey === '1D' || !sources.includes('nasdaq')
+    ? sources
     : (preferredChartSource === 'nasdaq' ? ['nasdaq', 'yahoo'] : ['yahoo', 'nasdaq']);
   let lastErr;
   for (const src of order) {
     try {
       const data = src === 'yahoo'
-        ? await chartFromYahoo(symbol, rangeKey)
-        : await chartFromNasdaq(symbol, rangeKey);
+        ? await chartFromYahoo(identity.provider.yahoo, rangeKey)
+        : await chartFromNasdaq(identity.provider.nasdaq, rangeKey);
       const hasEnoughPoints = data.points?.length >= 2;
       const hasEnoughOhlc = !requireOhlc || countOhlcPoints(data.points) >= 3;
       if (hasEnoughPoints && hasEnoughOhlc) {
-        preferredChartSource = src;
-        return { ...data, source: src };
+        if (identity.market === 'US') preferredChartSource = src;
+        return decorateChart(identity, data, src);
       }
       lastErr = !hasEnoughPoints
         ? new Error(`${src} returned too few points`)
@@ -1123,6 +1210,14 @@ const WORLD_FEEDS = [
 
 async function fetchMarketHeadlines() {
   const lists = await Promise.all(MARKET_FEEDS.map(u => fetchFeed(u, 18)));
+  return mergeHeadlines(lists).slice(0, 32);
+}
+
+/** Market-scoped headline pull for sentiment (feeds from shared/market-core.js). */
+async function fetchMarketHeadlinesFor(marketId) {
+  const m = marketCore.market(marketId);
+  if (!m || m.id === 'US') return fetchMarketHeadlines();
+  const lists = await Promise.all(m.sentimentFeeds.map(u => fetchFeed(u, 18)));
   return mergeHeadlines(lists).slice(0, 32);
 }
 
@@ -1699,28 +1794,41 @@ async function fetchSupplyChain(query) {
   );
 }
 
-async function fetchDeepDive(query) {
-  let ticker  = /^[A-Z.]{1,6}$/.test(query) ? query.toUpperCase() : '';
-  if (!ticker) {
+async function fetchDeepDive(query, marketId = 'US') {
+  const mkt = marketCore.market(marketId) || marketCore.market('US');
+  const symbolLike = mkt.id === 'IN' ? /^[A-Z0-9&.-]{1,12}$/ : /^[A-Z.]{1,6}$/;
+  let identity = symbolLike.test(query.toUpperCase()) ? marketCore.parseInstrument(query, mkt.id) : null;
+  if (identity && identity.market !== mkt.id) identity = null; // e.g. AAPL typed into the India context
+  if (!identity) {
     try {
       const s   = await finnhub('/search', { q: query });
-      const hit = (s.result || []).find(r => r.symbol && !r.symbol.includes('.'));
-      if (hit) ticker = hit.symbol.toUpperCase();
+      const hit = normalizeSearchResults(s && s.result, mkt.id)[0];
+      if (hit) identity = marketCore.parseInstrument(hit.canonical);
     } catch {}
   }
-  if (!ticker) throw new Error('Could not resolve a US-listed ticker for that company.');
+  if (!identity) throw new Error(`Could not resolve a ${mkt.exchangeLabel}-listed ticker for that company.`);
+  const ticker = identity.symbol;
+  const caps = marketCore.PROVIDER_CAPABILITIES.finnhub[mkt.id];
 
   const [profile, quote, metricData, recs, headlines] = await Promise.all([
-    finnhub('/stock/profile2', { symbol: ticker }).catch(() => ({})),
-    getQuote(ticker).catch(() => null),
-    finnhub('/stock/metric',   { symbol: ticker, metric: 'all' }).catch(() => ({})),
-    finnhub('/stock/recommendation', { symbol: ticker }).catch(() => []),
-    fetchCompanyHeadlines(ticker, 16),
+    caps.profile ? finnhub('/stock/profile2', { symbol: ticker }).catch(() => ({})) : Promise.resolve({}),
+    getQuote(identity).catch(() => null),
+    caps.metrics ? finnhub('/stock/metric',   { symbol: ticker, metric: 'all' }).catch(() => ({})) : Promise.resolve({}),
+    caps.metrics ? finnhub('/stock/recommendation', { symbol: ticker }).catch(() => []) : Promise.resolve([]),
+    fetchCompanyHeadlines(mkt.id === 'IN' ? `${ticker} NSE` : ticker, 16),
   ]);
 
   const m   = (metricData && metricData.metric) || {};
   const rec = Array.isArray(recs) && recs.length ? recs[0] : null;
-  const optionsChain = await getOptionsChain(ticker, quote && quote.c);
+  const optionsChain = identity.provider.nasdaq
+    ? await getOptionsChain(ticker, quote && quote.c)
+    : unavailableOptionsChain(ticker, `Options chain data is not available for ${mkt.exchangeLabel} listings from the configured providers.`, new Date().toISOString());
+  const marketContext = {
+    id: mkt.id, exchange: identity.exchange, exchangeLabel: mkt.exchangeLabel, currency: mkt.currency,
+    currencySymbol: mkt.currencySymbol, tzLabel: mkt.tzLabel, canonical: identity.canonical,
+    quoteTruth: quote ? quote.truth : marketCore.DATA_TRUTH.UNAVAILABLE,
+    limitations: mkt.id === 'IN' ? ['fundamentals', 'analyst consensus', 'options chain', 'provider company news'] : [],
+  };
   const preparation = prepareAiTask('intel.deep-dive', headlines, {
     inputs: {
       quote: Boolean(quote && Number(quote.c) > 0),
@@ -1735,6 +1843,7 @@ async function fetchDeepDive(query) {
     recommendation: rec,
     evidence: preparation.evidence,
     optionsChain,
+    market: marketContext,
   });
   const fallback = (reason) => policyAbstention(preparation, reason, {
     ...baseline,
@@ -1743,7 +1852,7 @@ async function fetchDeepDive(query) {
   });
   if (!preparation.canGenerate) return fallback('The current evidence did not meet the deep-dive grounding policy.');
   const dataBlock =
-    `LIVE DATA for ${profile.name || ticker} (${ticker}):\n` +
+    `LIVE DATA for ${profile.name || ticker} (${ticker}) — market ${mkt.name}, exchange ${identity.exchange}, currency ${mkt.currency}; all prices below are ${mkt.currency} and the quote is ${marketContext.quoteTruth}:\n` +
     `- Price: ${quote?.c ?? 'N/A'} (change ${quote?.d ?? 'N/A'}, ${quote?.dp ?? 'N/A'}% today)\n` +
     `- Day range: ${quote?.l ?? '?'}-${quote?.h ?? '?'}; Prev close ${quote?.pc ?? '?'}\n` +
     `- 52-week range: ${m['52WeekLow'] ?? '?'}–${m['52WeekHigh'] ?? '?'}\n` +
@@ -3448,27 +3557,43 @@ const adminRateLimit = makeRateLimit('admin');
 
 // ── Market data ────────────────────────────────────────────────────────────
 
+app.get('/api/market', publicRateLimit, route(async (req, res) => {
+  const now = new Date();
+  const id = String(req.query.id || '').trim();
+  if (id) {
+    const m = marketCore.market(id);
+    if (!m) return res.status(404).json({ error: `unknown market ${id}`, markets: marketCore.MARKET_IDS });
+    const cat = marketCore.catalog(now);
+    return res.json({ marketSchemaVersion: cat.marketSchemaVersion, market: cat.markets.find((x) => x.id === m.id), providers: cat.providers, dataTruth: cat.dataTruth, generatedAt: cat.generatedAt });
+  }
+  res.json(marketCore.catalog(now));
+}));
+
 app.get('/api/quote', publicRateLimit, route(async (req, res) => {
-  if (!requireFinnhub(res)) return;
-  const symbol = String(req.query.symbol || '').toUpperCase();
-  if (!symbol) return res.status(400).json({ error: 'symbol is required' });
-  wsSubscribe(symbol);
-  const q = await getQuote(symbol);
+  const identity = requestInstrument(req);
+  if (!identity) return res.status(400).json({ error: 'symbol is required' });
+  // US quotes need a keyed provider; India rides the keyless Yahoo fallback (capability matrix).
+  if (identity.market === 'US' && !requireFinnhub(res)) return;
+  if (identity.market === 'US') wsSubscribe(identity.symbol);
+  const q = await getQuote(identity);
   res.json(q);
 }));
 
 app.get('/api/profile', publicRateLimit, route(async (req, res) => {
+  const identity = requestInstrument(req);
+  if (!identity) return res.status(400).json({ error: 'symbol is required' });
+  if (!marketCore.PROVIDER_CAPABILITIES.finnhub[identity.market].profile) return res.json(marketUnavailable(identity, 'profile'));
   if (!requireFinnhub(res)) return;
-  const symbol = String(req.query.symbol || '').toUpperCase();
-  if (!symbol) return res.status(400).json({ error: 'symbol is required' });
-  const p = await finnhub('/stock/profile2', { symbol });
-  res.json(p);
+  const p = await finnhub('/stock/profile2', { symbol: identity.symbol });
+  res.json({ ...p, market: identity.market, currency: p.currency || identity.currency });
 }));
 
 app.get('/api/metrics', publicRateLimit, route(async (req, res) => {
+  const identity = requestInstrument(req);
+  if (!identity) return res.status(400).json({ error: 'symbol is required' });
+  if (!marketCore.PROVIDER_CAPABILITIES.finnhub[identity.market].metrics) return res.json(marketUnavailable(identity, 'metrics'));
   if (!requireFinnhub(res)) return;
-  const symbol = String(req.query.symbol || '').toUpperCase();
-  if (!symbol) return res.status(400).json({ error: 'symbol is required' });
+  const symbol = identity.symbol;
   const data = await finnhub('/stock/metric', { symbol, metric: 'all' });
   const m    = (data && data.metric) || {};
   res.json({
@@ -3479,9 +3604,11 @@ app.get('/api/metrics', publicRateLimit, route(async (req, res) => {
 }));
 
 app.get('/api/news', publicRateLimit, route(async (req, res) => {
+  const identity = requestInstrument(req);
+  if (!identity) return res.status(400).json({ error: 'symbol is required' });
+  if (!marketCore.PROVIDER_CAPABILITIES.finnhub[identity.market].news) return res.json(marketUnavailable(identity, 'news'));
   if (!requireFinnhub(res)) return;
-  const symbol = String(req.query.symbol || '').toUpperCase();
-  if (!symbol) return res.status(400).json({ error: 'symbol is required' });
+  const symbol = identity.symbol;
   const items = await finnhub('/company-news', { symbol, from: isoDaysAgo(30), to: isoDaysAgo(0) });
   const list  = Array.isArray(items) ? items : [];
   res.json(list.slice(0, 15).map(n => ({
@@ -3490,45 +3617,87 @@ app.get('/api/news', publicRateLimit, route(async (req, res) => {
   })));
 }));
 
+/**
+ * Market-aware search over Finnhub's global symbol index. US keeps the historical
+ * "no dotted symbols" filter; India keeps only NSE/BSE listings and maps them onto the
+ * canonical identity (the `.NS`/`.BO` suffix stays in `providerSymbol`).
+ */
+function normalizeSearchResults(raw, marketId) {
+  const list = Array.isArray(raw) ? raw : [];
+  const out = [];
+  const seen = new Set();
+  for (const r of list) {
+    if (!r || !r.symbol) continue;
+    let identity;
+    if (marketId === 'IN') {
+      if (!/\.(NS|BO)$/i.test(r.symbol)) continue;
+      identity = marketCore.parseInstrument(r.symbol, 'IN');
+    } else {
+      if (r.symbol.includes('.')) continue;
+      identity = marketCore.parseInstrument(r.symbol, 'US');
+    }
+    if (!identity || identity.market !== marketId || seen.has(identity.canonical)) continue;
+    seen.add(identity.canonical);
+    out.push({
+      description: r.description, displaySymbol: identity.display, symbol: identity.symbol, type: r.type,
+      market: identity.market, exchange: identity.exchange, canonical: identity.canonical,
+      providerSymbol: identity.provider.finnhub, currency: identity.currency,
+    });
+    if (out.length >= 12) break;
+  }
+  return out;
+}
+
 app.get('/api/search', publicRateLimit, route(async (req, res) => {
   if (!requireFinnhub(res)) return;
   const q = String(req.query.q || '').trim();
-  if (!q) return res.json({ result: [] });
+  const marketId = marketCore.resolveMarketId(req.query.market);
+  if (!q) return res.json({ result: [], market: marketId });
   const data   = await finnhub('/search', { q });
-  const result = (data && Array.isArray(data.result) ? data.result : [])
-    .filter(r => r.symbol && !r.symbol.includes('.'))
-    .slice(0, 12)
-    .map(r => ({ description: r.description, displaySymbol: r.displaySymbol, symbol: r.symbol, type: r.type }));
-  res.json({ result });
+  res.json({ result: normalizeSearchResults(data && data.result, marketId), market: marketId });
 }));
 
-const _tickerLastGood = new Map();
+const _tickerLastGood = new Map(); // key: `${market}:${symbol}`
 
-async function loadTickerBasket() {
+async function loadTickerBasket(marketId = 'US') {
+  const m = marketCore.market(marketId) || marketCore.market('US');
+  const basket = m.tape;
   const currentQuotes = {};
-  await Promise.all(DEFAULT_TICKER_BASKET.map(async (symbol) => {
-    try { currentQuotes[symbol] = await getQuote(symbol); } catch { currentQuotes[symbol] = null; }
+  await Promise.all(basket.map(async (symbol) => {
+    try { currentQuotes[symbol] = await getQuote(marketCore.parseInstrument(symbol, m.id)); } catch { currentQuotes[symbol] = null; }
   }));
-  const items = mergeTickerBasket(DEFAULT_TICKER_BASKET, currentQuotes, [..._tickerLastGood.values()]);
+  const previous = [...basket].map((symbol) => _tickerLastGood.get(`${m.id}:${symbol}`)).filter(Boolean);
+  const items = mergeTickerBasket(basket, currentQuotes, previous).map((item) => {
+    const q = currentQuotes[item.symbol];
+    return {
+      ...item,
+      market: m.id,
+      currency: m.currency,
+      truth: item.available
+        ? (item.stale ? marketCore.DATA_TRUTH.LAST_GOOD : (q && q.truth) || marketCore.DATA_TRUTH.SNAPSHOT)
+        : marketCore.DATA_TRUTH.UNAVAILABLE,
+    };
+  });
   for (const item of items) {
-    if (item.available && !item.stale) _tickerLastGood.set(item.symbol, item);
+    if (item.available && !item.stale) _tickerLastGood.set(`${m.id}:${item.symbol}`, item);
   }
   return items;
 }
 
 app.get('/api/ticker', publicRateLimit, route(async (req, res) => {
-  const { data } = await fetch_cached_data(`ticker:${TICKER_SCHEMA_VERSION}`, loadTickerBasket, 15);
+  const marketId = marketCore.resolveMarketId(req.query.market);
+  const { data } = await fetch_cached_data(`ticker:${TICKER_SCHEMA_VERSION}:${marketId}`, () => loadTickerBasket(marketId), 15);
   res.json(data);
 }));
 
 app.get('/api/chart', publicRateLimit, route(async (req, res) => {
-  const symbol   = String(req.query.symbol || '').toUpperCase();
-  if (!symbol) return res.status(400).json({ error: 'symbol is required' });
+  const identity = requestInstrument(req);
+  if (!identity) return res.status(400).json({ error: 'symbol is required' });
   const rangeKey = String(req.query.range || '1D').toUpperCase();
   if (!YAHOO_RANGE[rangeKey]) return res.status(400).json({ error: 'invalid range' });
   const { data } = await fetch_cached_data(
-    `chart:${symbol}:${rangeKey}`,
-    () => getChart(symbol, rangeKey),
+    marketCore.cacheKey('chart', identity, rangeKey),
+    () => getChart(identity, rangeKey),
     TTL.CHART
   );
   res.json(data);
@@ -3588,9 +3757,10 @@ app.get('/api/intel/deepdive', rateLimit, async (req, res) => {
   try {
     const query = (req.query.q || '').toString().trim().slice(0, 60);
     if (!query) return res.status(400).json({ error: true, message: 'Missing company name or ticker.' });
+    const marketId = marketCore.resolveMarketId(req.query.market);
     const { data, fresh } = await fetch_cached_data(
-      `intel:deepdive:${DEEP_DIVE_SCHEMA_VERSION}:${AI_TASK_POLICY_SCHEMA_VERSION}:${query.toLowerCase()}`,
-      () => fetchDeepDive(query), TTL.NEWS
+      `intel:deepdive:${DEEP_DIVE_SCHEMA_VERSION}:${AI_TASK_POLICY_SCHEMA_VERSION}:${marketId}:${query.toLowerCase()}`,
+      () => fetchDeepDive(query, marketId), TTL.NEWS
     );
     res.json({ cached: !fresh, ...data });
   } catch (err) {
@@ -3848,33 +4018,38 @@ const MARKET_SENTIMENT_BENCHMARKS = Object.freeze([
   { symbol: '^VIX', inverse: true },
 ]);
 
-async function fetchMarketSentiment() {
+async function fetchMarketSentiment(marketId = 'US') {
+  const m = marketCore.market(marketId) || marketCore.market('US');
   const [quoteResults, headlines] = await Promise.all([
-    Promise.allSettled(MARKET_SENTIMENT_BENCHMARKS.map(async (benchmark) => {
-      const quote = await getQuote(benchmark.symbol);
+    Promise.allSettled(m.sentimentBenchmarks.map(async (benchmark) => {
+      if (marketCore.isForeignBenchmark(m.id, benchmark.symbol)) throw new Error(`benchmark ${benchmark.symbol} does not belong to ${m.id}`);
+      const quote = await getQuote(marketCore.parseInstrument(benchmark.symbol, m.id));
       return {
         ...benchmark,
         changePercent: quote.dp,
         source: quote.src || 'unknown',
+        truth: quote.truth,
       };
     })),
-    fetchMarketHeadlines(),
+    fetchMarketHeadlinesFor(m.id),
   ]);
   const benchmarks = quoteResults
     .filter((result) => result.status === 'fulfilled')
     .map((result) => result.value)
     .filter((benchmark) => Number.isFinite(Number(benchmark.changePercent)));
 
-  return analyzeMarketSentiment({
+  const result = analyzeMarketSentiment({
     benchmarks,
     headlines: headlines.slice(0, 18),
     generatedAt: new Date().toISOString(),
   });
+  return { ...result, market: m.id, currency: m.currency, session: marketCore.sessionState(m.id), marketSchemaVersion: marketCore.MARKET_SCHEMA_VERSION };
 }
 
 async function handleMarketSentiment(req, res, deprecatedAlias = false) {
+  const marketId = marketCore.resolveMarketId(req.query.market);
   const { data, fresh } = await fetch_cached_data(
-    'sentiment:market', fetchMarketSentiment, TTL.NEWS
+    `sentiment:market:${marketId}`, () => fetchMarketSentiment(marketId), TTL.NEWS
   );
   if (deprecatedAlias) {
     res.set('Deprecation', 'true');

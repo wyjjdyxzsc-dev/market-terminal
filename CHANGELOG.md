@@ -1,5 +1,22 @@
 # Changelog
 
+## 2026-09-20 — MT2-3 TWINCORE
+
+- Added `shared/market-core.js`: canonical US / India market definitions (currency, locale,
+  timezone, exchanges, session, calendar, tape, benchmarks, sentiment universe, quant benchmark),
+  canonical instrument identity (`MKT:EXCH:SYMBOL`, provider suffixes kept out of identity),
+  market-scoped cache keys, session/calendar logic, money formatting, explicit data truth
+  (`REALTIME/DELAYED/SNAPSHOT/EOD/CACHED/LAST_GOOD/UNAVAILABLE`), and a verified provider
+  capability matrix.
+- Added `/api/market`; quote/chart/search/ticker/profile/metrics/news/sentiment/deepdive accept
+  `?market=US|IN` (omitted → US, backward compatible). Capabilities a market lacks return
+  `200 { unavailable: true, truth: 'UNAVAILABLE' }`. server.js / worker.js parity.
+- Frontend: global US / India selector (persisted), ET / IST clock and session status from each
+  market's own calendar, market-aware tape, benchmarks, sentiment, search, Deep Dive context and
+  quant benchmark (SPY vs NIFTY 50), INR formatting, currency chip and truth badge.
+- Tests: 18 market-core tests incl. six negative controls; Deep Dive INR render control (fixed a
+  hardcoded `$` in the dossier summary); 13 new smoke contracts. Assets `20260920h`.
+
 ## 2026-07-22
 
 - Extended the shared AI task-policy registry to sector analysis and company-news impact, requiring fresh source-diverse evidence, approved heavy providers, bounded citations, and structured abstention.

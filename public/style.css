@@ -207,6 +207,9 @@ canvas { max-width: none; }
 .autocomplete li { padding: 7px 10px; cursor: pointer; display: flex; justify-content: space-between; gap: var(--s-3); border-radius: var(--r-sm); }
 .autocomplete li:hover, .autocomplete li.active { background: var(--surface-selected); }
 .ac-sym { color: var(--text-primary); font-family: var(--font-data); font-weight: 600; }
+.ac-exch { font-size: var(--fs-label); color: var(--text-muted); font-weight: 500; margin-left: 4px; letter-spacing: .04em; }
+.quote-currency { font-size: var(--fs-label); color: var(--text-muted); letter-spacing: .06em; margin-left: 6px; }
+#qFresh { margin-left: 6px; vertical-align: middle; }
 .ac-desc { color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: right; flex: 1; font-size: var(--fs-label); }
 
 /* Session cluster */
@@ -517,6 +520,9 @@ canvas { max-width: none; }
 #mkRegistry .sym small { white-space: normal; }
 .mk-status { font-size: var(--fs-caption); }
 .mk-status.is-active { color: var(--positive); }
+.mk-status.is-available { color: var(--info); }
+#mkRegistryBody tr[data-market] { cursor: pointer; }
+#mkRegistryBody tr[data-market]:hover td { background: var(--surface-raised); }
 .mk-status.is-reserved { color: var(--text-muted); }
 
 /* Sentiment gauge (Markets) */

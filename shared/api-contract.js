@@ -2,6 +2,7 @@
   'use strict';
 
   const ROUTES = [
+    { path: '/api/market', methods: ['GET'], category: 'market', frontend: true },
     { path: '/api/quote', methods: ['GET'], category: 'market', frontend: true },
     { path: '/api/profile', methods: ['GET'], category: 'market', frontend: true },
     { path: '/api/metrics', methods: ['GET'], category: 'market', frontend: true },
