@@ -79,3 +79,12 @@ test('filterGraph bounds traversal depth and node count', () => {
   assert.deepEqual(graph.nodes.map((n) => n.id).sort(), ['US:NASDAQ:A', 'US:NASDAQ:B']);
   assert.equal(graph.edges.length, 1);
 });
+
+test('nexus-snapshot.js registry has no orphaned canonical ids and reports coverage', () => {
+  const snapshot = require('../shared/nexus-snapshot.js');
+  assert.ok(snapshot.companies.length > 1000, 'expected a large registry, not a curated subset');
+  for (const c of snapshot.companies.slice(0, 50)) {
+    assert.equal(c.id, `${c.market}:${c.exchange}:${c.symbol}`);
+  }
+  assert.ok(snapshot.coverage.byMarket.US, 'US market must be present in coverage');
+});
