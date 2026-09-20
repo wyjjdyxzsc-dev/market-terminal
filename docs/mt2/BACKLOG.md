@@ -211,3 +211,30 @@ accessibility/degraded-state defect · P3 minor.
   Dive AI narrative therefore also abstains (evidence gate + B-002).
 - SUGGESTED: evaluate a keyed India provider (or Yahoo quoteSummary with crumb handling) in a
   later data checkpoint; Yahoo search from Cloudflare is unverified (Finnhub search covers NSE).
+
+## B-028 · P2 · MAP · Remaining legacy curated overlays are unsourced
+- OBSERVATION: after ATLAS, `public/mapintel.js` still offers military bases, critical minerals,
+  tech HQs, cloud regions, financial centres, refugee hotspots, sanctions, startup hubs, GCC
+  funds, economic centres, internet exchanges and curated webcams from memory-typed tuples
+  (class `curated`, no per-object source). They are labelled LEGACY OVERLAYS, off by default.
+- SUGGESTED: migrate each to an ATLAS layer with a verifiable source (Wikidata items, official
+  registries) or retire it; NEXUS/WORLDWIRE own several of these domains.
+
+## B-029 · P2 · MAP · Facility datasets not yet ingested (fabs, refineries, mines, LNG, pipelines, cables)
+- OBSERVATION: ATLAS registers `industry-sites`, `energy-infrastructure`, `subsea-cables` with
+  `renders: false` because no licence-compatible open dataset with facility coordinates was
+  verified (GEM trackers need a data request; TeleGeography is CC BY-NC-SA; OSM ODbL extraction
+  is heavy). See D-010.
+- SUGGESTED: NEXUS ingests facilities with evidence per object (Wikidata P17/P625 per facility,
+  GEM after request, OSM extracts with ODbL attribution).
+
+## B-030 · P3 · MAP · Snapshot refresh is manual
+- OBSERVATION: `tools/atlas-build-snapshot.js` regenerates `shared/atlas-snapshot.js` (Wikidata
+  ~35 s/query, verification ~10 min); the snapshot's `generatedAt` is exposed in `/api/map/atlas`.
+- SUGGESTED: a scheduled Worker cron writing to KV with the committed snapshot as fallback.
+
+## B-031 · P3 · MAP · Wikidata coverage of NSE/BSE listings is thin
+- OBSERVATION: Wikidata records HQ coordinates for ~180 NSE companies versus ~2,000+ listed;
+  `/api/map/atlas` reports `coverage.companies.perMarket` truthfully. Not a fabrication risk,
+  a coverage limit.
+- SUGGESTED: NEXUS measures security-universe completeness and adds an India-specific source.

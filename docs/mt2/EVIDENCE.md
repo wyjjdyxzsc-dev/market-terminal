@@ -630,3 +630,65 @@ RESTART VERIFIED · HUMAN ACCEPTED
 - Production served nine `20260920i` refs. First `test:prod` run: 47/48 — `/api/map/weather`
   502 (upstream NWS transient, untouched by TWINCORE: `git diff 7d65fc0..HEAD -- worker.js`
   has zero `weather` hunks; direct probes went 502 → 200 → 200). Rerun: **48/48**.
+
+---
+
+## MT2-4 ATLAS — 2026-09-21 — start HEAD `cd28830` (canonical path `~/Developer/market-terminal`)
+
+### Pre-flight — iCloud safety (HUMAN-visible decision executed)
+- `~/Desktop/claude projects/market-terminal` is under iCloud Desktop (FileProvider xattrs); at
+  session start 211 tracked/untracked files and 185 `.git` objects were evicted again.
+- Relocated: `git clone https://github.com/wyjjdyxzsc-dev/market-terminal.git ~/Developer/market-terminal`
+  (HEAD `cd28830` = origin = old copy), copied `.env`, the three untracked owner files and the
+  git-ignored `ios/Config/Local.xcconfig`; `npm ci` (90 packages). No xattr `fileprovider` on
+  the new path. The old copy was not modified, reset, cleaned or deleted. Canonical working
+  path recorded in STATE.md.
+
+### Gates
+- Phase identity: MT2-4 ATLAS (OWNER brief; roadmap corrected in this checkpoint, D-010).
+  Change class: **MIXED** (STRUCTURAL shared core + datasets, BEHAVIORAL API/UI, TEST-ONLY,
+  DOCUMENTATION). Route from zero: claude-opus-5 / SERIAL / bypass — sufficient; no ROUTING STOP.
+
+### Current map audit (before replacement)
+- Architecture: two engines — Leaflet (`ships.js` bootstrap → `mapintel.js` overlay panel) and a
+  bespoke Web-Mercator canvas "Infrastructure" engine (`intel.js` WorldMapEngine) fed by
+  `/api/map/infrastructure`. A third renderer (`globe.js`) re-plots the same datasets on a globe.
+- Layers (33): live USGS/EONET/NWS/FIRMS/GDELT/ProMED/gpsjam/webcams/aircraft/instability;
+  22 curated point sets; three line sets (trade routes, cables, pipelines); day/night.
+- Sources: live feeds proxied with layer-level provenance (`shared/map-provenance-core.js`,
+  2026-07-15). Curated sets: `[name, lat, lon, note]` tuples **duplicated** in
+  `public/mapintel.js` (`DATA`) and `server.js` (`MAP_LAYERS_BASELINE`) — no per-object source,
+  no verification date, coordinates typed from memory at 2–3 decimals.
+- API routes: 13 `/api/map/*` (earthquakes, events, weather, flights, fires, webcams-live,
+  eonet/overpass (Express only), disease, gpsjam, conflict, layers, infrastructure, conflictnews
+  (Worker only)). Caching: `map:<layer>` string keys, 15 min–24 h.
+- **Root causes of inaccuracy:**
+  1. **Invented geometry** — cable/pipeline/trade-route polylines are explicit approximations
+     (`'Transatlantic (MAREA-ish)'`, 3–8 hand-picked waypoints) and the Worker additionally
+     ingested TeleGeography cable geometry live (CC BY-NC-SA — licence never recorded).
+  2. **No object-level provenance** — the provenance core classifies *layers* (curated/live) but
+     no point carries a source URL, so a wrong coordinate is indistinguishable from a right one.
+  3. **Memory-typed coordinates** — e.g. "Ashburn (US-East)" is a town centroid presented as a
+     data-centre; several exchange points are the city, not the venue. Verification against
+     Wikidata (this checkpoint) confirmed 4/4 of the first exchanges within 0.4 km but left
+     others UNVERIFIED because Wikidata keeps the coordinate on the building item.
+  4. **Dataset drift** — the frontend `DATA` and server `MAP_LAYERS_BASELINE` are separate
+     copies edited independently (frontend falls back to its own copy when the API fails).
+  5. **No identity** — objects are tuples, so nothing can link a fab to TSMC or a refinery to
+     NSE:RELIANCE; popups are emoji + HTML strings (`mt:drill` event is dispatched but no
+     listener exists in app.js — the "drill" path was dead).
+  6. **Rendering** — per-layer `L.layerGroup` of canvas circle markers with no clustering or
+     viewport bounding (fine at hundreds, not thousands); aircraft layer fetched 12 CORS-blocked
+     tiles every 8 s from the browser (B-003) and timers ran while hidden (B-004).
+  7. **Mobile** — popups need tap; the layer panel (236 px) overlaps the map on 375 px; the
+     Infrastructure canvas required hover for details.
+- Map backlog before ATLAS: B-003 (aircraft CORS), B-004 (hidden timers), B-015 (tile
+  watermark locally).
+
+### Provider / dataset verification (LIVE TESTED, observation)
+- Wikidata SPARQL (CC0): NSE `Q638740` 183 rows, NYSE `Q13677` 2,383, Nasdaq `Q82059` 2,133
+  companies with HQ coordinates; ~35 s per query → snapshotted, not request-path.
+- Natural Earth 10m (public domain): 1,081 ports, 893 airports (GeoJSON from the
+  `nvkelso/natural-earth-vector` mirror).
+- WRI GPPD v1.3 zip (CC BY 4.0, README licence text captured): 34,936 plants; 195 nuclear;
+  1,618 ≥ 1 GW.

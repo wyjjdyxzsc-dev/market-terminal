@@ -29,6 +29,8 @@ import './shared/ai-provider-registry.js';
 import './shared/ai-verification-core.js';
 import './shared/ai-task-policy-core.js';
 import './shared/market-core.js';
+import './shared/atlas-core.js';
+import './shared/atlas-snapshot.js';
 
 const FINNHUB_BASE = 'https://finnhub.io/api/v1';
 const CACHE_MS = 15 * 60 * 1000; // news refreshes every 15 min
@@ -65,6 +67,8 @@ const {
 const { normalizeNasdaqOptionChain, unavailableOptionsChain } = globalThis.MarketTerminalOptionsChain;
 const { TICKER_SCHEMA_VERSION, DEFAULT_TICKER_BASKET, mergeTickerBasket } = globalThis.MarketTerminalTicker;
 const marketCore = globalThis.MarketTerminalMarket;
+const atlasCore = globalThis.MarketTerminalAtlas;
+const atlasSnapshot = globalThis.MarketTerminalAtlasSnapshot;
 
 const { buildDeterministicCandleAnalysis } = globalThis.MarketTerminalCandleAnalysis;
 const { analyzeMarketSentiment } = globalThis.MarketTerminalMarketSentiment;
@@ -2588,6 +2592,8 @@ out 80 geom;`;
 // All failures are swallowed — baseline is always returned.
 async function fetchAugmentedLayers() {
   const out = JSON.parse(JSON.stringify(MAP_LAYERS_BASELINE)); // deep clone
+  // MT2-4 ATLAS (D-010): unsourced line geometry is never served; sourced objects come from /api/map/entities.
+  out.lines = { tradeRoutes: [], cables: [], pipelines: [], retired: 'MT2-4 ATLAS D-010' };
 
   // ── 1. IAEA PRIS — nuclear reactor operational status ────────────────────
   try {
@@ -2788,6 +2794,179 @@ function isEmptyPayload(d) {
   if (Array.isArray(d.industries)) return d.industries.length === 0;
   return false;
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  MT2-4 ATLAS — canonical geographic market-intelligence API
+//  (shared/atlas-core.js + generated shared/atlas-snapshot.js; parity with server.js)
+// ═══════════════════════════════════════════════════════════════════════════
+
+let _atlasIndex = null;
+function atlasIndex() {
+  if (_atlasIndex) return _atlasIndex;
+  const built = atlasCore.buildFromSnapshot(atlasSnapshot);
+  const byId = new Map(built.entities.map((e) => [e.id, e]));
+  const linksByLocation = new Map();
+  const linksByIdentity = new Map();
+  for (const link of built.links) {
+    (linksByLocation.get(link.locationId) || linksByLocation.set(link.locationId, []).get(link.locationId)).push(link);
+    (linksByIdentity.get(link.instrumentIdentity) || linksByIdentity.set(link.instrumentIdentity, []).get(link.instrumentIdentity)).push(link);
+  }
+  const layerCounts = {};
+  for (const e of built.entities) {
+    const c = layerCounts[e.layer] || (layerCounts[e.layer] = { total: 0, authoritative: 0, unverified: 0 });
+    c.total += 1; if (e.authoritative) c.authoritative += 1; else c.unverified += 1;
+  }
+  if (built.problems.length) console.warn(`[atlas] ${built.problems.length} snapshot rows rejected (first: ${built.problems[0]})`);
+  _atlasIndex = { ...built, byId, linksByLocation, linksByIdentity, layerCounts };
+  return _atlasIndex;
+}
+
+/** Wire-safe entity summary (no evidence bodies; those come from /api/map/entity). */
+function atlasEntitySummary(e) {
+  const a = e.attributes || {};
+  return {
+    id: e.id, type: e.type, name: e.name, lat: e.lat, lon: e.lon, country: e.country, countryCode: e.countryCode,
+    layer: e.layer, confidence: e.confidence, relevance: e.relevance || 'global', lastVerified: e.lastVerified,
+    attributes: {
+      instruments: a.instruments || undefined, exchanges: a.exchanges || undefined, capacityMw: a.capacityMw, fuel: a.fuel,
+      iata: a.iata || undefined, size: a.size || undefined, scalerank: a.scalerank, hq: a.hq || undefined,
+    },
+  };
+}
+
+function atlasCatalog() {
+  const idx = atlasIndex();
+  return {
+    atlasSchemaVersion: atlasCore.ATLAS_SCHEMA_VERSION,
+    snapshot: { version: atlasSnapshot.atlasSnapshotVersion, generatedAt: atlasSnapshot.generatedAt, sources: atlasSnapshot.sources },
+    layers: atlasCore.LAYERS.map((l) => ({ ...l, counts: idx.layerCounts[l.id] || { total: 0, authoritative: 0, unverified: 0 } })),
+    coverage: idx.coverage,
+    entityTypes: atlasCore.GEO_ENTITY_TYPES,
+    eventCategories: atlasCore.EVENT_CATEGORIES,
+    markets: marketCore.MARKET_IDS,
+    problems: idx.problems.length,
+    generatedAt: new Date().toISOString(),
+  };
+}
+
+/** Viewport query: bounded entities, or server-side grid clusters below the detail zoom. */
+function atlasEntities(query) {
+  const idx = atlasIndex();
+  const layerId = String(query.layer || '');
+  const layerDef = atlasCore.layerById(layerId);
+  if (!layerDef) return { error: 'unknown layer', layers: atlasCore.LAYERS.map((l) => l.id) };
+  const zoom = Number.isFinite(Number(query.zoom)) ? Number(query.zoom) : 3;
+  const bbox = atlasCore.parseBbox(query.bbox);
+  if (query.bbox && !bbox) return { error: 'bad bbox' };
+  const result = atlasCore.filterEntities(idx.entities, {
+    layer: layerId, market: query.market, bbox, types: query.types ? String(query.types).split(',') : null,
+    limit: query.limit, includeUnverified: query.includeUnverified === '1',
+  });
+  const base = {
+    atlasSchemaVersion: atlasCore.ATLAS_SCHEMA_VERSION, snapshotVersion: atlasSnapshot.atlasSnapshotVersion, layer: layerId,
+    market: marketCore.resolveMarketId(query.market), zoom, total: result.total, truncated: result.truncated, renders: layerDef.renders,
+    coverage: layerDef.coverage, freshness: layerDef.freshness, dataSource: layerDef.dataSource,
+  };
+  if (!layerDef.renders) return { ...base, mode: 'none', entities: [], clusters: [] };
+  const CLUSTER_BELOW_ZOOM = 7;
+  if (zoom < CLUSTER_BELOW_ZOOM && result.entities.length > 60) {
+    const clusters = atlasCore.clusterPoints(result.entities, zoom, 56).map((c) => (
+      c.count === 1 ? { ...c, entity: atlasEntitySummary(idx.byId.get(c.ids[0])) } : c
+    ));
+    return { ...base, mode: 'clusters', clusters, entities: [] };
+  }
+  return { ...base, mode: 'entities', clusters: [], entities: result.entities.map(atlasEntitySummary) };
+}
+
+function haversineKm(a, b) {
+  const R = 6371, d = Math.PI / 180;
+  const dLat = (b.lat - a.lat) * d, dLon = (b.lon - a.lon) * d;
+  const x = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * d) * Math.cos(b.lat * d) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(x));
+}
+
+/** Aggregate the existing live feeds into canonical GeoEvents (bounded, sourced, classified). */
+async function fetchGeoEvents() {
+  const now = Date.now();
+  const events = [];
+  const push = (input) => { try { events.push(atlasCore.createGeoEvent(input, now)); } catch { /* rejected rows are not events */ } };
+  const [quakes, natural, weather, conflict] = await Promise.all([
+    fetchQuakes().catch(() => []),
+    fetchNaturalEvents().catch(() => []),
+    fetchWeatherAlerts().catch(() => []),
+    fetchConflictZones().catch(() => ({ features: [] })),
+  ]);
+  for (const q of quakes) {
+    if (!(Number(q.mag) >= 3.0)) continue;
+    push({ id: `event:earthquake:usgs:${q.url ? q.url.split('/').pop() : `${q.lat},${q.lon},${q.time}`}`, type: 'EARTHQUAKE', title: `M${Number(q.mag).toFixed(1)} — ${q.place || 'earthquake'}`,
+      location: { lat: q.lat, lon: q.lon, name: q.place || '' }, startedAt: q.time, updatedAt: q.time, severity: Number(q.mag) >= 6 ? 'major' : Number(q.mag) >= 4.5 ? 'moderate' : 'minor',
+      sourceEvidence: [{ source: 'USGS Earthquake Hazards Program', sourceUrl: q.url || 'https://earthquake.usgs.gov', confidence: 'HIGH', observedAt: q.time, lastVerified: new Date(now).toISOString() }],
+      attributes: { magnitude: q.mag, depthKm: q.depth, tsunami: q.tsunami } });
+  }
+  const EONET_TYPE = { wildfires: 'WILDFIRE', severeStorms: 'STORM', volcanoes: 'VOLCANO', floods: 'FLOOD', drought: 'DROUGHT', earthquakes: 'EARTHQUAKE', manmade: 'INDUSTRIAL_ACCIDENT' };
+  for (const ev of natural) {
+    push({ id: `event:eonet:${atlasCore.entityId('eonet', ev.title, ev.lat, ev.lon)}`, type: EONET_TYPE[ev.category] || 'OTHER', title: ev.title || 'Natural event',
+      location: { lat: ev.lat, lon: ev.lon, name: '' }, startedAt: ev.date, updatedAt: ev.date, severity: 'unknown',
+      sourceEvidence: [{ source: 'NASA EONET', sourceUrl: /^https?:/.test(String(ev.source || '')) ? ev.source : 'https://eonet.gsfc.nasa.gov', confidence: 'HIGH', observedAt: ev.date, lastVerified: new Date(now).toISOString() }],
+      attributes: { category: ev.categoryTitle || ev.category || '' } });
+  }
+  const weatherSorted = [...weather].filter((w) => /Extreme|Severe/i.test(String(w.severity))).slice(0, 120);
+  for (const w of weatherSorted) {
+    const text = String(w.event || '');
+    const type = /flood/i.test(text) ? 'FLOOD' : /fire/i.test(text) ? 'WILDFIRE' : 'STORM';
+    push({ id: `event:nws:${atlasCore.entityId('storm', `${text} ${w.area}`, w.lat, w.lon)}`, type, title: `${text} — ${w.area || 'US'}`,
+      location: { lat: w.lat, lon: w.lon, name: w.area || '' }, startedAt: new Date(now).toISOString(), updatedAt: new Date(now).toISOString(), severity: String(w.severity || 'unknown').toLowerCase(),
+      sourceEvidence: [{ source: 'National Weather Service', sourceUrl: 'https://api.weather.gov/alerts/active', confidence: 'HIGH', observedAt: new Date(now).toISOString(), lastVerified: new Date(now).toISOString() }],
+      attributes: { urgency: w.urgency || '', headline: w.headline || '' } });
+  }
+  for (const f of (conflict && conflict.features) || []) {
+    const c = f.geometry && f.geometry.coordinates;
+    const p = f.properties || {};
+    if (!c) continue;
+    push({ id: `event:conflict:${atlasCore.entityId('war', p.title, c[1], c[0])}`, type: p.eventType === 'MILITARY' ? 'MILITARY' : 'WAR', title: p.title || 'Conflict report cluster',
+      location: { lat: c[1], lon: c[0], name: '' }, startedAt: new Date(now).toISOString(), updatedAt: new Date(now).toISOString(), severity: 'unknown',
+      sourceEvidence: [{ source: p.source || 'GDELT', sourceUrl: p.source === 'ACLED' ? 'https://acleddata.com' : 'https://api.gdeltproject.org/api/v2/geo/geo', confidence: 'MEDIUM', observedAt: new Date(now).toISOString(), lastVerified: new Date(now).toISOString(), note: 'News-report cluster (last 24 h), not a verified incident record' }],
+      attributes: { tone: p.tone } });
+  }
+  return events;
+}
+
+async function atlasGeoEvents(env, ctx, query) {
+  const { data, fresh } = await getData(env, ctx, atlasCore.atlasCacheKey('events', {}), fetchGeoEvents, 900 * 1000);
+  const bbox = atlasCore.parseBbox(query.bbox);
+  const category = String(query.category || '').toUpperCase();
+  const now = Date.now();
+  const events = data
+    .map((e) => ({ ...e, status: atlasCore.classifyEventStatus(e, now) }))
+    .filter((e) => (!bbox || atlasCore.inBbox(e.location, bbox)) && (!category || e.categories.includes(category)));
+  return { atlasSchemaVersion: atlasCore.ATLAS_SCHEMA_VERSION, cached: !fresh, total: events.length, categories: atlasCore.EVENT_CATEGORIES, events: events.slice(0, 600), truncated: events.length > 600, generatedAt: new Date(now).toISOString() };
+}
+
+async function atlasEntityDetail(env, ctx, id) {
+  const idx = atlasIndex();
+  const entity = idx.byId.get(String(id || ''));
+  if (!entity) return null;
+  const links = idx.linksByLocation.get(entity.id) || [];
+  let nearbyEvents = [];
+  try {
+    const { data } = await getData(env, ctx, atlasCore.atlasCacheKey('events', {}), fetchGeoEvents, 900 * 1000);
+    const now = Date.now();
+    nearbyEvents = data
+      .map((e) => ({ ...e, status: atlasCore.classifyEventStatus(e, now), distanceKm: Math.round(haversineKm(entity, e.location)) }))
+      .filter((e) => e.status === 'active' && e.distanceKm <= 250)
+      .sort((a, b) => a.distanceKm - b.distanceKm).slice(0, 8);
+  } catch { nearbyEvents = []; }
+  return {
+    atlasSchemaVersion: atlasCore.ATLAS_SCHEMA_VERSION,
+    entity,
+    links,
+    securities: links.map((l) => l.instrumentIdentity).filter(Boolean),
+    layer: atlasCore.layerById(entity.layer),
+    nearbyEvents,
+    extensions: { supplyChain: 'reserved:MT2-5 NEXUS', ipo: 'reserved:MT2-6 LAUNCHPAD', worldwire: 'reserved:MT2-7 WORLDWIRE', oracle: 'reserved:MT2-8 ORACLE', portfolio: 'reserved:MT2-9 LEDGER', watchlist: 'reserved:MT2-11 WATCHTOWER', sentinel: 'reserved:MT2-12 SENTINEL' },
+  };
+}
+
 
 async function getData(env, ctx, key, fetcher, ttl = CACHE_MS) {
   const now = Date.now();
@@ -3162,6 +3341,26 @@ async function handleApi(request, env, ctx, url) {
 
   // --- GLOBAL MAP layers (free public feeds, normalized + cached) ---
 
+  if (p === '/api/map/atlas') return json(atlasCatalog());
+  if (p === '/api/map/entities') {
+    const out = atlasEntities(Object.fromEntries(qs.entries()));
+    if (out.error) return json({ error: true, message: out.error, layers: out.layers }, 400);
+    return json(out);
+  }
+  if (p === '/api/map/entity') {
+    const out = await atlasEntityDetail(env, ctx, qs.get('id'));
+    if (!out) return json({ error: true, code: 'not_found', message: 'Unknown ATLAS entity id.' }, 404);
+    return json(out);
+  }
+  if (p === '/api/map/search') {
+    const q = (qs.get('q') || '').trim().slice(0, 80);
+    const results = q ? atlasCore.searchEntities(atlasIndex().entities, q, { market: qs.get('market'), limit: qs.get('limit') }) : [];
+    return json({ atlasSchemaVersion: atlasCore.ATLAS_SCHEMA_VERSION, q, market: marketCore.resolveMarketId(qs.get('market')), results });
+  }
+  if (p === '/api/map/geoevents') {
+    try { return json(await atlasGeoEvents(env, ctx, Object.fromEntries(qs.entries()))); }
+    catch (err) { return json({ error: true, message: friendlyError(err) }, 502); }
+  }
   if (p === '/api/map/layers') {
     try { const { data, fresh } = await getData(env, ctx, 'map:layers', fetchAugmentedLayers, 86400 * 1000); return json(annotateMapPayload({ cached: !fresh, ...data }, 'layers', { cached: !fresh })); }
     catch (err) { return json({ error: true, message: friendlyError(err) }, 502); }
@@ -4191,169 +4390,17 @@ function downsample(coords, maxPts = 30) {
   return out;
 }
 
-async function buildInfrastructureData(env) {
-  // ── 1. TeleGeography submarine cable database (600+ cables) ──────────
-  let liveCables = [];
-  let cableSource = 'curated';
-  try {
-    const TELE_GEO  = 'https://www.submarinecablemap.com/api/v3/cable/cable-geo.json';
-    const TELE_META = 'https://www.submarinecablemap.com/api/v3/cable/all.json';
-    const hdrs = { 'User-Agent': 'MarketTerminal/1.0 (educational)', 'Accept': 'application/json' };
-
-    const [geoRes, metaRes] = await Promise.all([
-      fetchWithTimeout(TELE_GEO,  { headers: hdrs }, 20000),
-      fetchWithTimeout(TELE_META, { headers: hdrs }, 15000),
-    ]);
-
-    // Build metadata lookup: cable id → {owners, landing_points, is_planned, ...}
-    let metaMap = {};
-    if (metaRes.ok) {
-      const md = await metaRes.json();
-      (md.cables || []).forEach(c => { metaMap[c.id] = c; });
-    }
-
-    if (geoRes.ok) {
-      const geo = await geoRes.json();
-      liveCables = (geo.features || []).map(f => {
-        const props = f.properties || {};
-        const meta  = metaMap[props.id] || {};
-        const geom  = f.geometry || {};
-
-        // Convert geometry to array of segments (MultiLineString → [[lon,lat],...])
-        let rawSegs = [];
-        if (geom.type === 'LineString') {
-          rawSegs = [geom.coordinates || []];
-        } else if (geom.type === 'MultiLineString') {
-          rawSegs = geom.coordinates || [];
-        }
-
-        // Downsample each segment and drop empties
-        const segments = rawSegs
-          .map(s => downsample(s, 30))
-          .filter(s => s && s.length >= 2);
-
-        if (!segments.length) return null;
-
-        const owners = (meta.owners || []).map(o => o.name).filter(Boolean);
-        const landingNames = (meta.landing_points || []).map(lp => lp.name).filter(Boolean).slice(0, 6);
-        const isPlanned = !!(meta.is_planned || (meta.rfs && parseInt(meta.rfs) > 2026));
-
-        return {
-          id: props.id || `tg_${Math.random().toString(36).slice(2)}`,
-          name: props.name || meta.name || 'Unknown Cable',
-          type: 'undersea_cable',
-          status: isPlanned ? 'planned' : 'active',
-          capacity_tbps: null,
-          owner: owners.slice(0, 3).join(', ') || 'Consortium',
-          color: props.color || '#a78bfa',
-          segments,
-          coords: segments[0],           // first segment for hit-test compat
-          beneficiaries: landingNames,
-          risks: [],
-          rfs: meta.rfs || null,
-          source: 'telegeography',
-        };
-      }).filter(Boolean);
-
-      if (liveCables.length > 20) cableSource = 'telegeography';
-    }
-  } catch (_) { /* fall through to curated */ }
-
-  // ── 2. OSM live pipelines — run 4 regional queries in parallel ────────
-  let livePipelines = [];
-  try {
-    // Split into 4 bbox regions so Overpass can return more results within timeout
-    const regions = [
-      '(bbox:-60,-170,75,-30)',   // Americas
-      '(bbox:-60,-30,75,60)',     // Europe / Africa / Middle East
-      '(bbox:-60,60,75,140)',     // Central/South Asia / East Asia
-      '(bbox:-60,140,75,180)',    // SE Asia / Pacific
-    ];
-    const osmRes = await Promise.allSettled(regions.map(bbox => {
-      const q = `[out:json][timeout:25];(way["man_made"="pipeline"]["substance"~"oil|gas|water",i]${bbox};rel["man_made"="pipeline"]["substance"~"oil|gas",i]${bbox};);out geom 60;`;
-      return fetchWithTimeout(`https://overpass-api.de/api/interpreter?data=${encodeURIComponent(q)}`, {}, 22000);
-    }));
-
-    const seen = new Set();
-    for (const r of osmRes) {
-      if (r.status !== 'fulfilled' || !r.value.ok) continue;
-      const d = await r.value.json();
-      for (const el of (d.elements || []).slice(0, 80)) {
-        if (seen.has(el.id)) continue;
-        seen.add(el.id);
-        const sub = (el.tags?.substance || '').toLowerCase();
-        const rawCoords = el.type === 'way'
-          ? (el.geometry || []).map(n => [n.lon, n.lat])
-          : (el.members || []).filter(m => m.geometry).flatMap(m => m.geometry.map(n => [n.lon, n.lat]));
-        const coords = downsample(rawCoords, 30);
-        if (coords.length < 2) continue;
-        livePipelines.push({
-          id: `osm_${el.id}`,
-          name: el.tags?.name || el.tags?.['name:en'] || `${sub || 'Unknown'} Pipeline`,
-          type: sub.includes('gas') ? 'gas' : sub.includes('water') ? 'water' : 'oil',
-          status: el.tags?.operational_status === 'abandoned' ? 'mothballed' : 'operational',
-          capacity_kbd: null,
-          substance: sub || 'unknown',
-          operator: el.tags?.operator || el.tags?.['operator:en'] || 'Unknown',
-          country: el.tags?.['addr:country'] || null,
-          beneficiaries: [], risks: [],
-          coords,
-          source: 'osm',
-        });
-      }
-    }
-  } catch (_) {}
-
-  // ── 3. OSM live trade routes / shipping lanes ───────────────────────
-  let liveRoutes = [];
-  try {
-    // OSM shipping lanes + ferry routes + international waterways
-    const shippingQ = `[out:json][timeout:25];(
-      way["seamark:type"="separation_zone"](bbox:-80,-180,80,180);
-      way["route"="ferry"]["international"="yes"](bbox:-80,-180,80,180);
-      relation["route"="ferry"]["international"="yes"](bbox:-80,-180,80,180);
-    );out geom 40;`;
-    const sr = await fetchWithTimeout(`https://overpass-api.de/api/interpreter?data=${encodeURIComponent(shippingQ)}`, {}, 20000);
-    if (sr.ok) {
-      const sd = await sr.json();
-      const seen2 = new Set();
-      for (const el of (sd.elements || []).slice(0, 60)) {
-        if (seen2.has(el.id)) continue;
-        seen2.add(el.id);
-        const rawCoords = el.type === 'way'
-          ? (el.geometry || []).map(n => [n.lon, n.lat])
-          : (el.members || []).filter(m => m.geometry).flatMap(m => m.geometry.map(n => [n.lon, n.lat]));
-        const coords = downsample(rawCoords, 25);
-        if (coords.length < 2) continue;
-        liveRoutes.push({
-          id: `osm_r_${el.id}`,
-          name: el.tags?.name || el.tags?.['name:en'] || 'Shipping Lane',
-          type: 'trade_route',
-          status: 'operational',
-          throughput_ships_day: null,
-          cargo_types: ['International shipping'],
-          operator: el.tags?.operator || null,
-          beneficiaries: [], risks: [],
-          coords,
-          source: 'osm',
-        });
-      }
-    }
-  } catch (_) {}
-
-  const allPipelines = [...INFRA_PIPELINES, ...livePipelines];
-  const allRoutes    = [...INFRA_ROUTES,    ...liveRoutes];
-
+async function buildInfrastructureData(_env) {
+  // MT2-4 ATLAS (D-010): retired. The TeleGeography submarine-cable feed is licensed
+  // CC BY-NC-SA (non-commercial, share-alike) and the curated pipeline / trade-route
+  // paths were hand-drawn approximations; neither is served any more. The route stays for
+  // contract parity with server.js and returns empty geometry plus this note.
   return {
-    pipelines: allPipelines,
-    cables:    liveCables.length > 20 ? liveCables : INFRA_CABLES,
-    routes:    allRoutes,
+    cables: [], pipelines: [], routes: [],
+    cable_source: 'retired',
+    cable_count: 0, pipeline_count: 0, route_count: 0,
+    note: 'Retired in MT2-4 ATLAS: unsourced geometry is not served. Sourced infrastructure objects are available from /api/map/entities.',
     generated: Date.now(),
-    ttl: 86400,
-    cable_source:    cableSource,
-    cable_count:     liveCables.length || INFRA_CABLES.length,
-    pipeline_count:  allPipelines.length,
-    route_count:     allRoutes.length,
   };
 }
 

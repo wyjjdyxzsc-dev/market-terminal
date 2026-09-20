@@ -57,41 +57,42 @@ IN PROGRESS / PASS / PARTIAL / BLOCKED.
   both markets with tests; MARKETS workspace verified in browser.
 - OUT OF SCOPE: India derivatives depth (MT2-5), portfolio.
 
-## MT2-4 — LEDGER — Portfolio (Equity / Futures / Options)
-- STATUS: NOT STARTED
-- OBJECTIVE: Portfolio model, storage, and UI for equity, futures, and options positions.
-- ENTRY REQUIREMENT: MT2-3 closed; DECISIONS.md record on portfolio storage; explicit authorization.
-- DONE CONTRACT: positions persist, P&L computes deterministically with tests, restart-verified.
-- OUT OF SCOPE: broker connectivity, trade execution.
+## MT2-4 — ATLAS — Maps (geographic market-intelligence foundation)
+- STATUS: IN PROGRESS → see STATE.md (2026-09-21)
+- OBJECTIVE: canonical GeoEntity / MapLayer / CompanyGeoLink / GeoEvent model, sourced datasets,
+  reusable map API, clustering, search, detail drawer, company → security path.
+- DONE CONTRACT: PASS contract in the ATLAS brief (COMMS 2026-09-21).
+- OUT OF SCOPE: relationship graph (NEXUS), IPO location (LAUNCHPAD), event collection (WORLDWIRE).
 
-## MT2-5 — MARKETGRID — US + India market-data / derivatives capability expansion
-- STATUS: NOT STARTED
-- OBJECTIVE: Provider expansion and derivatives data (chains, futures curves) for both markets.
-- ENTRY REQUIREMENT: MT2-4 closed; DECISIONS.md record on India provider selection; explicit
-  authorization.
-- DONE CONTRACT: provider cascades with provenance and last-good behavior, live-tested.
-- OUT OF SCOPE: execution.
+## MT2-5 — NEXUS — Supply (listed-company universe, suppliers/customers/competitors/facilities, dependency graph)
+- STATUS: NOT STARTED · ENTRY: MT2-4 closed; explicit authorization.
 
-## MT2-6 — WATCHTOWER — Watchlist 2.0
-- STATUS: NOT STARTED
-- OBJECTIVE: Rebuild the watchlist on the MT2 shell with multi-market symbols and persistence.
-- ENTRY REQUIREMENT: MT2-5 closed; explicit authorization.
-- DONE CONTRACT: persistence, stale-state handling, and alerts integration verified in browser and
-  after restart.
-- OUT OF SCOPE: AI watchers.
+## MT2-6 — LAUNCHPAD — IPOs
+- STATUS: NOT STARTED · ENTRY: MT2-5 closed; explicit authorization.
 
-## MT2-7 — SENTINEL — AI Watchers 2.0
-- STATUS: NOT STARTED
-- OBJECTIVE: Evidence-gated AI watchers with a materiality model.
-- ENTRY REQUIREMENT: MT2-6 closed; DECISIONS.md record on watcher materiality model; explicit
-  authorization.
-- DONE CONTRACT: watchers abstain without evidence, are verified independently where high-risk,
-  and are live-tested.
-- OUT OF SCOPE: execution, broker connectivity.
+## MT2-7 — WORLDWIRE — News (large-scale geopolitical event collection into GeoEvent)
+- STATUS: NOT STARTED · ENTRY: explicit authorization.
 
-## MT2-8 — CONVERGENCE — Full UI migration / production acceptance
-- STATUS: NOT STARTED
-- OBJECTIVE: Migrate all surfaces to the MT2 shell, retire the legacy shell, production acceptance.
-- ENTRY REQUIREMENT: MT2-2 through MT2-7 closed; explicit authorization.
-- DONE CONTRACT: production smoke, browser, and HUMAN ACCEPTED evidence for every surface.
-- OUT OF SCOPE: new features.
+## MT2-8 — ORACLE — Research
+- STATUS: NOT STARTED · ENTRY: explicit authorization.
+
+## MT2-9 — LEDGER — Portfolio (Equity / Futures / Options)
+- STATUS: NOT STARTED · ENTRY: DECISIONS record on portfolio storage; explicit authorization.
+
+## MT2-10 — MARKETGRID — Data
+- STATUS: NOT STARTED · ENTRY: explicit authorization.
+
+## MT2-11 — WATCHTOWER — Watchlist
+- STATUS: NOT STARTED · ENTRY: explicit authorization.
+
+## MT2-12 — SENTINEL — Alerts
+- STATUS: NOT STARTED · ENTRY: explicit authorization.
+
+## MT2-13 — CONVERGENCE — Polish / full migration
+- STATUS: NOT STARTED · ENTRY: explicit authorization.
+
+---
+ROADMAP CORRECTION (2026-09-21): the numbering above is the OWNER's canonical roadmap (ATLAS brief).
+The earlier sequence that placed LEDGER at MT2-4, MARKETGRID at MT2-5, WATCHTOWER at MT2-6,
+SENTINEL at MT2-7 and CONVERGENCE at MT2-8 is superseded; references to those old numbers in
+BACKLOG/EVIDENCE entries written before this date map onto the new names, not the old numbers.

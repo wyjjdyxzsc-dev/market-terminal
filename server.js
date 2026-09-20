@@ -40,6 +40,8 @@ const aiProviderRegistry = require('./shared/ai-provider-registry.js');
 const aiVerificationCore = require('./shared/ai-verification-core.js');
 const aiTaskPolicyCore = require('./shared/ai-task-policy-core.js');
 const marketCore = require('./shared/market-core.js');
+const atlasCore = require('./shared/atlas-core.js');
+const atlasSnapshot = require('./shared/atlas-snapshot.js');
 
 // Optional WebSocket for Finnhub live feed.  npm i ws  to enable.
 let WS;
@@ -3051,6 +3053,8 @@ async function fetchOverpassLines() {
  */
 async function fetchAugmentedLayers() {
   const out = JSON.parse(JSON.stringify(MAP_LAYERS_BASELINE)); // deep clone
+  // MT2-4 ATLAS (D-010): unsourced line geometry is never served; sourced objects come from /api/map/entities.
+  out.lines = { tradeRoutes: [], cables: [], pipelines: [], retired: 'MT2-4 ATLAS D-010' };
 
   // ── 1. IAEA PRIS — nuclear reactor operational status ─────────────────────
   // Public REST endpoint (no key required)
@@ -3970,6 +3974,200 @@ app.get('/api/map/conflict', route(async (req, res) => {
   res.json(annotateMapPayload(data, 'conflictZones', { cached: !fresh }));
 }));
 
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  MT2-4 ATLAS — canonical geographic market-intelligence API
+//  (shared/atlas-core.js + generated shared/atlas-snapshot.js; parity with worker.js)
+// ═══════════════════════════════════════════════════════════════════════════
+
+let _atlasIndex = null;
+function atlasIndex() {
+  if (_atlasIndex) return _atlasIndex;
+  const built = atlasCore.buildFromSnapshot(atlasSnapshot);
+  const byId = new Map(built.entities.map((e) => [e.id, e]));
+  const linksByLocation = new Map();
+  const linksByIdentity = new Map();
+  for (const link of built.links) {
+    (linksByLocation.get(link.locationId) || linksByLocation.set(link.locationId, []).get(link.locationId)).push(link);
+    (linksByIdentity.get(link.instrumentIdentity) || linksByIdentity.set(link.instrumentIdentity, []).get(link.instrumentIdentity)).push(link);
+  }
+  const layerCounts = {};
+  for (const e of built.entities) {
+    const c = layerCounts[e.layer] || (layerCounts[e.layer] = { total: 0, authoritative: 0, unverified: 0 });
+    c.total += 1; if (e.authoritative) c.authoritative += 1; else c.unverified += 1;
+  }
+  if (built.problems.length) console.warn(`[atlas] ${built.problems.length} snapshot rows rejected (first: ${built.problems[0]})`);
+  _atlasIndex = { ...built, byId, linksByLocation, linksByIdentity, layerCounts };
+  return _atlasIndex;
+}
+
+/** Wire-safe entity summary (no evidence bodies; those come from /api/map/entity). */
+function atlasEntitySummary(e) {
+  const a = e.attributes || {};
+  return {
+    id: e.id, type: e.type, name: e.name, lat: e.lat, lon: e.lon, country: e.country, countryCode: e.countryCode,
+    layer: e.layer, confidence: e.confidence, relevance: e.relevance || 'global', lastVerified: e.lastVerified,
+    attributes: {
+      instruments: a.instruments || undefined, exchanges: a.exchanges || undefined, capacityMw: a.capacityMw, fuel: a.fuel,
+      iata: a.iata || undefined, size: a.size || undefined, scalerank: a.scalerank, hq: a.hq || undefined,
+    },
+  };
+}
+
+function atlasCatalog() {
+  const idx = atlasIndex();
+  return {
+    atlasSchemaVersion: atlasCore.ATLAS_SCHEMA_VERSION,
+    snapshot: { version: atlasSnapshot.atlasSnapshotVersion, generatedAt: atlasSnapshot.generatedAt, sources: atlasSnapshot.sources },
+    layers: atlasCore.LAYERS.map((l) => ({ ...l, counts: idx.layerCounts[l.id] || { total: 0, authoritative: 0, unverified: 0 } })),
+    coverage: idx.coverage,
+    entityTypes: atlasCore.GEO_ENTITY_TYPES,
+    eventCategories: atlasCore.EVENT_CATEGORIES,
+    markets: marketCore.MARKET_IDS,
+    problems: idx.problems.length,
+    generatedAt: new Date().toISOString(),
+  };
+}
+
+/** Viewport query: bounded entities, or server-side grid clusters below the detail zoom. */
+function atlasEntities(query) {
+  const idx = atlasIndex();
+  const layerId = String(query.layer || '');
+  const layerDef = atlasCore.layerById(layerId);
+  if (!layerDef) return { error: 'unknown layer', layers: atlasCore.LAYERS.map((l) => l.id) };
+  const zoom = Number.isFinite(Number(query.zoom)) ? Number(query.zoom) : 3;
+  const bbox = atlasCore.parseBbox(query.bbox);
+  if (query.bbox && !bbox) return { error: 'bad bbox' };
+  const result = atlasCore.filterEntities(idx.entities, {
+    layer: layerId, market: query.market, bbox, types: query.types ? String(query.types).split(',') : null,
+    limit: query.limit, includeUnverified: query.includeUnverified === '1',
+  });
+  const base = {
+    atlasSchemaVersion: atlasCore.ATLAS_SCHEMA_VERSION, snapshotVersion: atlasSnapshot.atlasSnapshotVersion, layer: layerId,
+    market: marketCore.resolveMarketId(query.market), zoom, total: result.total, truncated: result.truncated, renders: layerDef.renders,
+    coverage: layerDef.coverage, freshness: layerDef.freshness, dataSource: layerDef.dataSource,
+  };
+  if (!layerDef.renders) return { ...base, mode: 'none', entities: [], clusters: [] };
+  const CLUSTER_BELOW_ZOOM = 7;
+  if (zoom < CLUSTER_BELOW_ZOOM && result.entities.length > 60) {
+    const clusters = atlasCore.clusterPoints(result.entities, zoom, 56).map((c) => (
+      c.count === 1 ? { ...c, entity: atlasEntitySummary(idx.byId.get(c.ids[0])) } : c
+    ));
+    return { ...base, mode: 'clusters', clusters, entities: [] };
+  }
+  return { ...base, mode: 'entities', clusters: [], entities: result.entities.map(atlasEntitySummary) };
+}
+
+function haversineKm(a, b) {
+  const R = 6371, d = Math.PI / 180;
+  const dLat = (b.lat - a.lat) * d, dLon = (b.lon - a.lon) * d;
+  const x = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * d) * Math.cos(b.lat * d) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(x));
+}
+
+/** Aggregate the existing live feeds into canonical GeoEvents (bounded, sourced, classified). */
+async function fetchGeoEvents() {
+  const now = Date.now();
+  const events = [];
+  const push = (input) => { try { events.push(atlasCore.createGeoEvent(input, now)); } catch { /* rejected rows are not events */ } };
+  const [quakes, natural, weather, conflict] = await Promise.all([
+    fetchEarthquakes().catch(() => []),
+    fetchNaturalEvents().catch(() => []),
+    fetchWeatherAlerts().catch(() => []),
+    fetchConflictZones().catch(() => ({ features: [] })),
+  ]);
+  for (const q of quakes) {
+    if (!(Number(q.mag) >= 3.0)) continue;
+    push({ id: `event:earthquake:usgs:${q.url ? q.url.split('/').pop() : `${q.lat},${q.lon},${q.time}`}`, type: 'EARTHQUAKE', title: `M${Number(q.mag).toFixed(1)} — ${q.place || 'earthquake'}`,
+      location: { lat: q.lat, lon: q.lon, name: q.place || '' }, startedAt: q.time, updatedAt: q.time, severity: Number(q.mag) >= 6 ? 'major' : Number(q.mag) >= 4.5 ? 'moderate' : 'minor',
+      sourceEvidence: [{ source: 'USGS Earthquake Hazards Program', sourceUrl: q.url || 'https://earthquake.usgs.gov', confidence: 'HIGH', observedAt: q.time, lastVerified: new Date(now).toISOString() }],
+      attributes: { magnitude: q.mag, depthKm: q.depth, tsunami: q.tsunami } });
+  }
+  const EONET_TYPE = { wildfires: 'WILDFIRE', severeStorms: 'STORM', volcanoes: 'VOLCANO', floods: 'FLOOD', drought: 'DROUGHT', earthquakes: 'EARTHQUAKE', manmade: 'INDUSTRIAL_ACCIDENT' };
+  for (const ev of natural) {
+    push({ id: `event:eonet:${atlasCore.entityId('eonet', ev.title, ev.lat, ev.lon)}`, type: EONET_TYPE[ev.category] || 'OTHER', title: ev.title || 'Natural event',
+      location: { lat: ev.lat, lon: ev.lon, name: '' }, startedAt: ev.date, updatedAt: ev.date, severity: 'unknown',
+      sourceEvidence: [{ source: 'NASA EONET', sourceUrl: /^https?:/.test(String(ev.source || '')) ? ev.source : 'https://eonet.gsfc.nasa.gov', confidence: 'HIGH', observedAt: ev.date, lastVerified: new Date(now).toISOString() }],
+      attributes: { category: ev.categoryTitle || ev.category || '' } });
+  }
+  const weatherSorted = [...weather].filter((w) => /Extreme|Severe/i.test(String(w.severity))).slice(0, 120);
+  for (const w of weatherSorted) {
+    const text = String(w.event || '');
+    const type = /flood/i.test(text) ? 'FLOOD' : /fire/i.test(text) ? 'WILDFIRE' : 'STORM';
+    push({ id: `event:nws:${atlasCore.entityId('storm', `${text} ${w.area}`, w.lat, w.lon)}`, type, title: `${text} — ${w.area || 'US'}`,
+      location: { lat: w.lat, lon: w.lon, name: w.area || '' }, startedAt: new Date(now).toISOString(), updatedAt: new Date(now).toISOString(), severity: String(w.severity || 'unknown').toLowerCase(),
+      sourceEvidence: [{ source: 'National Weather Service', sourceUrl: 'https://api.weather.gov/alerts/active', confidence: 'HIGH', observedAt: new Date(now).toISOString(), lastVerified: new Date(now).toISOString() }],
+      attributes: { urgency: w.urgency || '', headline: w.headline || '' } });
+  }
+  for (const f of (conflict && conflict.features) || []) {
+    const c = f.geometry && f.geometry.coordinates;
+    const p = f.properties || {};
+    if (!c) continue;
+    push({ id: `event:conflict:${atlasCore.entityId('war', p.title, c[1], c[0])}`, type: p.eventType === 'MILITARY' ? 'MILITARY' : 'WAR', title: p.title || 'Conflict report cluster',
+      location: { lat: c[1], lon: c[0], name: '' }, startedAt: new Date(now).toISOString(), updatedAt: new Date(now).toISOString(), severity: 'unknown',
+      sourceEvidence: [{ source: p.source || 'GDELT', sourceUrl: p.source === 'ACLED' ? 'https://acleddata.com' : 'https://api.gdeltproject.org/api/v2/geo/geo', confidence: 'MEDIUM', observedAt: new Date(now).toISOString(), lastVerified: new Date(now).toISOString(), note: 'News-report cluster (last 24 h), not a verified incident record' }],
+      attributes: { tone: p.tone } });
+  }
+  return events;
+}
+
+async function atlasGeoEvents(query) {
+  const { data, fresh } = await fetch_cached_data(atlasCore.atlasCacheKey('events', {}), fetchGeoEvents, TTL.NEWS);
+  const bbox = atlasCore.parseBbox(query.bbox);
+  const category = String(query.category || '').toUpperCase();
+  const now = Date.now();
+  const events = data
+    .map((e) => ({ ...e, status: atlasCore.classifyEventStatus(e, now) }))
+    .filter((e) => (!bbox || atlasCore.inBbox(e.location, bbox)) && (!category || e.categories.includes(category)));
+  return { atlasSchemaVersion: atlasCore.ATLAS_SCHEMA_VERSION, cached: !fresh, total: events.length, categories: atlasCore.EVENT_CATEGORIES, events: events.slice(0, 600), truncated: events.length > 600, generatedAt: new Date(now).toISOString() };
+}
+
+async function atlasEntityDetail(id) {
+  const idx = atlasIndex();
+  const entity = idx.byId.get(String(id || ''));
+  if (!entity) return null;
+  const links = idx.linksByLocation.get(entity.id) || [];
+  let nearbyEvents = [];
+  try {
+    const { data } = await fetch_cached_data(atlasCore.atlasCacheKey('events', {}), fetchGeoEvents, TTL.NEWS);
+    const now = Date.now();
+    nearbyEvents = data
+      .map((e) => ({ ...e, status: atlasCore.classifyEventStatus(e, now), distanceKm: Math.round(haversineKm(entity, e.location)) }))
+      .filter((e) => e.status === 'active' && e.distanceKm <= 250)
+      .sort((a, b) => a.distanceKm - b.distanceKm).slice(0, 8);
+  } catch { nearbyEvents = []; }
+  return {
+    atlasSchemaVersion: atlasCore.ATLAS_SCHEMA_VERSION,
+    entity,
+    links,
+    securities: links.map((l) => l.instrumentIdentity).filter(Boolean),
+    layer: atlasCore.layerById(entity.layer),
+    nearbyEvents,
+    extensions: { supplyChain: 'reserved:MT2-5 NEXUS', ipo: 'reserved:MT2-6 LAUNCHPAD', worldwire: 'reserved:MT2-7 WORLDWIRE', oracle: 'reserved:MT2-8 ORACLE', portfolio: 'reserved:MT2-9 LEDGER', watchlist: 'reserved:MT2-11 WATCHTOWER', sentinel: 'reserved:MT2-12 SENTINEL' },
+  };
+}
+
+app.get('/api/map/atlas', publicRateLimit, route(async (req, res) => { res.json(atlasCatalog()); }));
+app.get('/api/map/entities', publicRateLimit, route(async (req, res) => {
+  const out = atlasEntities(req.query);
+  if (out.error) return res.status(400).json({ error: true, message: out.error, layers: out.layers });
+  res.json(out);
+}));
+app.get('/api/map/entity', publicRateLimit, route(async (req, res) => {
+  const out = await atlasEntityDetail(req.query.id);
+  if (!out) return res.status(404).json({ error: true, code: 'not_found', message: 'Unknown ATLAS entity id.' });
+  res.json(out);
+}));
+app.get('/api/map/search', publicRateLimit, route(async (req, res) => {
+  const q = String(req.query.q || '').trim().slice(0, 80);
+  const results = q ? atlasCore.searchEntities(atlasIndex().entities, q, { market: req.query.market, limit: req.query.limit }) : [];
+  res.json({ atlasSchemaVersion: atlasCore.ATLAS_SCHEMA_VERSION, q, market: marketCore.resolveMarketId(req.query.market), results });
+}));
+app.get('/api/map/geoevents', publicRateLimit, route(async (req, res) => {
+  const out = await atlasGeoEvents(req.query);
+  res.json(out);
+}));
+
 app.get('/api/map/layers', route(async (req, res) => {
   // 24-hour TTL — curated reference data + live augmentation
   const { data, fresh } = await fetch_cached_data('map:layers', fetchAugmentedLayers, TTL.MAP);
@@ -3979,7 +4177,9 @@ app.get('/api/map/layers', route(async (req, res) => {
 app.get('/api/map/infrastructure', route(async (req, res) => {
   // Serve curated cable/pipeline/route data from MAP_LAYERS_BASELINE in the
   // rich format expected by WorldMapEngine in intel.js.
-  const L = MAP_LAYERS_BASELINE.lines;
+  // MT2-4 ATLAS (D-010): the hand-drawn pipeline / cable / trade-route paths were never sourced
+  // and are retired. The route stays for contract parity and returns empty geometry + a note.
+  const L = { tradeRoutes: [], cables: [], pipelines: [] };
   const slug = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-');
 
   const routes = (L.tradeRoutes || []).map(([name, coords, desc]) => ({
@@ -3997,10 +4197,11 @@ app.get('/api/map/infrastructure', route(async (req, res) => {
 
   res.json(annotateMapPayload({
     cables, pipelines, routes,
-    cable_source: 'curated',
+    cable_source: 'retired',
     cable_count: cables.length,
     pipeline_count: pipelines.length,
     route_count: routes.length,
+    note: 'Retired in MT2-4 ATLAS: unsourced geometry is not served. Sourced infrastructure objects are available from /api/map/entities.',
     generated: Date.now(),
   }, 'infrastructure'));
 }));

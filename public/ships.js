@@ -21,14 +21,19 @@
       center: [20, 10],
       zoom: 2,
       minZoom: 1,
-      maxZoom: 10,
+      maxZoom: 12,
       zoomControl: true,
-      attributionControl: false,
+      attributionControl: true,
+      tap: true,
     });
 
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-      subdomains: 'abcd',
+    // MT2-4 ATLAS: keyless OpenStreetMap tiles (ODbL; attribution required and shown) with a
+    // CSS dark treatment in the QUARTZ palette. The previous CARTO dark tiles now require an
+    // API key and rendered an "API KEY REQUIRED" watermark (B-015).
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
+      className: 'map-tiles-dark',
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors',
     }).addTo(map);
 
     // Let mapintel.js attach its overlay layers

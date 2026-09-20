@@ -221,7 +221,10 @@
   };
 
   // Line-based layers (great-circle-ish polylines) — [name, [[lat,lon],...], desc]
-  const LINES = {
+  // Retired (D-010): the line geometries below were hand-drawn approximations, not sourced
+  // paths. Kept empty so the 3D globe and /api/map/infrastructure consumers degrade truthfully.
+  const LINES = { tradeRoutes: [], cables: [], pipelines: [] };
+  const LINES_RETIRED = {
     tradeRoutes: [
       ['Asia–Europe (via Suez)', [[31.2, 121.5], [1.3, 104.0], [6.9, 79.8], [12.6, 43.3], [30.0, 32.5], [37.0, 15.0], [36.1, -5.3], [51.0, 1.4]], 'Main container artery'],
       ['Transpacific', [[31.2, 121.5], [35.5, 140.0], [40.0, 175.0], [40.0, -150.0], [37.8, -122.4]], 'Asia–US West Coast'],
@@ -298,8 +301,11 @@
           centers.push([s + (n - s) * (j + 0.5) / rows, w + (e - w) * (i + 0.5) / cols]);
         }
         const bbox = [s.toFixed(2), w.toFixed(2), n.toFixed(2), e.toFixed(2)].join(',');
-        const tiles = centers.map(([la, lo]) =>
-          getJSON(`https://api.airplanes.live/v2/point/${la.toFixed(3)}/${lo.toFixed(3)}/${radiusNm}`).then((d) => d.ac || []).catch(() => []));
+        // B-003 (fixed in MT2-4): the browser-direct airplanes.live tiles are CORS-blocked and
+        // produced an error storm; only the server proxy is used now. `centers`/`radiusNm`
+        // remain for the proxy's own tiling contract.
+        void radiusNm;
+        const tiles = centers.map(() => Promise.resolve([]));
         const all = await Promise.all([...tiles, getJSON('/api/map/flights?bbox=' + bbox).then((d) => d.points || []).catch(() => [])]);
         const live = all.slice(0, centers.length).flat();
         const merged = all[all.length - 1];
@@ -369,22 +375,8 @@
     { id: 'daynight', label: 'Day / Night', icon: '🌓', group: 'Overlays', compute: true, refresh: 300000,
       load: (lg) => { drawTerminator(lg); } },
     // Curated reference layers
-    { id: 'chokepoints', label: 'Chokepoints', icon: '⚓', group: 'Geopolitics',
-      load: async (lg) => { const d = await ensureLayerData(); (d.chokepoints || DATA.chokepoints).forEach(([n, la, lo, desc]) => diamond(la, lo, '#45c8dc', `<b>${esc(n)}</b><br>${esc(desc)}`).addTo(lg)); } },
-    { id: 'nuclear', label: 'Nuclear Sites', icon: '☢', group: 'Geopolitics',
-      load: async (lg) => { const d = await ensureLayerData(); (d.nuclear || DATA.nuclear).forEach(([n, la, lo, desc]) => diamond(la, lo, '#ffd23f', `<b>☢ ${esc(n)}</b><br>${esc(desc)}`).addTo(lg)); } },
-    { id: 'spaceports', label: 'Spaceports', icon: '🚀', group: 'Infrastructure',
-      load: async (lg) => { const d = await ensureLayerData(); (d.spaceports || DATA.spaceports).forEach(([n, la, lo, desc]) => diamond(la, lo, '#d96bff', `<b>🚀 ${esc(n)}</b><br>${esc(desc)}`).addTo(lg)); } },
-    { id: 'datacenters', label: 'AI Data Centers', icon: '🖥', group: 'Infrastructure',
-      load: async (lg) => { const d = await ensureLayerData(); (d.datacenters || DATA.datacenters).forEach(([n, la, lo, desc]) => diamond(la, lo, '#2bd97c', `<b>🖥 ${esc(n)}</b><br>${esc(desc)}`).addTo(lg)); } },
-    { id: 'exchanges', label: 'Stock Exchanges', icon: '🏛', group: 'Markets',
-      load: async (lg) => { const d = await ensureLayerData(); (d.exchanges || DATA.exchanges).forEach(([n, la, lo, desc]) => diamond(la, lo, '#ffa028', `<b>🏛 ${esc(n)}</b><br>${esc(desc)}`).addTo(lg)); } },
-    { id: 'centralbanks', label: 'Central Banks', icon: '💰', group: 'Markets',
-      load: async (lg) => { const d = await ensureLayerData(); (d.centralbanks || DATA.centralbanks).forEach(([n, la, lo, desc]) => diamond(la, lo, '#e8c170', `<b>💰 ${esc(n)}</b><br>${esc(desc)}`).addTo(lg)); } },
     { id: 'financialCenters', label: 'Financial Centers', icon: '💵', group: 'Markets',
       load: async (lg) => { const d = await ensureLayerData(); (d.financialCenters || DATA.financialCenters).forEach(([n, la, lo, desc]) => diamond(la, lo, '#ffd23f', `<b>💵 ${esc(n)}</b><br>${esc(desc)}`).addTo(lg)); } },
-    { id: 'commodityPorts', label: 'Commodity Ports', icon: '⚓', group: 'Markets',
-      load: async (lg) => { const d = await ensureLayerData(); (d.commodityPorts || DATA.commodityPorts).forEach(([n, la, lo, desc]) => diamond(la, lo, '#e8a87c', `<b>⚓ ${esc(n)}</b><br>${esc(desc)}`).addTo(lg)); } },
     // Geopolitics & defense
     { id: 'militaryBases', label: 'Military Bases', icon: '🪖', group: 'Geopolitics',
       load: async (lg) => { const d = await ensureLayerData(); (d.militaryBases || DATA.militaryBases).forEach(([n, la, lo, desc]) => diamond(la, lo, '#ff8c5a', `<b>🪖 ${esc(n)}</b><br>${esc(desc)}`).addTo(lg)); } },
@@ -511,12 +503,8 @@
         if (sc) sc.textContent = `Live Webcams · ${(d.points || []).length}`;
       } },
     // Line layers
-    { id: 'tradeRoutes', label: 'Trade Routes', icon: '🚢', group: 'Routes',
-      load: async (lg) => { const d = await ensureLayerData(); lines(lg, (d.lines || LINES).tradeRoutes || LINES.tradeRoutes, '#45c8dc', 2); } },
-    { id: 'cables', label: 'Undersea Cables', icon: '🔌', group: 'Routes',
-      load: async (lg) => { const d = await ensureLayerData(); lines(lg, (d.lines || LINES).cables || LINES.cables, '#7aa2f7', 1.5, '4 3'); } },
-    { id: 'pipelines', label: 'Pipelines', icon: '🛢', group: 'Routes',
-      load: async (lg) => { const d = await ensureLayerData(); lines(lg, (d.lines || LINES).pipelines || LINES.pipelines, '#ffa028', 2, '1 4'); } },
+    // Trade routes / undersea cables / pipelines: retired in MT2-4 ATLAS — the hand-drawn
+    // "-ish" paths were never sourced (D-010). Sourced geometry returns via ATLAS layers.
   ];
 
   function lines(lg, set, color, weight, dash) {
@@ -707,11 +695,11 @@
       options: { position: 'topright' },
       onAdd() {
         const div = L.DomUtil.create('div', 'map-layer-panel');
-        const groupsOrder = ['Hazards', 'Movement', 'Routes', 'Geopolitics', 'Infrastructure', 'Markets', 'Overlays'];
+        const groupsOrder = ['Hazards', 'Movement', 'Geopolitics', 'Infrastructure', 'Markets', 'Overlays'];
         const byGroup = {};
         LAYERS.forEach((l) => { (byGroup[l.group] = byGroup[l.group] || []).push(l); });
         div.innerHTML =
-          `<div class="mlp-head"><span>LAYERS</span><span class="mlp-count"></span><button class="mlp-collapse" title="Collapse">▾</button></div>` +
+          `<div class="mlp-head"><span>LEGACY OVERLAYS</span><span class="mlp-count"></span><button class="mlp-collapse" title="Collapse">▾</button></div>` +
           `<div class="mlp-body">` +
           groupsOrder.filter((g) => byGroup[g]).map((g) =>
             `<div class="mlp-group"><div class="mlp-gname">${g}</div>` +
@@ -721,6 +709,7 @@
           ).join('') + `</div>`;
         L.DomEvent.disableClickPropagation(div);
         L.DomEvent.disableScrollPropagation(div);
+        if (window.innerWidth < 720) { div.classList.add('collapsed'); div.querySelector('.mlp-collapse').textContent = '▸'; }
         countEl = div.querySelector('.mlp-count');
         div.querySelector('.mlp-collapse').addEventListener('click', (ev) => {
           ev.preventDefault();

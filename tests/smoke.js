@@ -98,8 +98,8 @@ async function checkHtml(label, url) {
   const t = await res.text();
   if (!t.includes('chartCanvas')) { console.error(`  ✗ ${label} — missing #chartCanvas`); fail++; return; }
   const versions = [...t.matchAll(/\?v=([0-9]{8}[a-z])/g)].map((match) => match[1]);
-  if (versions.length !== 9 || new Set(versions).size !== 1) {
-    console.error(`  ✗ ${label} — expected nine synchronized asset versions`);
+  if (versions.length !== 10 || new Set(versions).size !== 1) {
+    console.error(`  ✗ ${label} — expected ten synchronized asset versions (MT2-4 adds atlas.js)`);
     fail++; return;
   }
   // MT2-2 QUARTZ shell contract: primary nav mount, every workspace view, and the
@@ -109,6 +109,8 @@ async function checkHtml(label, url) {
   const missing = shellIds.filter((id) => !t.includes(`id="${id}"`));
   if (missing.length) { console.error(`  ✗ ${label} — shell missing ${missing.join(', ')}`); fail++; return; }
   if (!t.includes('shell.js?v=')) { console.error(`  ✗ ${label} — shell.js is not loaded`); fail++; return; }
+  if (!t.includes('atlas.js?v=')) { console.error(`  ✗ ${label} — atlas.js is not loaded`); fail++; return; }
+  if (t.includes('id="worldMapContainer"')) { console.error(`  ✗ ${label} — retired Infrastructure canvas still in the shell`); fail++; return; }
   console.log(`  ✓ ${label}`);
   pass++;
 }
@@ -211,6 +213,50 @@ async function checkHtml(label, url) {
     { skipError: true, validate: d => hasPolicy(d, 'intel.price-action') && typeof d.direction === 'string' });
 
   // Map layers (no key required — embedded baseline)
+  // ── MT2-4 ATLAS geographic intelligence contract ─────────────────────
+  await check('GET /api/map/atlas (registry: 5 categories, licences, coverage truth, snapshot)', `${BASE}/api/map/atlas`, {
+    validate: d => d.atlasSchemaVersion === '2026-09-21a' && Array.isArray(d.layers) && d.layers.length >= 12 &&
+      ['MARKETS', 'INDUSTRY', 'ENERGY', 'MARITIME', 'EVENTS'].every(c => d.layers.some(l => l.category === c)) &&
+      d.layers.every(l => typeof l.coverage.note === 'string' && l.coverage.complete === false && l.counts && (l.renders === false || l.dataSource.license)) &&
+      d.layers.find(l => l.id === 'subsea-cables').renders === false && d.layers.find(l => l.id === 'companies').counts.authoritative > 1000 &&
+      d.snapshot && d.snapshot.sources.gppd.license === 'CC BY 4.0' && d.coverage.companies.perMarket.IN > 50,
+  });
+  await check('GET /api/map/entities?layer=companies&market=IN&bbox=India&zoom=9 (entities, IN emphasis first)', `${BASE}/api/map/entities?layer=companies&market=IN&bbox=72.5,18.8,73.2,19.4&zoom=9`, {
+    validate: d => d.mode === 'entities' && d.market === 'IN' && d.entities.length > 5 && d.entities.every(e => e.type === 'COMPANY_HQ' && e.confidence !== 'UNVERIFIED' && typeof e.lastVerified === 'string') &&
+      d.entities[0].relevance === 'primary' && d.entities.every(e => e.lat >= 18.8 && e.lat <= 19.4),
+  });
+  await check('GET /api/map/entities?layer=companies&zoom=2 (world → server clusters, bounded)', `${BASE}/api/map/entities?layer=companies&market=US&zoom=2&bbox=-180,-85,180,85`, {
+    validate: d => d.mode === 'clusters' && d.clusters.length > 5 && d.clusters.length < 400 && d.clusters.every(c => c.count >= 1 && Math.abs(c.lat) <= 90) && d.total > 4000,
+  });
+  await check('GET /api/map/entities?layer=subsea-cables (non-rendering layer draws nothing, says why)', `${BASE}/api/map/entities?layer=subsea-cables&zoom=3`, {
+    validate: d => d.mode === 'none' && d.renders === false && d.entities.length === 0 && /CC BY-NC-SA|retired/.test(d.coverage.note),
+  });
+  await check('GET /api/map/entities?layer=nope → 400', `${BASE}/api/map/entities?layer=nope`, { allowStatuses: [400], allowErrorPayload: true, validate: d => Array.isArray(d.layers) });
+  await check('GET /api/map/entities bad bbox → 400', `${BASE}/api/map/entities?layer=ports&bbox=0,99,1,100`, { allowStatuses: [400], allowErrorPayload: true, validate: d => /bbox/.test(d.message) });
+  await check('GET /api/map/search?q=reliance&market=IN (company → canonical security, no .NS)', `${BASE}/api/map/search?q=reliance&market=IN`, {
+    validate: d => d.results.length > 0 && d.results[0].kind === 'company' && /^NSE:|^BSE:/.test(d.results[0].subtitle) && !/\.NS|\.BO/.test(JSON.stringify(d.results)),
+  });
+  await check('GET /api/map/search?q=hormuz (place)', `${BASE}/api/map/search?q=hormuz`, { validate: d => d.results.some(r => r.kind === 'place' && r.type === 'SHIPPING_CHOKEPOINT') });
+  await check('GET /api/map/entity?id=<first Mumbai company> (detail: evidence, canonical link, extension seams)', `${BASE}/api/map/entities?layer=companies&market=IN&bbox=72.5,18.8,73.2,19.4&zoom=9`, {
+    validate: d => Array.isArray(d.entities) && d.entities.length > 0,
+  });
+  {
+    let first = null;
+    try { first = (await (await fetch(`${BASE}/api/map/entities?layer=companies&market=IN&bbox=72.5,18.8,73.2,19.4&zoom=9`)).json()).entities[0]; } catch {}
+    if (first) {
+      await check(`GET /api/map/entity?id=${first.id}`, `${BASE}/api/map/entity?id=${encodeURIComponent(first.id)}`, {
+        validate: d => d.entity && d.entity.id === first.id && d.entity.sourceEvidence.length > 0 && /wikidata\.org/.test(d.entity.sourceEvidence[0].sourceUrl) &&
+          Array.isArray(d.links) && d.links.every(l => /^IN:(NSE|BSE):[A-Z0-9&.-]+$/.test(l.instrumentIdentity) && l.relationType === 'HEADQUARTERS') &&
+          d.extensions && /NEXUS/.test(d.extensions.supplyChain) && Array.isArray(d.nearbyEvents),
+      });
+    }
+  }
+  await check('GET /api/map/entity?id=nope → 404', `${BASE}/api/map/entity?id=nope`, { allowStatuses: [404], allowErrorPayload: true, validate: d => d.code === 'not_found' });
+  await check('GET /api/map/geoevents (canonical GeoEvents, classified status)', `${BASE}/api/map/geoevents`, {
+    skipError: true,
+    validate: d => d.error || (Array.isArray(d.events) && d.events.every(e => ['active', 'stale', 'resolved'].includes(e.status) && e.sourceEvidence.length > 0 && Math.abs(e.location.lat) <= 90 && d.categories.includes(e.type))),
+  });
+
   await check('GET /api/map/layers', `${BASE}/api/map/layers`,
     { validate: d => (d.points || d.lines || d.regions) && d.provenance?.kind === 'layer-catalog' });
 

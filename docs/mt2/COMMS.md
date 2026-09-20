@@ -221,3 +221,22 @@ DECISION / REQUEST: none. MT2-4 LEDGER is NOT authorized by this report.
 EVIDENCE POINTER: EVIDENCE.md "MT2-3 TWINCORE" + "Production acceptance"; D-009; B-023…B-027.
 ACTION REQUIRED: OWNER — move the repo out of iCloud (B-001/B-023, data-loss risk); verify the
   NSE 2026 holiday list (B-024).
+---
+TIMESTAMP: 2026-09-21T06:20Z
+FROM: CLAUDE
+TO: OWNER
+CHECKPOINT: MT2-4 ATLAS
+MESSAGE TYPE: STATUS — implementation complete, deploying for production acceptance
+SUMMARY: Repo relocated to ~/Developer/market-terminal (non-iCloud; HEAD cd28830 verified; owner
+  files copied; old copy untouched). Roadmap corrected to the canonical numbering. Map audit:
+  inaccuracies were structural (memory-typed coordinates, invented "-ish" route geometry, an
+  unrecorded CC BY-NC-SA TeleGeography ingestion, duplicated datasets, no object identity or
+  provenance). ATLAS replaces that with sourced objects only: Wikidata (CC0) companies for
+  NSE/BSE/NYSE/Nasdaq + Wikidata-verified reference points (the verification caught my own
+  curated Strait of Malacca point 258 km off), Natural Earth (PD) ports/airports, WRI GPPD
+  (CC BY 4.0) power/nuclear plants, live USGS/EONET/NWS/GDELT events as classified GeoEvents.
+  Cables, pipelines, fabs, refineries and mines are registry layers with `renders: false` and
+  a coverage note — nothing invented (D-010, B-029).
+DECISION / REQUEST: none pending. Pushing main per policy.
+EVIDENCE POINTER: EVIDENCE.md "MT2-4 ATLAS"; DECISIONS D-010; BACKLOG B-028…B-031.
+ACTION REQUIRED: OWNER — none for this checkpoint (the old iCloud copy can be archived at leisure).

@@ -55,6 +55,31 @@ function truthBadge(el, truth) {
 
 window.MarketTerminal = window.MarketTerminal || {};
 window.MarketTerminal.getMarketContext = () => ({ id: Market.id, ...Market.def() });
+/**
+ * Canonical map → security path (MT2-4 ATLAS). Accepts a TWINCORE identity
+ * ('IN:NSE:RELIANCE') or { market, symbol }; switches market context when needed and lands on
+ * the Terminal (default) or Deep Dive. Never accepts provider spellings such as RELIANCE.NS.
+ */
+window.MarketTerminal.openSecurity = (target, view = 'terminal') => {
+  let market = null, symbol = null;
+  if (typeof target === 'string') {
+    const m = /^([A-Z]{2}):([A-Z]+):([A-Z0-9&.^-]+)$/i.exec(target.trim());
+    if (!m || /\.(NS|BO)$/i.test(m[3])) return false;
+    market = m[1].toUpperCase(); symbol = m[3].toUpperCase();
+  } else if (target && target.symbol) {
+    market = String(target.market || Market.id).toUpperCase(); symbol = String(target.symbol).toUpperCase();
+  }
+  if (!symbol || !Shell || !Shell.market(market)) return false;
+  if (market !== Market.id) setMarket(market); // full context switch: tape, benchmarks, sentiment follow
+  if (view === 'deepdive') {
+    navigateTo('research/analyze');
+    document.dispatchEvent(new CustomEvent('mt:deepdive', { detail: { symbol, market } }));
+  } else {
+    navigateTo('terminal');
+    loadSymbol(symbol);
+  }
+  return true;
+};
 window.MarketTerminal.getSymbolContext = () => ({
   symbol: state.symbol,
   lastPrice: Number.isFinite(Number(state.quote?.c)) ? Number(state.quote.c) : null,

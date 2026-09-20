@@ -1461,6 +1461,7 @@ function formatAiRuntimeSummary(policy) {
   }
 
   $('#ddForm').addEventListener('submit', (e) => { e.preventDefault(); loadDeepDive($('#ddInput').value); });
+  document.addEventListener('mt:deepdive', (e) => { if (e.detail && e.detail.symbol) loadDeepDive(e.detail.symbol); });
 
   // ---------- GLOBAL INTEL: AI Investment Report ----------
   let reportLoaded = false;
