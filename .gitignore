@@ -4,3 +4,20 @@ node_modules
 subscriptions.json
 .claude/
 .wrangler/
+
+# iOS shell (ios/) — never commit user state, build output, or signing material
+ios/**/xcuserdata/
+ios/**/*.xcuserstate
+ios/**/*.xcuserdatad/
+ios/**/project.xcworkspace/xcuserdata/
+ios/DerivedData/
+ios/build/
+ios/dist/
+ios/Config/Local.xcconfig
+ios/**/*.ipa
+ios/**/*.xcarchive
+ios/**/*.mobileprovision
+ios/**/*.p12
+ios/**/*.cer
+ios/**/ExportOptions*.plist
+!ios/**/ExportOptions.example.plist

@@ -1,0 +1,99 @@
+# XcodeGen spec for the Market Terminal iOS shell.
+# Regenerate the project after editing:  brew install xcodegen && cd ios && xcodegen generate
+name: MarketTerminal
+options:
+  bundleIdPrefix: com.marketterminal
+  deploymentTarget:
+    iOS: "16.0"
+  xcodeVersion: "16.0"
+  createIntermediateGroups: true
+  generateEmptyDirectories: false
+  groupSortPosition: top
+  defaultConfig: Debug
+
+configs:
+  Debug: debug
+  Development: debug
+  Release: release
+
+configFiles:
+  Debug: Config/Debug.xcconfig
+  Development: Config/Development.xcconfig
+  Release: Config/Release.xcconfig
+
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+    ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+    GENERATE_INFOPLIST_FILE: NO
+    CODE_SIGN_STYLE: Automatic
+    SUPPORTS_MACCATALYST: NO
+    SUPPORTED_PLATFORMS: "iphoneos iphonesimulator"
+
+schemes:
+  MarketTerminal:
+    build:
+      targets:
+        MarketTerminal: all
+        MarketTerminalTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets: [MarketTerminalTests]
+    profile:
+      config: Release
+    analyze:
+      config: Debug
+    archive:
+      config: Release
+  MarketTerminal-Development:
+    build:
+      targets:
+        MarketTerminal: all
+    run:
+      config: Development
+
+targets:
+  MarketTerminal:
+    type: application
+    platform: iOS
+    sources:
+      - path: MarketTerminal
+        excludes:
+          - "Resources/Info*.plist"
+    configFiles:
+      Debug: Config/Debug.xcconfig
+      Development: Config/Development.xcconfig
+      Release: Config/Release.xcconfig
+    settings:
+      base:
+        # PRODUCT_NAME / bundle id / INFOPLIST_FILE / deployment target come from Config/*.xcconfig.
+        LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/Frameworks"
+        ENABLE_PREVIEWS: YES
+        PRODUCT_MODULE_NAME: MarketTerminal
+      configs:
+        Debug:
+          INFOPLIST_FILE: MarketTerminal/Resources/Info.plist
+        Release:
+          INFOPLIST_FILE: MarketTerminal/Resources/Info.plist
+        Development:
+          INFOPLIST_FILE: MarketTerminal/Resources/Info-Development.plist
+
+  MarketTerminalTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: MarketTerminalTests
+    dependencies:
+      - target: MarketTerminal
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.marketterminal.app.tests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Market Terminal.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Market Terminal"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+        IPHONEOS_DEPLOYMENT_TARGET: "16.0"
+        CODE_SIGN_STYLE: Automatic

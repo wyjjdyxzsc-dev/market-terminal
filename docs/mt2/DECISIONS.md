@@ -136,3 +136,31 @@ Do not pre-decide future architecture; add records only when a real decision is 
   documents use "Deep Dive" for the surface and may say "(the OWNER's 'Deep Research')" once
   when quoting. D-001 stands, with the label correction above.
 - STATUS: ACCEPTED
+
+## D-008 · 2026-09-20 · POCKET (side-track) · iPhone delivery is a native WKWebView shell around the canonical web app
+- DECISION: `ios/` holds a Swift/SwiftUI application (`Market Terminal`, `com.marketterminal.app`,
+  iOS 16+) whose only content is a persistent `WKWebView` pointed at the production Worker
+  origin. No financial, provider, AI, Deep Dive, map, quant, watchlist or portfolio logic is
+  duplicated natively. Production URL is a single xcconfig value (`MARKET_TERMINAL_BASE_URL`)
+  surfaced through Info.plist; Swift carries no service URL literal and enforces https.
+- EXTERNAL LINKS: Market Terminal hosts stay in the shell (including `target=_blank`); external
+  http(s) sources open in `SFSafariViewController` (Safari process, own cookies, content
+  blockers), which returns to the untouched terminal on dismissal; `mailto:`/`tel:` go to the
+  system; `javascript:` and self-scheme bounces are dropped; third-party iframes render in place.
+- DEEP LINKS: the `marketterminal://` scheme is registered; only workspace routes that map onto
+  the QUARTZ `#/workspace/item` hash contract resolve. `stock/…`, `deepdive/<symbol>`,
+  `portfolio`, `ipo/…`, `event/…` are reserved and explicitly unsupported until the web
+  application exposes an entity URL contract (it has none today — only `?tab=` and the hash).
+- WHY: the OWNER's brief requires the web application to remain canonical; a wrapper is the
+  lowest-complexity path that still gives a Home Screen icon, no browser chrome, persistent
+  session, native loading/failure states and clean extension seams. Capacitor was not adopted:
+  the repository has no bundler or plugin needs that would justify it.
+- ALTERNATIVES: (a) PWA "Add to Home Screen" — already possible but gives no native seams
+  (push, Face ID, deep links) and no install artefact; (b) Capacitor — rejected as above;
+  (c) native rewrite — out of scope by the brief.
+- CONSEQUENCES: `ios/` is generated from `project.yml` by XcodeGen and the `.xcodeproj` is
+  committed; a `Development` configuration carries the only ATS exception (loopback/local
+  network) in a separate Info.plist; the production plist has none. Web Push cannot work inside
+  `WKWebView` (B-018), so SENTINEL/WORLDWIRE/ORACLE notifications will need a native push seam.
+- STATUS: ACCEPTED (engineering default under the POCKET authorization; OWNER may override the
+  bundle id via `Config/Local.xcconfig`).

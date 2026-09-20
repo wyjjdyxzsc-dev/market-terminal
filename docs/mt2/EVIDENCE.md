@@ -405,3 +405,65 @@ RESTART VERIFIED · HUMAN ACCEPTED
   → schema `2026-08-11a`, `deterministic-dossier`, `aiNarrativeStatus: unavailable`, Not Rated /
   Data Only, policy `abstained` (B-002 unchanged). Level: LIVE TESTED (observation).
 - Classification: **CASE A — SAME SURFACE.** No code changed; docs/mt2 only.
+
+---
+
+## POCKET — iPhone delivery (side-track) — 2026-09-20 — start HEAD `bd51724`
+
+### Ground truth
+- Repository: `main` @ `bd51724`, tracked tree clean; 3 untracked owner files preserved
+  (`MARKET_TERMINAL_TOTAL_PLATFORM_CODEX_MASTER_PROMPT.{md,txt}`, `worker-startup.cpuprofile`).
+  Production `GET /` → 200, nine `?v=20260920g` assets. Web app: vanilla JS, `manifest.json`
+  standalone PWA, `sw.js` push-only service worker (no offline cache), `viewport-fit=cover`
+  with no `safe-area-inset` CSS.
+- Mac: Apple M1, macOS 26.5.2, Command Line Tools 26.6 (`swift 6.3.3`), **no Xcode**
+  (`/Library/Developer/CommandLineTools` active; no `/Applications/Xcode*.app`; DerivedData
+  from a July install remains), **0 code-signing identities**, `devicectl`/`simctl`/`xctrace`
+  absent. App Store Xcode is 27.0 and requires macOS 26.6 (26.7 update is offered by
+  `softwareupdate -l`, needs admin password + restart). `mas get 497799835` requires sudo.
+  Disk: 33 GiB free.
+- iPhone: **none detected** (`system_profiler SPUSBDataType` lists no Apple mobile device).
+  Pairing/trust/Developer Mode: not observable.
+
+### Implemented (level: IMPLEMENTED unless stated)
+- `ios/project.yml` + generated `ios/MarketTerminal.xcodeproj` (XcodeGen 2.46.0), three
+  configurations (Debug/Release → production, Development → local), two schemes, app + XCTest
+  targets, automatic signing, no team pinned.
+- Swift sources: `AppConfig` (Info.plist → typed config, https enforced), `NavigationPolicy`,
+  `DeepLinkRouter`, `TerminalSession` (WKWebView owner: persistent data store, JS on,
+  data detectors off, inline media, UA suffix `MarketTerminalIOS/<v>`, navigation + UI
+  delegates, response MIME gate, process-termination reload, foreground retry),
+  `ContentView`/`StateViews`/`SafariView`/`Theme`, `MarketTerminalApp` (scene phase, onOpenURL).
+- Resources: production `Info.plist` (no ATS keys), `Info-Development.plist` (NSAllowsLocalNetworking
+  + localhost exception only), asset catalog with an opaque 1024 px icon rendered from the
+  QUARTZ favicon path, launch background `#0b0c0f`, accent `#e8b25c`.
+- `ios/README.md` (build/sign/install/reinstall/IPA fallback/dev-server/troubleshooting);
+  `.gitignore` rules for xcuserdata, DerivedData, build/dist, Local.xcconfig, IPA/archives,
+  provisioning profiles, certificates.
+
+### Verification actually performed
+- `swiftc -parse` on all 13 Swift files → no errors. Level: IMPLEMENTED (syntax only for the
+  UIKit/WebKit/SwiftUI files; the iOS SDK is not present).
+- Pure logic compiled **and executed** on macOS: `AppConfig.swift + NavigationPolicy.swift +
+  DeepLinkRouter.swift` against a 28-assertion `main.swift` mirroring `MarketTerminalTests`
+  → `28/28 passed` (production/development parsing, https rejection, real production host,
+  internal/external/new-window/iframe/system/blocked decisions, workspace routes, reserved
+  entity routes, destination building). Level: UNIT TESTED (macOS toolchain; the XCTest
+  bundle itself has not run — B-020).
+- `plutil -lint` both plists → OK. Generated pbxproj carries per-config `INFOPLIST_FILE`,
+  `PRODUCT_MODULE_NAME = MarketTerminal`, xcconfig base references, 52 Swift file refs.
+- Web suites unchanged and green after the change: `npm run test:unit` 75/75;
+  `npm run test:ai-eval` `thresholdsPassed: true`. No tracked web asset changed → no `?v=` bump.
+- iPhone-dimension audit of **production** in the built-in browser (Level: REAL BROWSER
+  TESTED, not device): portrait 375×812 `scrollWidth 375`, chrome/mode/command/tape/nav/band/
+  chart render; landscape 812×375 across `#/terminal, markets, watchlist, research/analyze,
+  research/sectors, intelligence/{briefing,situation,supply,map}, quant, alerts` → every route
+  shows its view, `scrollWidth === 812` for all, Leaflet map initialises (440 px), Deep Dive
+  form renders; console errors only the known B-003 aircraft CORS storm. Landscape chrome
+  stack ≈ 170 px (B-016).
+
+### Not achieved (truthfully)
+- IOS BUILD TESTED, SIGNED, DEVICE INSTALLED, DEVICE LAUNCHED, REAL DEVICE TESTED, RESTART
+  VERIFIED, OWNER ACCEPTED: **none** — no Xcode, no signing identity, no iPhone connected.
+  Evidence level reached: **UNIT TESTED (pure logic) / IMPLEMENTED (shell)**.
+- No IPA produced (requires Xcode). AltStore not required.

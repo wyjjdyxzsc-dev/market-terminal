@@ -1,0 +1,6 @@
+#include "Base.xcconfig"
+#include? "Local.xcconfig"
+// Development boots into MARKET_TERMINAL_DEV_URL (local Mac server). Uses a separate
+// Info.plist that carries the narrowly scoped ATS local-networking exception.
+MARKET_TERMINAL_ENV = development
+INFOPLIST_FILE = MarketTerminal/Resources/Info-Development.plist

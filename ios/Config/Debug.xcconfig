@@ -1,0 +1,3 @@
+#include "Base.xcconfig"
+#include? "Local.xcconfig"
+// Debug still targets PRODUCTION so a Debug device install proves the real service.

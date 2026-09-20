@@ -123,3 +123,24 @@ DECISION / REQUEST: D-007 records the identity permanently; D-001's "AI RESEARCH
 EVIDENCE POINTER: EVIDENCE.md "MT2-1A"; DECISIONS D-007.
 ACTION REQUIRED: none. Owner requirement satisfied; next checkpoint awaits authorization.
 ---
+---
+TIMESTAMP: 2026-09-20T08:25Z
+FROM: CLAUDE
+TO: OWNER
+CHECKPOINT: POCKET (side-track — iPhone delivery; main roadmap numbering untouched)
+MESSAGE TYPE: HUMAN ACTION REQUIRED (state preserved; resume this same checkpoint)
+SUMMARY: Native shell implemented end-to-end under ios/ (SwiftUI + WKWebView, production URL
+  centralized in Config/Base.xcconfig, persistent store, navigation policy, SFSafariViewController
+  for external sources, loading/retry states, marketterminal:// seam, XCTest suite, README,
+  ignore rules). Pure logic compiled+executed 28/28 on macOS; web suites 75/75 + ai-eval green;
+  production audited at iPhone portrait/landscape in the browser (no overflow). The environment
+  cannot go further: this Mac has no Xcode (App Store Xcode 27 needs macOS 26.6; the Mac is on
+  26.5.2), zero signing identities, and no iPhone is connected. Committed locally; NOT pushed
+  (delivery is not verified on a device, and a push deploys production).
+DECISION / REQUEST: OWNER actions, in order — (1) install macOS 26.7 (Software Update; admin
+  password + restart) then Xcode from the App Store, or install Xcode 26.x from
+  developer.apple.com; (2) open Xcode once, sign in with your Apple ID (Settings ▸ Accounts);
+  (3) plug the iPhone in, unlock it, tap Trust, enable Developer Mode. Then say "continue
+  POCKET" and this checkpoint resumes at BUILD → SIGN → INSTALL → LAUNCH → device acceptance.
+EVIDENCE POINTER: EVIDENCE.md "POCKET"; DECISIONS.md D-008; BACKLOG.md B-016…B-020; ios/README.md.
+ACTION REQUIRED: OWNER — steps (1)–(3). No other engineering is pending.

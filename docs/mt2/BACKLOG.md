@@ -118,3 +118,43 @@ accessibility/degraded-state defect · P3 minor.
 ## B-004 / B-013 · NOTE (MT2-2)
 - Not addressed in QUARTZ (shell lifecycle work stayed within navigation + presentation). Both
   remain open for the next checkpoint that touches intel.js/mapintel.js lifecycle.
+
+## B-016 · P3 · UX · Landscape iPhone: fixed chrome consumes ~45% of the viewport
+- OBSERVATION: at 812×375 (iPhone landscape) production stacks chrome (117 px) + tape + nav +
+  subnav ≈ 170 px before content. Every workspace renders, `scrollWidth === 812` (no horizontal
+  overflow), content scrolls — usable but cramped. Portrait 375×812 unchanged from QUARTZ.
+- EVIDENCE: EVIDENCE.md POCKET "iPhone-dimension audit" (built-in browser, production).
+- SUGGESTED: collapse the market-mode row and tape into the chrome below ~420 px height, or
+  auto-hide the tape in landscape. Belongs to CONVERGENCE; not a wrapper defect.
+
+## B-017 · P3 · SECURITY-POSTURE · Local dev server binds all interfaces
+- OBSERVATION: `server.js` calls `httpServer.listen(PORT)` with no host, so `npm start` is
+  reachable from the LAN today. The POCKET brief assumed a 127.0.0.1-only posture; ground truth
+  is broader. The iOS `Development` configuration uses `localhost` (Simulator only) and does
+  not change this.
+- SUGGESTED: bind to `127.0.0.1` by default with an explicit `HOST=0.0.0.0` opt-in for
+  physical-device testing. Not changed in POCKET (out of scope; would alter local behaviour).
+
+## B-018 · P2 · MOBILE · Web Push is unavailable inside WKWebView
+- OBSERVATION: `public/intel.js` gates Alerts on `serviceWorker` + `PushManager`; WKWebView
+  has no push support, so the Alerts workspace shows its own unsupported/blocked state in the
+  iOS app. Breaking-news alerts therefore do not reach the phone through the wrapper.
+- SUGGESTED: native APNs seam (UNUserNotificationCenter + device-token registration route in
+  the Worker) when SENTINEL/WORLDWIRE/ORACLE push is authorized. Seam location:
+  `ios/MarketTerminal/App/MarketTerminalApp.swift` (AppDelegate adaptor) + a `/api/push/ios`
+  route. Not implemented in POCKET by design.
+
+## B-019 · P3 · MOBILE · Optional Face ID application lock not implemented
+- OBSERVATION: POCKET left `LocalAuthentication` out; the app holds no private data beyond the
+  web session, so the lock is a preference, not a protection gap.
+- SUGGESTED: `LAContext` gate in `ContentView` behind a Settings toggle, in a later mobile
+  checkpoint.
+
+## B-020 · P2 · IOS · XCTest suite and iOS build have not been executed
+- OBSERVATION: the Mac has only Command Line Tools (no Xcode, no iOS SDK, 0 signing
+  identities), so `MarketTerminalTests` and the iOS build could not run in POCKET. The
+  Foundation-only logic (AppConfig, NavigationPolicy, DeepLinkRouter) was compiled and executed
+  with the macOS toolchain (28/28); the UIKit/WebKit/SwiftUI files are parse-checked only.
+- SUGGESTED: first action after Xcode is installed — `xcodebuild test` on a simulator, then the
+  device install (ios/README.md). Any compile error there is an IMPLEMENTATION class fix
+  inside POCKET, not a new checkpoint.

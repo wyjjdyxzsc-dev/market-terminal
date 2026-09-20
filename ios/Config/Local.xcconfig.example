@@ -1,0 +1,4 @@
+// Copy to Config/Local.xcconfig (git-ignored) to pin your Personal Team without Xcode UI.
+// DEVELOPMENT_TEAM = XXXXXXXXXX
+// Override the bundle id if com.marketterminal.app collides with another Personal-Team app:
+// PRODUCT_BUNDLE_IDENTIFIER = com.yourname.marketterminal
