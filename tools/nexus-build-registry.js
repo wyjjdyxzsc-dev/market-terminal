@@ -254,12 +254,61 @@ function buildNameIndex(companies) {
   return index;
 }
 
+function tokenizeName(normalized) {
+  return String(normalized || '').split(' ').filter(Boolean);
+}
+
+// Fix (review round 1): the original substring-containment fuzzy match had no
+// minimum length floor on the QUERY side (only `indexed.length > 4`), and even
+// with a floor, plain word-containment is too permissive for a short/common
+// word shared by two unrelated real companies. Two confirmed-fabricated edges
+// from the first run:
+//   - "CMS" (from a UnitedHealth 10-K — almost certainly the Centers for
+//     Medicare & Medicaid Services, a federal agency, not a company at all)
+//     substring-matched "cms energy" -> CMS Energy Corp, an unrelated utility.
+//   - "Aditya Birla Group" (real Wikidata parent of Hindalco/Vodafone
+//     Idea/Indus Towers) substring/word-matched "birla" -> Birla Corporation
+//     Limited, a separate, unrelated NSE-listed cement company that merely
+//     shares a founder-family name.
+// Fix: (1) require BOTH the query and the indexed name to exceed 4 normalized
+// characters — a bare 3-4 letter label (like "CMS") is exactly the shape SEC
+// XBRL customer-axis members and short ticker-style abbreviations take, and is
+// too ambiguous to trust without more context; (2) replace substring
+// containment with word-level containment (all significant words of the
+// shorter name must appear as *whole words* in the longer name, not as a
+// character substring); (3) additionally require the shorter name's words to
+// cover a substantial share (>=60%) of the longer name's words — this is what
+// actually rejects "birla" (1 of 3 words in "aditya birla group" = 33%
+// coverage), since word-containment alone still accepts a single word buried
+// inside an unrelated multi-word name; (4) require at least TWO significant
+// words to agree — a single shared word, even a distinctive-looking one, is
+// not enough on its own. This fourth rule was added after the >=60%-coverage
+// rule alone let a *different* false positive through in testing: "3i GROUP
+// PLC" (an unrelated investment firm) matched "Aditya Birla Group" purely
+// because both contain the generic corporate word "group" — the only
+// "significant" (>2-char) token "3i" itself is 2 characters and gets filtered
+// out, leaving "group" as the sole word compared, which is far too generic
+// to trust alone.
+const MIN_MATCH_LEN = 4; // normalized strings of this length or shorter are never matched (exact or fuzzy)
+const MIN_WORD_COVERAGE = 0.6;
+const MIN_SIGNIFICANT_WORDS = 2; // a single shared word is never sufficient for a fuzzy match
+
 function matchCompanyByName(rawLabel, nameIndex) {
   const key = normalizeCompanyName(rawLabel);
-  if (!key) return null;
+  if (!key || key.length <= MIN_MATCH_LEN) return null;
   if (nameIndex.has(key)) return nameIndex.get(key);
+  const keyTokens = tokenizeName(key);
   for (const [indexed, id] of nameIndex) {
-    if (indexed.length > 4 && (key.includes(indexed) || indexed.includes(key))) return id;
+    if (!indexed || indexed.length <= MIN_MATCH_LEN) continue;
+    const indexedTokens = tokenizeName(indexed);
+    const shorterTokens = keyTokens.length <= indexedTokens.length ? keyTokens : indexedTokens;
+    const longerTokens = keyTokens.length <= indexedTokens.length ? indexedTokens : keyTokens;
+    const significant = shorterTokens.filter((t) => t.length > 2);
+    if (significant.length < MIN_SIGNIFICANT_WORDS) continue;
+    const longerSet = new Set(longerTokens);
+    if (!significant.every((t) => longerSet.has(t))) continue;
+    if (shorterTokens.length / longerTokens.length < MIN_WORD_COVERAGE) continue;
+    return id;
   }
   return null;
 }
