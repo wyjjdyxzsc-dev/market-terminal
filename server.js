@@ -4128,14 +4128,20 @@ async function atlasEntityDetail(id) {
   if (!entity) return null;
   const links = idx.linksByLocation.get(entity.id) || [];
   let nearbyEvents = [];
+  let nearbyEventsState = 'loaded';
   try {
-    const { data } = await fetch_cached_data(atlasCore.atlasCacheKey('events', {}), fetchGeoEvents, TTL.NEWS);
-    const now = Date.now();
-    nearbyEvents = data
-      .map((e) => ({ ...e, status: atlasCore.classifyEventStatus(e, now), distanceKm: Math.round(haversineKm(entity, e.location)) }))
-      .filter((e) => e.status === 'active' && e.distanceKm <= 250)
-      .sort((a, b) => a.distanceKm - b.distanceKm).slice(0, 8);
-  } catch { nearbyEvents = []; }
+    // Bounded: the live aggregate can take seconds cold; the drawer must not wait on it.
+    const timeout = new Promise((resolve) => setTimeout(() => resolve(null), 1500));
+    const result = await Promise.race([fetch_cached_data(atlasCore.atlasCacheKey('events', {}), fetchGeoEvents, TTL.NEWS), timeout]);
+    if (!result) { nearbyEventsState = 'pending'; }
+    else {
+      const now = Date.now();
+      nearbyEvents = result.data
+        .map((e) => ({ ...e, status: atlasCore.classifyEventStatus(e, now), distanceKm: Math.round(haversineKm(entity, e.location)) }))
+        .filter((e) => e.status === 'active' && e.distanceKm <= 250)
+        .sort((a, b) => a.distanceKm - b.distanceKm).slice(0, 8);
+    }
+  } catch { nearbyEvents = []; nearbyEventsState = 'unavailable'; }
   return {
     atlasSchemaVersion: atlasCore.ATLAS_SCHEMA_VERSION,
     entity,
@@ -4143,6 +4149,7 @@ async function atlasEntityDetail(id) {
     securities: links.map((l) => l.instrumentIdentity).filter(Boolean),
     layer: atlasCore.layerById(entity.layer),
     nearbyEvents,
+    nearbyEventsState,
     extensions: { supplyChain: 'reserved:MT2-5 NEXUS', ipo: 'reserved:MT2-6 LAUNCHPAD', worldwire: 'reserved:MT2-7 WORLDWIRE', oracle: 'reserved:MT2-8 ORACLE', portfolio: 'reserved:MT2-9 LEDGER', watchlist: 'reserved:MT2-11 WATCHTOWER', sentinel: 'reserved:MT2-12 SENTINEL' },
   };
 }
