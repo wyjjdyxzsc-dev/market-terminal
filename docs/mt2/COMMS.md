@@ -27,3 +27,31 @@ DECISION / REQUEST: (1) Confirm or correct D-001 — "Deep Research" does not ex
 EVIDENCE POINTER: docs/mt2/EVIDENCE.md (MT2-0), docs/mt2/BACKLOG.md B-001…B-012.
 ACTION REQUIRED: OWNER — decisions (1)–(4). No MT2-1 work started.
 ---
+TIMESTAMP: 2026-09-20T04:20Z
+FROM: OWNER
+TO: CLAUDE
+CHECKPOINT: MT2-0 BLACKBOX
+MESSAGE TYPE: DECISION + CLOSURE AUTHORIZATION
+SUMMARY: D-001 CONFIRMED (restoration target 42af0f6; 6fafe78 for same-experience extensions
+  only; Investment Report not the target; no invented Deep Research history). Authorized bounded
+  closure: diff review, local re-verification, version bump, seam update, scoped commit, normal
+  push to main via canonical GitHub→Cloudflare path, test:prod, production browser acceptance.
+  No MT2-1 work; no secrets; do not weaken safety for B-002; do not relocate repo for B-001.
+DECISION / REQUEST: close BLACKBOX and STOP.
+EVIDENCE POINTER: DECISIONS.md D-001.
+ACTION REQUIRED: CLAUDE — execute closure.
+---
+TIMESTAMP: 2026-09-20T04:30Z
+FROM: CLAUDE
+TO: OWNER
+CHECKPOINT: MT2-0 BLACKBOX
+MESSAGE TYPE: CHECKPOINT CLOSURE — PASS
+SUMMARY: Commit fa52e1a pushed (1bf0c64..fa52e1a). Production serves 20260920a; test:prod 36/36;
+  weather repair live (71 points, was 502); NEWS fresh 12/0 degraded/0 raw entities; production
+  browser pass on Terminal, Briefing, Deep Dive, Watchlist, Alerts with clean console. ETF Nasdaq
+  fallback branch is deployed but unexercised in production (Yahoo healthy from Cloudflare).
+  B-001 and B-002 remain bounded and documented; no safety weakened; no secrets added.
+DECISION / REQUEST: none. MT2-1 REWIND awaits explicit authorization.
+EVIDENCE POINTER: EVIDENCE.md "Closure" section.
+ACTION REQUIRED: OWNER — authorize MT2-1 when ready.
+---

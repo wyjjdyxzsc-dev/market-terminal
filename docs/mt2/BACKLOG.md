@@ -25,6 +25,8 @@ accessibility/degraded-state defect · P3 minor.
 - WHY DEFERRED: needs Worker secrets (e.g. `GEMINI_API_KEY`, a valid `GITHUB_MODELS_TOKEN`)
   and/or a policy decision on provider requirements; not repairable from the repo.
 - SUGGESTED: HUMAN ACTION (secrets) now; policy revisit in MT2-1 REWIND (Deep Dive) / MT2-7.
+- CLOSURE NOTE (2026-09-20): re-observed on the deployed fa52e1a build; abstention is truthful
+  and safe; no verification/evidence/separation was weakened and no secrets were added.
 
 ## B-003 · P2 · MAP / FRONTEND · Aircraft layer: dead browser-direct path + empty in production
 - OBSERVATION: `public/mapintel.js` fetches up to 12 `api.airplanes.live/v2/point/…` tiles

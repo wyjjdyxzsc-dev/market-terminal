@@ -129,3 +129,35 @@ RESTART VERIFIED · HUMAN ACCEPTED
 - Alternative candidate: the "AI RESEARCH" chat panel (`6fafe78`). It was never "deep": single-turn
   Q&A. Lower fit.
 - Decision needed: see DECISIONS.md D-001 (PROPOSED). Level: evidence from git history only.
+
+### Closure (OWNER-authorized) — commit `fa52e1a` → production
+- Diff review: every hunk in the 5 code/test files mapped to R1–R4; no unrelated modification;
+  owner untracked files excluded and preserved.
+- Local re-run on the exact committed tree: unit 62/62 · smoke 34/34 (2 keyed skips: fires,
+  webcams-live) · ai-eval thresholds pass. Level: INTEGRATION TESTED.
+- Frontend versioning: `20260920a` verified unused; all seven `?v=` refs bumped together.
+- Commit `fa52e1a` "Complete MT2-0 BLACKBOX baseline and Project Meridian control plane";
+  `git push origin main` → `1bf0c64..fa52e1a` (normal push, no force).
+- Cloudflare GitHub build: production shell switched from `20260811a` to `20260920a` at
+  09:14:06 IST (≈2 min after push). Deployed revision confirmed by served asset version and by
+  the repaired weather route behaviour (below), not assumed.
+- `npm run test:prod` → **36/36 passed** (includes the two new strict checks). Level: LIVE TESTED.
+- Focused production probes (read-only):
+  - R2 weather: `/api/map/weather` → 200, 71 points, provenance present (was 502 pre-deploy).
+    **LIVE TESTED.**
+  - R3/R4 NEWS: `/api/intel/news?nocache=1` → 12 items, 0 degraded, 0 raw entities.
+    **LIVE TESTED** (no regression; which speed provider won is not exposed, so the Groq-specific
+    path is proven locally, not in production).
+  - R1 ETF chart: `/api/chart?symbol=SPY|QQQ&range=1D|1Y` → 200 via `yahoo`. Yahoo is not
+    rate-limited from Cloudflare egress, so the Nasdaq `etf` fallback branch was **not exercised
+    in production**; it is INTEGRATION TESTED locally and deployed (IMPLEMENTED) in the Worker.
+  - Parity: identical R1–R4 hunks in server.js and worker.js (diff review); contract routes
+    36/36 on the Worker.
+- Production browser (built-in pane, desktop): all assets `20260920a`, service worker registered
+  (1 registration); Terminal live AAPL quote/chart; Global Intel → Briefing renders enriched cards,
+  no degraded banner, no raw entities; Deep Dive AAPL → explicit "AI ANALYSIS UNAVAILABLE — LIVE
+  DATA SHOWN" fallback dossier (github `Error` + cfai `generation failed`, B-002, safe abstention);
+  Watchlist empty state; Alerts shows corroborated items with blocked-permission notice.
+  Console: no errors on any of the five views. Level: REAL BROWSER TESTED (production).
+- Not verified in production: ETF Nasdaq fallback branch (see above), mobile viewport on
+  production, physical Enter on watchlist (B-012), push delivery, installed PWA.

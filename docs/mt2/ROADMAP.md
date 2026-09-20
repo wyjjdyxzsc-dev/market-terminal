@@ -7,7 +7,7 @@ IN PROGRESS / PASS / PARTIAL / BLOCKED.
 ---
 
 ## MT2-0 — BLACKBOX — Audit / Repair / Baseline
-- STATUS: PARTIAL — HUMAN ACTION REQUIRED (2026-09-20) — see STATE.md
+- STATUS: PASS (closed 2026-09-20, commit fa52e1a; bounded open items B-001/B-002 in BACKLOG.md)
 - OBJECTIVE: Establish repository/runtime ground truth, create the durable docs/mt2 control plane,
   audit the current product and repair verified material baseline defects, identify (not restore)
   the original first-complete Claude "Deep Research" implementation for MT2-1.
@@ -24,8 +24,9 @@ IN PROGRESS / PASS / PARTIAL / BLOCKED.
 - STATUS: NOT STARTED
 - OBJECTIVE: Restore the original first-complete Claude Deep Research experience identified in
   MT2-0, reconciled with the current evidence/authority model rather than blindly reverted.
-- ENTRY REQUIREMENT: MT2-0 PASS or PARTIAL with the origin commit confirmed by OWNER; explicit
-  MT2-1 authorization.
+- ENTRY REQUIREMENT: MT2-0 PASS (met) and origin confirmed by OWNER (D-001 CONFIRMED:
+  `42af0f6`, with `6fafe78` for same-experience extensions only); explicit MT2-1 authorization
+  (NOT yet given).
 - DONE CONTRACT: restored experience runs locally and in production, verified in a real browser,
   with evidence recorded in EVIDENCE.md; no regression of the regression baseline.
 - OUT OF SCOPE: new UI system, India, Portfolio, Watchlist 2.0, watchers.
