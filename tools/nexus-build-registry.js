@@ -10,7 +10,10 @@
  *   node tools/nexus-build-registry.js --relationships  # also run Task 3's edge build
  *
  * Sources:
- *   - SEC EDGAR company_tickers.json — public domain, exhaustive US issuer list.
+ *   - SEC EDGAR company_tickers_exchange.json — public domain, exhaustive US issuer
+ *     list *with* a real listing-exchange field per ticker (the older
+ *     company_tickers.json has no exchange field at all, which previously forced
+ *     every US node to a guessed NASDAQ exchange regardless of true listing venue).
  *   - NSE archives EQUITY_L.csv — official NSE equity listing.
  *   - BSE ListofScripData API — official BSE equity listing.
  *   - shared/atlas-snapshot.js (Wikidata, CC0) — HQ/geo/sector cross-walk only.
@@ -25,6 +28,7 @@ const fs = require('fs');
 const path = require('path');
 const https = require('https');
 const nexusCore = require('../shared/nexus-core.js');
+const marketCore = require('../shared/market-core.js');
 const atlasSnapshot = require('../shared/atlas-snapshot.js');
 
 // SEC EDGAR fair-access policy requires a UA identifying the requester with a
@@ -58,15 +62,38 @@ function parseCsv(text) {
   });
 }
 
+// Raw SEC exchange strings -> market-core's US exchange list (['NYSE', 'NASDAQ']).
+// Anything not explicitly recognized (Cboe BZX/BATS, OTC, blank/null, unknown
+// future values) is deliberately left unmapped, so the caller falls through to
+// market-core's own default-exchange fallback for a genuinely unclassified issuer
+// — this is an honest "we don't know" fallback, not a guess dressed up as a fact.
+const SEC_EXCHANGE_MAP = Object.freeze({
+  NASDAQ: 'NASDAQ',
+  NYSE: 'NYSE',
+  'NYSE ARCA': 'NYSE',
+  'NYSE AMERICAN': 'NYSE',
+});
+
+function mapSecExchange(raw) {
+  const key = String(raw || '').trim().toUpperCase();
+  return SEC_EXCHANGE_MAP[key] || null;
+}
+
 async function fetchUsIssuers() {
-  const raw = JSON.parse(await get('https://www.sec.gov/files/company_tickers.json'));
-  // Shape: { "0": { cik_str, ticker, title }, "1": {...}, ... }
-  return Object.values(raw)
-    .filter((r) => r.ticker && r.title)
-    .map((r) => ({
-      cik: String(r.cik_str).padStart(10, '0'),
-      ticker: String(r.ticker).toUpperCase(),
-      name: String(r.title).trim(),
+  const raw = JSON.parse(await get('https://www.sec.gov/files/company_tickers_exchange.json'));
+  // Shape: { fields: ["cik","name","ticker","exchange"], data: [[cik, name, ticker, exchange], ...] }
+  const fields = Array.isArray(raw.fields) ? raw.fields : ['cik', 'name', 'ticker', 'exchange'];
+  const cikIdx = fields.indexOf('cik');
+  const nameIdx = fields.indexOf('name');
+  const tickerIdx = fields.indexOf('ticker');
+  const exchangeIdx = fields.indexOf('exchange');
+  return (Array.isArray(raw.data) ? raw.data : [])
+    .filter((row) => row[tickerIdx] && row[nameIdx])
+    .map((row) => ({
+      cik: String(row[cikIdx]).padStart(10, '0'),
+      ticker: String(row[tickerIdx]).toUpperCase(),
+      name: String(row[nameIdx]).trim(),
+      exchange: mapSecExchange(row[exchangeIdx]), // NYSE | NASDAQ | null (unclassified)
     }));
 }
 
@@ -120,20 +147,28 @@ async function build() {
   const nodes = [];
   const seen = new Set();
 
-  console.log('[nexus] fetching SEC EDGAR company_tickers.json ...');
+  console.log('[nexus] fetching SEC EDGAR company_tickers_exchange.json ...');
   let usSkipped = 0;
+  let usUnclassifiedExchange = 0;
+  const usDefaultExchange = marketCore.market('US').defaultExchange; // fallback marker for issuers SEC doesn't classify as NYSE/Nasdaq
   for (const issuer of await fetchUsIssuers()) {
-    const canonicalId = `US:NASDAQ:${issuer.ticker}`; // market-core.parseInstrument re-derives the correct default exchange if this guess is wrong
+    // issuer.exchange is NYSE/NASDAQ when SEC's real exchange field maps cleanly;
+    // otherwise it's null and we use market-core's own default-exchange fallback
+    // rather than guessing — this is the fix for the prior version's bug, where
+    // every US issuer (including NYSE names like XOM/JPM) was hardcoded to NASDAQ.
+    const exchange = issuer.exchange || usDefaultExchange;
+    if (!issuer.exchange) usUnclassifiedExchange += 1;
+    const canonicalId = `US:${exchange}:${issuer.ticker}`;
     if (seen.has(canonicalId)) continue;
     seen.add(canonicalId);
     try {
       nodes.push(toNode({
-        id: canonicalId, name: issuer.name, market: 'US', exchange: 'NASDAQ', cik: issuer.cik,
-        evidence: [{ source: 'SEC EDGAR', sourceUrl: 'https://www.sec.gov/files/company_tickers.json', observedAt: new Date().toISOString() }],
+        id: canonicalId, name: issuer.name, market: 'US', exchange, cik: issuer.cik,
+        evidence: [{ source: 'SEC EDGAR', sourceUrl: 'https://www.sec.gov/files/company_tickers_exchange.json', observedAt: new Date().toISOString() }],
       }, atlasIndex));
     } catch (err) { usSkipped += 1; console.warn('[nexus] skip US', issuer.ticker, err.message); }
   }
-  console.log(`[nexus] US: ${nodes.length} nodes built, ${usSkipped} skipped`);
+  console.log(`[nexus] US: ${nodes.length} nodes built, ${usSkipped} skipped, ${usUnclassifiedExchange} unclassified-exchange (fell back to ${usDefaultExchange})`);
 
   console.log('[nexus] fetching NSE EQUITY_L.csv ...');
   let nseAdded = 0;
@@ -181,7 +216,7 @@ async function build() {
     nexusSnapshotVersion: nexusCore.NEXUS_SCHEMA_VERSION,
     generatedAt: new Date().toISOString(),
     sources: {
-      sec: { name: 'SEC EDGAR company_tickers.json', url: 'https://www.sec.gov/files/company_tickers.json', license: 'Public domain (US Government work)' },
+      sec: { name: 'SEC EDGAR company_tickers_exchange.json', url: 'https://www.sec.gov/files/company_tickers_exchange.json', license: 'Public domain (US Government work)' },
       nse: { name: 'NSE Equity List', url: 'https://www.nseindia.com/market-data/securities-available-for-trading', license: 'Public listing data' },
       bse: { name: 'BSE List of Scrips', url: 'https://www.bseindia.com/corporates/List_Scrips.aspx', license: 'Public listing data' },
       wikidata: { name: 'Wikidata (via atlas-snapshot.js)', url: 'https://www.wikidata.org', license: 'CC0 1.0' },
