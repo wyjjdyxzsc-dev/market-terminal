@@ -86,3 +86,24 @@ EVIDENCE POINTER: EVIDENCE.md "MT2-1 REWIND" + "Production acceptance"; DECISION
   BACKLOG B-013.
 ACTION REQUIRED: OWNER — authorize MT2-2 QUARTZ when ready. STOP.
 ---
+TIMESTAMP: 2026-09-20T10:25Z
+FROM: CLAUDE
+TO: OWNER
+CHECKPOINT: MT2-2 QUARTZ
+MESSAGE TYPE: CHECKPOINT CLOSURE — PASS
+SUMMARY: Commit b46bbb2 pushed (6ffb81c..b46bbb2); production serves 20260920e (closure bumps to
+  20260920f); test:prod 36/36. New design system (ten-layer tokenised CSS, system UI + mono data
+  type, restrained accent), application chrome with market mode (US active, India reserved and
+  inert), global command bar, eight-workspace navigation with contextual subnav (Portfolio
+  reserved/disabled), MARKETS shell on the existing pooled quote route, Terminal security band
+  with chart priority, Quant Lab as its own workspace, standardised freshness/status/
+  interpretation registers, keyboard roving tabs + `/` shortcut, mobile without overflow. Deep
+  Dive renderer untouched and its REWIND order verified in production. Backend, shared core,
+  evidence gates, provider safety, secrets untouched; no India data, no Portfolio logic, no
+  watcher logic.
+DECISION / REQUEST: none. B-002 still bounds AI acceptance; B-003 (aircraft CORS) is the only
+  production console noise and predates QUARTZ. Physical-keyboard Enter/`/` remain HUMAN checks.
+EVIDENCE POINTER: EVIDENCE.md "MT2-2 QUARTZ" + "Production acceptance"; DECISIONS D-004…D-006;
+  BACKLOG B-014, B-015.
+ACTION REQUIRED: OWNER — authorize MT2-3 TWINCORE when ready. STOP.
+---

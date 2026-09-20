@@ -357,3 +357,31 @@ RESTART VERIFIED · HUMAN ACCEPTED
   calls 200. Level: REAL BROWSER TESTED (local).
 - Screenshots were inspected in the pane; no binary artifacts were added to Git (repository
   convention).
+
+### Production acceptance — commit `b46bbb2` → production
+- `git push origin main` → `6ffb81c..b46bbb2` (normal push, no force). Production switched from
+  `20260920d` to `20260920e` at 10:16:00 local (≈2 min after push); `GET /` carries nine
+  `20260920e` refs; `GET /shell.js?v=20260920e` → 200, 6,463 B.
+- `npm run test:prod` → **36/36 passed** (nine-asset shell contract + nav/workspace ids + all
+  route contracts). Level: LIVE TESTED.
+- Production browser (built-in pane, 1440×900): shell renders with all eight nav items,
+  PORTFOLIO `aria-disabled` "Soon", market mode US active / India "Soon" inert; Terminal AAPL
+  336.13 −0.87 (−0.26 %) with security band, chart, quant snapshot, company, news; **console: no
+  errors** on load. MARKETS: SPY/QQQ/DIA/IWM rows from the pooled quote route (761.69 / 721.45 /
+  515.88 / 284.10) labelled `Snapshot` (market closed), sentiment Neutral −0.12, market context
+  US `CLOSED · Active · data context` / India `Not yet active`. RESEARCH → Deep Dive AAPL renders
+  `data-dd-state="fallback"` with the REWIND order head → notice → summary → ratings (NOT RATED /
+  CHAIN ONLY 48 rows) → drivers → cases ×2 → stats → consensus → sources → open → disclaimer,
+  status line empty, plus "Open AAPL in Quant Lab". Programmatic `navigateTo()` over quant,
+  intelligence/{briefing,situation,report,supply,map}, research/sectors, watchlist, alerts each
+  activated the correct view, subnav selection, Global-Intel panel and hash; Quant Lab mounted
+  (`#quantLab` present); Leaflet map initialised. Level: REAL BROWSER TESTED (production).
+- Console after opening Global Map: the known B-003 aircraft-layer CORS storm
+  (api.airplanes.live) — pre-existing, unrelated to QUARTZ; no other errors.
+- Production mobile 375×812: `scrollWidth === innerWidth === 375` on Terminal, Markets, Deep
+  Dive and Quant; chrome reflows; nav scrolls horizontally; band shows symbol/price side by side
+  with four-up stats.
+- Not claimed: generated-analysis acceptance (B-002 unchanged); physical-keyboard Enter in the
+  command bar and nav (pane synthetic keys are unreliable — HUMAN check, same as B-012); the
+  India mode switch (not implemented by design).
+- Closure commit bumps assets to `20260920f` (deploy rule), docs/seam only otherwise.

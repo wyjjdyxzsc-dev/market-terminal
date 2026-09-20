@@ -153,7 +153,7 @@ Deploys to `https://market-terminal.wyjjdyxzsc.workers.dev`
 - Chrome: brand · market mode · global command (`#symbolInput`, `/` focuses it, choosing a symbol lands on the Terminal) · session status · clock · refresh · Ask. Terminal: security band (identity, price, eight stats, Explain move) → chart with priority space + quant snapshot, right rail with company and news. Market sentiment moved to MARKETS. MARKETS shows a US benchmark table (SPY/QQQ/DIA/IWM via the pooled `/api/quote`), the sentiment gauge, and a market-context registry; India is visibly reserved and inert.
 - QUANT is its own workspace: the single Quant Lab instance (`#quantLabMount`) is mounted by `intel.js` `mountQuantLab()` for the Deep Dive subject, else the Terminal symbol; the Deep Dive report ends with "Open … in Quant Lab" instead of embedding the lab. Deep Dive renderer and its render contract are untouched (restyle only).
 - Standard vocabularies: freshness badge `.fresh[data-fresh=live|delayed|snapshot|eod|cached|last-good|unavailable]`; `.status` line states (`error`, `policy-status`, `empty`, `data-state`); interpretation register (`.interp`, amber left rule) vs measured data vs `.evidence`. No emoji in navigation or labels; SVG icons only where they aid recognition.
-- Shell contract is **nine** synchronized `?v=` assets (`tests/smoke.js` also checks nav/workspace ids and `shell.js`). Unit suite 75 tests.
+- Shell contract is **nine** synchronized `?v=` assets (production 20260920f after closure) (`tests/smoke.js` also checks nav/workspace ids and `shell.js`). Unit suite 75 tests.
 
 **Branches**: All work on `main` (no feature branches yet).
 
