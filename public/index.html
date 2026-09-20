@@ -14,7 +14,7 @@
   <meta name="apple-mobile-web-app-title" content="MktTerminal" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
     integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-  <link rel="stylesheet" href="style.css?v=20260920b" />
+  <link rel="stylesheet" href="style.css?v=20260920c" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%230a0a0a'/><text x='8' y='12' font-size='11' text-anchor='middle' fill='%23ffa028' font-family='monospace'>M</text></svg>" />
 </head>
 <body>
@@ -320,7 +320,7 @@
     <section id="view-analyze" class="view intel">
       <div class="intel-head">
         <h2 class="intel-title">DEEP DIVE</h2>
-        <span class="intel-sub">Full analyst deep dive · live quote, fundamentals, options chain, and current news</span>
+        <span class="intel-sub">Full AI analyst report on any stock · live news + fundamentals + options chain + analyst consensus → invest &amp; options ratings</span>
       </div>
 
       <form id="ddForm" class="watch-form">
@@ -329,7 +329,7 @@
         <button type="submit" class="watch-add">ANALYZE</button>
       </form>
 
-      <div id="ddStatus" class="status">Enter a stock above for a full analyst deep dive — ratings, thesis, levels, and an options view built from the live listed chain.</div>
+      <div id="ddStatus" class="status">Enter a stock above for a deep AI analysis — a buy/sell rating, an options play, the bull &amp; bear case, catalysts and risks. When the analyst model is unavailable, the live data report is shown instead.</div>
       <div id="ddResult" class="dd-result"></div>
     </section>
 
@@ -443,12 +443,13 @@
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
     integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-  <script src="quant.js?v=20260920b"></script>
-  <script src="app.js?v=20260920b"></script>
-  <script src="intel.js?v=20260920b"></script>
-  <script src="mapintel.js?v=20260920b"></script>
-  <script src="ships.js?v=20260920b"></script>
+  <script src="quant.js?v=20260920c"></script>
+  <script src="app.js?v=20260920c"></script>
+  <script src="deepdive.js?v=20260920c"></script>
+  <script src="intel.js?v=20260920c"></script>
+  <script src="mapintel.js?v=20260920c"></script>
+  <script src="ships.js?v=20260920c"></script>
   <script src="https://unpkg.com/globe.gl@2.34.0/dist/globe.gl.min.js" integrity="sha384-mGWIMpfF9wMIV/OPDBkP9zd5uJ0D5XOls3hZGSdPlyIKzoTw7ETT4f/Uc0Bu0/T3" crossorigin="anonymous"></script>
-  <script src="globe.js?v=20260920b"></script>
+  <script src="globe.js?v=20260920c"></script>
 </body>
 </html>

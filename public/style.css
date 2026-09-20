@@ -1263,17 +1263,39 @@ a { color: inherit; }
 .dd-rating-thesis { font-size: 13px; color: var(--text); line-height: 1.5; }
 .dd-fair { margin-top: 8px; font-size: 12.5px; color: var(--muted); } .dd-fair b { color: var(--amber); }
 
-.rate-strongbuy::before, .rate-buy::before, .bias-calls::before, .rate-data::before, .bias-data::before { background: var(--green); }
+.rate-strongbuy::before, .rate-buy::before, .bias-calls::before { background: var(--green); }
 .rate-strongsell::before, .rate-sell::before, .bias-puts::before { background: var(--red); }
-.rate-hold::before, .bias-straddle::before, .rate-partial::before { background: var(--amber); }
-.bias-avoid::before, .bias-unavailable::before { background: var(--muted); }
-.rate-strongbuy .dd-rating-badge, .rate-buy .dd-rating-badge, .bias-calls .dd-rating-badge, .rate-data .dd-rating-badge, .bias-data .dd-rating-badge { background: rgba(43,217,124,.15); color: var(--green); }
+.rate-hold::before, .bias-straddle::before { background: var(--amber); }
+.bias-avoid::before, .bias-unavailable::before, .rate-unrated::before, .bias-chain::before { background: var(--muted); }
+.rate-strongbuy .dd-rating-badge, .rate-buy .dd-rating-badge, .bias-calls .dd-rating-badge { background: rgba(43,217,124,.15); color: var(--green); }
 .rate-strongsell .dd-rating-badge, .rate-sell .dd-rating-badge, .bias-puts .dd-rating-badge { background: rgba(255,69,58,.15); color: var(--red); }
-.rate-hold .dd-rating-badge, .bias-straddle .dd-rating-badge, .rate-partial .dd-rating-badge { background: rgba(255,160,40,.15); color: var(--amber); }
-.bias-avoid .dd-rating-badge, .bias-unavailable .dd-rating-badge { background: rgba(122,130,144,.18); color: var(--muted); }
-.dd-data-note { color: var(--muted); font-size: 11px; }
+.rate-hold .dd-rating-badge, .bias-straddle .dd-rating-badge { background: rgba(255,160,40,.15); color: var(--amber); }
+.bias-avoid .dd-rating-badge, .bias-unavailable .dd-rating-badge, .rate-unrated .dd-rating-badge, .bias-chain .dd-rating-badge { background: rgba(122,130,144,.18); color: var(--muted); }
+.rate-unrated .dd-rating-score, .bias-chain .dd-rating-score { color: var(--muted); }
 .dd-data-link { display: inline-block; margin-top: 9px; color: var(--cyan); font-family: var(--mono); font-size: 10.5px; text-decoration: none; }
 .dd-data-link:hover { text-decoration: underline; }
+.dd-chain-ctx { margin-top: 9px; padding-top: 8px; border-top: 1px dashed var(--border); font-family: var(--mono); font-size: 11px; color: var(--muted); line-height: 1.6; }
+.dd-chain-ctx span { display: block; }
+
+/* ANALYSIS UNAVAILABLE — LIVE DATA SHOWN: one compact, honest strip under the head */
+.dd-notice {
+  margin: 12px 0 0; padding: 8px 12px; border-radius: 7px;
+  border: 1px solid rgba(255,160,40,.38); border-left: 3px solid var(--amber);
+  background: rgba(255,160,40,.07); font-family: var(--mono); font-size: 11px; line-height: 1.5;
+}
+.dd-notice-title { color: var(--amber); font-weight: 700; letter-spacing: 1.2px; }
+.dd-notice-reason { color: var(--text); margin-top: 2px; }
+.dd-notice-meta { color: var(--muted); margin-top: 2px; }
+
+/* KEY DATA & SOURCES: provenance + evidence kept, moved below the report */
+.dd-sources { margin: 4px 0 14px; border-top: 1px solid var(--border); padding-top: 12px; }
+.dd-sources-title { font-family: var(--mono); font-size: 10.5px; letter-spacing: 1.5px; color: var(--muted); margin-bottom: 8px; }
+.dd-sources .dd-provenance { margin: 0 0 10px; }
+.dd-sources .dd-evidence { margin: 0; border-top: 0; padding-top: 0; }
+.dd-grounding { margin-top: 10px; font-family: var(--mono); font-size: 10.5px; color: var(--muted); line-height: 1.6; }
+.dd-grounding a { color: var(--cyan); text-decoration: none; }
+.dd-grounding a:hover { text-decoration: underline; }
+.dd-cited { color: var(--cyan); font-style: normal; font-size: 9px; }
 
 .dd-drivers { background: var(--panel-2); border: 1px solid var(--border); border-radius: 7px; padding: 10px 12px; font-size: 13.5px; color: var(--text); line-height: 1.5; margin-bottom: 14px; }
 .dd-drivers-label { font-family: var(--mono); font-size: 10.5px; letter-spacing: 1.5px; color: var(--amber); margin-right: 6px; }

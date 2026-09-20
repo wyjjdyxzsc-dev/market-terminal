@@ -55,3 +55,18 @@ DECISION / REQUEST: none. MT2-1 REWIND awaits explicit authorization.
 EVIDENCE POINTER: EVIDENCE.md "Closure" section.
 ACTION REQUIRED: OWNER — authorize MT2-1 when ready.
 ---
+TIMESTAMP: 2026-09-20T05:20Z
+FROM: CLAUDE
+TO: OWNER
+CHECKPOINT: MT2-1 REWIND
+MESSAGE TYPE: PROGRESS — LOCAL PASS, DEPLOYING
+SUMMARY: 42af0f6 report hierarchy restored via a pure, unit-tested renderer (public/deepdive.js);
+  fallback under B-002 is now the same report skeleton with an honest NOT RATED / CHAIN ONLY
+  presentation and sources moved below the report. No backend/shared-core change; evidence gate,
+  provider safety, merge authority, URL sanitation preserved. Unit 67/67 · smoke 34/34 · ai-eval
+  pass · local desktop/mobile browser pass. Assets → 20260920c.
+DECISION / REQUEST: none required. Analysis-available state is verified through the real render
+  path with a simulated payload only — B-002 still prevents live generation everywhere.
+EVIDENCE POINTER: EVIDENCE.md "MT2-1 REWIND"; DECISIONS D-003; BACKLOG B-013.
+ACTION REQUIRED: none — proceeding to push, test:prod, production browser acceptance.
+---

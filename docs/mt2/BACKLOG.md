@@ -78,7 +78,9 @@ accessibility/degraded-state defect · P3 minor.
 - OBSERVATION: `AGENTS.md` still states Deep Dive levels/valuation/options are disabled and lacks
   the 2026-08-11 section; CLAUDE.md supersedes it. Both files also say the 08-11 commit is "not
   yet verified in production" while production serves `20260811a`.
-- SUGGESTED: fold into the first MT2 doc sync (MT2-1 closure).
+- SUGGESTED: fold into the first MT2 doc sync.
+- NOTE (MT2-1): CLAUDE.md updated with the REWIND entry; AGENTS.md still not synced (out of
+  REWIND scope — documentation-only touch for the next checkpoint that edits docs).
 
 ## B-011 · P3 · AI / SPEED TIER · Cerebras gpt-oss may share the reasoning-token overrun
 - OBSERVATION: R3 pinned `reasoning_effort: low` for Groq only (verified). Cerebras
@@ -90,3 +92,12 @@ accessibility/degraded-state defect · P3 minor.
   while the same synthetic Enter submitted the AI chat input (explicit keydown handler). DOM
   `requestSubmit()` and the ADD button work. May be a pane artifact.
 - SUGGESTED: HUMAN check in a real browser; fix in MT2-6 WATCHTOWER if real.
+
+## B-013 · P3 · FRONTEND · Intel views refresh twice on window focus
+- OBSERVATION: `public/intel.js` calls `refreshCurrent()` from both `visibilitychange` and
+  `focus`; returning to the tab fires both within ~400 ms, so News/Sectors/Watchlist/Supply
+  re-fetch twice. MT2-1 exempted Deep Dive (`FOCUS_REFRESH_EXEMPT`) but left the other views.
+- EVIDENCE: local resource timing 2026-09-20 (two `/api/intel/deepdive` fetches 0.4 s apart on
+  focus before the exemption).
+- WHY DEFERRED: behavioural change to views outside REWIND scope; harmless (cached payloads).
+- SUGGESTED: a single debounced refresh-on-return in MT2-2 QUARTZ shell lifecycle.

@@ -38,3 +38,21 @@ Do not pre-decide future architecture; add records only when a real decision is 
 - ALTERNATIVES: `brctl download` (requested; no visible progress in 2 min), manual waiting.
 - CONSEQUENCES: none for the repo; root cause remains (BACKLOG B-001).
 - STATUS: ACCEPTED (environment-only)
+
+## D-003 · 2026-09-20 · MT2-1 · Deep Dive report rendered by a pure, unit-tested module
+- DECISION: extract the Deep Dive report body from `public/intel.js` into `public/deepdive.js`, a
+  DOM-free HTML-string renderer with a pinned render contract (`2026-09-20a`), dual-exported for
+  Node tests and the browser. `intel.js` keeps mount, click wiring, refresh model, and QUANT LAB.
+- WHY: the REWIND done-contract requires proving the 42af0f6 analyst-report hierarchy exists when
+  analysis is available, but B-002 means no live generation is observable locally or in
+  production. A pure renderer makes both product states (analysis / fallback), ordering, measured-
+  data authority, and URL safety testable in Node, and lets the browser pass verify the same code.
+- ALTERNATIVES: (a) keep the render inline and rely on browser-only checks — cannot test the
+  analysis state; (b) run `intel.js` under a DOM stub — 2,000+ lines of DOM coupling, brittle.
+- CONSEQUENCES: one more static asset (shell contract = eight synchronized `?v=` refs); no
+  backend or shared-core change; the shared core's merge rules remain the data authority.
+- ALSO DECIDED: Deep Dive is exempt from the focus/visibility auto-refresh (42af0f6 refreshed only
+  on submit, first open, and REFRESH; the 15-minute timer from later evolution is kept). The
+  fallback keeps truthful observation labels (not "BULL CASE") because those bullets are
+  deterministic counts, not analyst judgement; the original four-quadrant colour/icon flow is kept.
+- STATUS: ACCEPTED

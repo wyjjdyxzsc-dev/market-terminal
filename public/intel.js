@@ -830,88 +830,10 @@ function formatAiRuntimeSummary(policy) {
   $('#scForm').addEventListener('submit', (e) => { e.preventDefault(); loadSupplyChain($('#scInput').value); });
 
   // ---------- Deep Dive (full AI analyst report) ----------
+  // The report body is built by public/deepdive.js (MarketTerminalDeepDiveRender), a pure
+  // renderer shared with the unit tests; this file only mounts it and wires interactions.
   let ddLoadedFor = null;
   let ddRequestId = 0;
-
-  const RATING_CLASS = (r) => {
-    const k = String(r || '').toLowerCase();
-    if (k.includes('strong buy')) return 'rate-strongbuy';
-    if (k.includes('buy')) return 'rate-buy';
-    if (k.includes('strong sell')) return 'rate-strongsell';
-    if (k.includes('sell')) return 'rate-sell';
-    if (k.includes('not rated')) return 'rate-partial';
-    return 'rate-hold';
-  };
-  const BIAS_CLASS = (b) => {
-    const k = String(b || '').toLowerCase();
-    if (k === 'calls') return 'bias-calls';
-    if (k === 'puts') return 'bias-puts';
-    if (k === 'avoid') return 'bias-avoid';
-    if (k.includes('data')) return 'bias-data';
-    if (k.includes('unavailable')) return 'bias-unavailable';
-    return 'bias-straddle';
-  };
-  const pctChangeHtml = (q) => {
-    if (!q || q.price == null) return '';
-    const up = (q.change || 0) >= 0;
-    return `<span class="dd-price">$${Number(q.price).toFixed(2)}</span>` +
-      `<span class="dd-chg ${up ? 'up' : 'down'}">${up ? '▲' : '▼'} ${Math.abs(q.change || 0).toFixed(2)} (${Math.abs(q.percent || 0).toFixed(2)}%)</span>`;
-  };
-
-  function consensusBar(c) {
-    if (!c) return '';
-    const segs = [
-      ['strongBuy', c.strongBuy || 0, '#16c784'], ['buy', c.buy || 0, '#3fb950'],
-      ['hold', c.hold || 0, '#d8a657'], ['sell', c.sell || 0, '#f0883e'], ['strongSell', c.strongSell || 0, '#f85149'],
-    ];
-    const total = segs.reduce((n, s) => n + s[1], 0) || 1;
-    const bars = segs.map(([, v, col]) => v ? `<span style="width:${(v / total) * 100}%;background:${col}" title="${v}"></span>` : '').join('');
-    return `<div class="dd-consensus"><div class="dd-consensus-label">ANALYST CONSENSUS <span>(${total} ratings · ${esc(c.period || '')})</span></div>` +
-      `<div class="dd-consensus-bar">${bars}</div>` +
-      `<div class="dd-consensus-legend"><span>${c.strongBuy || 0} Strong Buy</span><span>${c.buy || 0} Buy</span><span>${c.hold || 0} Hold</span><span>${c.sell || 0} Sell</span><span>${c.strongSell || 0} Strong Sell</span></div></div>`;
-  }
-
-  const liList = (arr) => (Array.isArray(arr) ? arr : []).map((x) => `<li>${esc(x)}</li>`).join('');
-
-  function deepDiveProvenance(data) {
-    const sources = data && data.dataSources || {};
-    const cards = [
-      ['QUOTE', sources.quote?.status, sources.quote?.provider || 'No usable provider'],
-      ['FUNDAMENTALS', sources.fundamentals?.status, sources.fundamentals?.status === 'available'
-        ? `${sources.fundamentals.fieldCount || 0} Finnhub metrics`
-        : 'Metrics unavailable'],
-      ['ANALYSTS', sources.analysts?.status, sources.analysts?.status === 'available'
-        ? `${sources.analysts.ratingCount || 0} ratings${sources.analysts.period ? `, ${sources.analysts.period}` : ''}`
-        : 'Consensus unavailable'],
-      ['OPTIONS', sources.options?.status, sources.options?.status === 'available'
-        ? `${sources.options.contractCount || 0} rows${sources.options.nearestExpiry ? `, ${sources.options.nearestExpiry}` : ''}`
-        : (sources.options?.reason || 'Chain unavailable')],
-      ['NEWS', sources.news?.status, sources.news?.recordCount
-        ? `${sources.news.recordCount} records, ${sources.news.sourceCount || 0} sources`
-        : 'No qualifying records'],
-    ];
-    if (!cards.some(([, status]) => status)) return '';
-    return `<div class="dd-provenance">${cards.map(([label, status, detail]) => {
-      const state = String(status || 'unavailable').toLowerCase().replace(/[^a-z-]/g, '');
-      return `<div class="dd-source"><div><span>${label}</span><i class="dd-source-state is-${esc(state)}">${esc(status || 'unavailable')}</i></div><b>${esc(detail)}</b></div>`;
-    }).join('')}</div>`;
-  }
-
-  function deepDiveEvidence(data) {
-    const evidence = Array.isArray(data && data.evidence) ? data.evidence.slice(0, 6) : [];
-    if (!evidence.length) return '';
-    return `<div class="dd-evidence"><div class="dd-evidence-title">RECENT SOURCE EVIDENCE</div>${evidence.map((entry) => {
-      const url = safeHttpUrl(entry.sourceUrl || '');
-      const date = entry.publishedAt && !Number.isNaN(new Date(entry.publishedAt).valueOf())
-        ? new Date(entry.publishedAt).toLocaleDateString()
-        : 'time unavailable';
-      const title = esc(entry.title || 'Untitled source record');
-      const headline = url
-        ? `<a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${title}</a>`
-        : `<span>${title}</span>`;
-      return `<div class="dd-evidence-row"><div>${headline}</div><span>${esc(entry.publisher || entry.publisherDomain || 'source')} · ${esc(date)}</span></div>`;
-    }).join('')}</div>`;
-  }
 
   function policyNotice(data) {
     const policy = data && data.policy;
@@ -948,97 +870,13 @@ function formatAiRuntimeSummary(policy) {
     </div>`;
   }
 
+
   function renderDeepDive(d) {
-    const inv = d.investment || {}, opt = d.options || {}, st = d.stats || {};
-    const equity = d.equityData || {};
-    const chain = d.optionsChain || {};
-    const deterministicOnly = d.aiNarrativeStatus !== 'ready';
-    const caseLabels = deterministicOnly
-      ? ['SUPPORTING OBSERVATIONS', 'CAUTION OBSERVATIONS', 'RECENT WATCH ITEMS', 'DATA LIMITS']
-      : ['▲ BULL CASE', '▼ BEAR CASE', '⚡ CATALYSTS', '⚠ RISKS'];
-    const usableLevel = (value) => value && !/^(n\/a|unrated)(\s|$)/i.test(String(value));
-    const showLevels = [d.technicalBias, d.entryZone, d.stopLoss, d.priceTarget].some(usableLevel);
+    const report = window.MarketTerminalDeepDiveRender
+      ? window.MarketTerminalDeepDiveRender.renderDeepDiveReport(d)
+      : `<div class="dd-card"><p class="dd-summary">${esc(d.summary || '')}</p></div>`;
     const html = `
-      <div class="dd-card">
-        <div class="dd-head">
-          ${st.logo ? `<img class="dd-logo" src="${esc(st.logo)}" alt="">` : ''}
-          <div class="dd-id">
-            <div class="dd-ticker" data-ticker="${esc(d.ticker)}">${esc(d.ticker)}</div>
-            <div class="dd-name">${esc(d.company)}${st.industry ? ` · ${esc(st.industry)}` : ''}</div>
-          </div>
-          <div class="dd-quote">${pctChangeHtml(d.quote)}</div>
-        </div>
-
-        ${policyNotice(d)}
-
-        ${deepDiveProvenance(d)}
-
-        <p class="dd-summary">${esc(d.summary)}</p>
-
-        <div class="dd-ratings">
-          ${deterministicOnly ? `
-          <div class="dd-rating ${equity.status === 'available' ? 'rate-data' : 'rate-partial'}">
-            <div class="dd-rating-top"><span class="dd-rating-kind">EQUITY DATA</span><span class="dd-rating-score">${equity.coverageScore != null ? equity.coverageScore : '—'}<i>/100 coverage</i></span></div>
-            <div class="dd-rating-badge">${esc((equity.status || 'unavailable').toUpperCase())}</div>
-            <div class="dd-rating-meta">${Number(equity.availableDatasets || 0)}/${Number(equity.totalDatasets || 4)} datasets returned · not a stock rating</div>
-            <div class="dd-rating-thesis">${esc(equity.summary || 'No equity dataset was returned for this refresh.')}<br><span class="dd-data-note">${esc(inv.thesis || equity.disclaimer || '')}</span></div>
-          </div>` : `
-          <div class="dd-rating ${RATING_CLASS(inv.rating)}">
-            <div class="dd-rating-top"><span class="dd-rating-kind">STOCK</span><span class="dd-rating-score">${inv.score != null ? inv.score : '—'}<i>/100</i></span></div>
-            <div class="dd-rating-badge">${esc(inv.rating || '—')}</div>
-            <div class="dd-rating-meta">${esc(inv.conviction || '')} conviction · ${esc(inv.horizon || '')}</div>
-            <div class="dd-rating-thesis">${esc(inv.thesis || '')}</div>
-            ${inv.fairValue && !/^n\/a/i.test(String(inv.fairValue)) ? `<div class="dd-fair">Fair value: <b>${esc(inv.fairValue)}</b></div>` : ''}
-          </div>`}
-          <div class="dd-rating ${BIAS_CLASS(opt.bias)}">
-            <div class="dd-rating-top"><span class="dd-rating-kind">OPTIONS</span><span class="dd-rating-score">${opt.score != null ? opt.score : (chain.contractCount != null ? chain.contractCount : '—')}<i>${opt.score != null ? '/100' : ' rows'}</i></span></div>
-            <div class="dd-rating-badge">${esc(opt.bias || '—')}</div>
-            <div class="dd-rating-meta">IV ${esc(opt.impliedVolatility || '?')} · ${esc(opt.timeframe || '')}${chain.contractCount ? ` · ${chain.contractCount} chain rows, ${Number(chain.expiryCount || 0)} expiries` : ''}</div>
-            <div class="dd-rating-thesis"><b>${esc(opt.recommendation || '')}</b><br>${esc(opt.rationale || '')}</div>
-            ${safeHttpUrl(chain.sourceUrl || '') ? `<a class="dd-data-link" href="${esc(safeHttpUrl(chain.sourceUrl))}" target="_blank" rel="noopener noreferrer">View source chain →</a>` : ''}
-          </div>
-        </div>
-
-        ${d.keyDrivers ? `<div class="dd-drivers"><span class="dd-drivers-label">${deterministicOnly ? 'OBSERVED DATA' : "WHAT'S MOVING IT"}</span> ${esc(d.keyDrivers)}</div>` : ''}
-
-        ${showLevels ? `
-        <div class="dd-levels">
-          ${usableLevel(d.technicalBias) ? `<div class="dd-level-bias dd-level-bias--${esc((d.technicalBias||'').toLowerCase())}"><span>TECH BIAS</span><b>${esc(d.technicalBias)}</b></div>` : ''}
-          ${usableLevel(d.entryZone) ? `<div class="dd-level-item"><span>ENTRY</span><b>${esc(d.entryZone)}</b></div>` : ''}
-          ${usableLevel(d.stopLoss) ? `<div class="dd-level-item dd-level-stop"><span>STOP</span><b>${esc(d.stopLoss)}</b></div>` : ''}
-          ${usableLevel(d.priceTarget) ? `<div class="dd-level-item dd-level-target"><span>TARGET</span><b>${esc(d.priceTarget)}</b></div>` : ''}
-        </div>` : ''}
-
-        <div class="dd-cases">
-          <div class="dd-case dd-bull"><h4>${esc(caseLabels[0])}</h4><ul>${liList(d.bullCase)}</ul></div>
-          <div class="dd-case dd-bear"><h4>${esc(caseLabels[1])}</h4><ul>${liList(d.bearCase)}</ul></div>
-        </div>
-
-        <div class="dd-cases">
-          <div class="dd-case dd-cat"><h4>${esc(caseLabels[2])}</h4><ul>${liList(d.catalysts)}</ul></div>
-          <div class="dd-case dd-risk"><h4>${esc(caseLabels[3])}</h4><ul>${liList(d.risks)}</ul></div>
-        </div>
-
-        <div class="dd-stats">
-          ${st.marketCap ? `<div class="dd-stat"><span>MKT CAP</span><b>${esc(st.marketCap)}</b></div>` : ''}
-          ${st.pe != null ? `<div class="dd-stat"><span>P/E</span><b>${Number(st.pe).toFixed(1)}</b></div>` : ''}
-          ${st.pb != null ? `<div class="dd-stat"><span>P/B</span><b>${Number(st.pb).toFixed(1)}</b></div>` : ''}
-          ${st.beta != null ? `<div class="dd-stat"><span>BETA</span><b>${Number(st.beta).toFixed(2)}</b></div>` : ''}
-          ${st.high52 != null ? `<div class="dd-stat"><span>52W HIGH</span><b>$${Number(st.high52).toFixed(2)}</b></div>` : ''}
-          ${st.low52 != null ? `<div class="dd-stat"><span>52W LOW</span><b>$${Number(st.low52).toFixed(2)}</b></div>` : ''}
-          ${st.rangePosition != null ? `<div class="dd-stat"><span>52W POSITION</span><b>${Number(st.rangePosition).toFixed(1)}%</b></div>` : ''}
-          <div class="dd-stat news-tone"><span>NEWS TONE</span><b class="tone-${esc(d.newsSentiment || 'unrated')}">${esc((d.newsSentiment || 'unrated').toUpperCase())}</b></div>
-        </div>
-
-        ${consensusBar(d.analystConsensus)}
-
-        ${deepDiveEvidence(d)}
-
-        <button class="dd-open" data-ticker="${esc(d.ticker)}">Open ${esc(d.ticker)} in Terminal →</button>
-        <p class="dd-disclaimer">${deterministicOnly
-          ? 'Live terminal data — educational only, not investment advice.'
-          : 'AI-generated analysis from live quote, fundamental, options-chain, and news data — educational only, not investment advice.'}</p>
-      </div>
+      ${report}
 
       <div class="quant-lab" id="quantLab">
         <div class="quant-lab-head">QUANT LAB — ${esc(d.ticker)}</div>
@@ -1183,6 +1021,9 @@ function formatAiRuntimeSummary(policy) {
     if (!isFinite(mu)) mu = 0.08;
     if (!isFinite(sigma) || sigma <= 0) sigma = 0.25;
 
+    // The report may have been re-rendered (REFRESH, new query) while the history fetch was
+    // in flight; the newer render owns its own Quant Lab, so this stale one just stops.
+    if (!$('#qlMcTarget')) return;
     $('#qlMcTarget').value = S0.toFixed(2);
     $('#qlBsStrike').value = S0.toFixed(2);
     $('#qlBsIv').value    = (sigma * 100).toFixed(1);
@@ -1530,17 +1371,16 @@ function formatAiRuntimeSummary(policy) {
     ddLoadedFor = q;
     $('#ddInput').value = q;
     $('#ddStatus').className = 'status';
-    $('#ddStatus').innerHTML = '<span class="spinner"></span>Running a full analyst deep dive on ' + esc(q.toUpperCase()) + '… (live quote, fundamentals, analyst consensus, options chain, and current news)';
+    $('#ddStatus').innerHTML = '<span class="spinner"></span>Running deep analysis on ' + esc(q.toUpperCase()) + '… (gathering live quote, fundamentals, analyst views, options chain &amp; news, then reasoning)';
     $('#ddResult').innerHTML = '';
     try {
       const data = await fetchJSON('/api/intel/deepdive?q=' + encodeURIComponent(q));
       if (requestId !== ddRequestId) return;
       if (data.error) throw new Error(data.message);
+      // Original behaviour: the status line clears and the report speaks for itself. The
+      // ANALYSIS UNAVAILABLE state is disclosed inside the card, once, not duplicated here.
+      $('#ddStatus').textContent = '';
       renderDeepDive(data);
-      $('#ddStatus').className = 'status policy-status';
-      $('#ddStatus').textContent = data.aiNarrativeStatus === 'ready'
-        ? 'Deep dive complete — analyst ratings, levels, and options view generated from live data.'
-        : 'Live data loaded. The AI analysis did not complete on this refresh; the data sections below are unaffected.';
     } catch (err) {
       if (requestId !== ddRequestId) return;
       $('#ddStatus').className = 'status error';
@@ -1780,11 +1620,15 @@ function formatAiRuntimeSummary(policy) {
   // (app.js owns the terminal view). Server-side SWR caching keeps the AI budget
   // safe — a focus refresh usually returns the cached payload and only does real
   // work when it's actually stale.
+  // Deep Dive is excluded: its report refreshes on submit, first open, the REFRESH button,
+  // and the 15-minute timer only (42af0f6 behaviour) — a focus change must not blank a
+  // report the reader is in the middle of and re-run the analyst call.
+  const FOCUS_REFRESH_EXEMPT = new Set(['terminal', 'analyze']);
   document.addEventListener('visibilitychange', () => {
-    if (!document.hidden && currentView && currentView !== 'terminal') refreshCurrent();
+    if (!document.hidden && currentView && !FOCUS_REFRESH_EXEMPT.has(currentView)) refreshCurrent();
   });
   window.addEventListener('focus', () => {
-    if (currentView && currentView !== 'terminal') refreshCurrent();
+    if (currentView && !FOCUS_REFRESH_EXEMPT.has(currentView)) refreshCurrent();
   });
 
   document.addEventListener('tabshown', (e) => {

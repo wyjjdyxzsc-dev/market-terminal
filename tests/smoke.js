@@ -98,8 +98,8 @@ async function checkHtml(label, url) {
   const t = await res.text();
   if (!t.includes('chartCanvas')) { console.error(`  ✗ ${label} — missing #chartCanvas`); fail++; return; }
   const versions = [...t.matchAll(/\?v=([0-9]{8}[a-z])/g)].map((match) => match[1]);
-  if (versions.length !== 7 || new Set(versions).size !== 1) {
-    console.error(`  ✗ ${label} — expected seven synchronized asset versions`);
+  if (versions.length !== 8 || new Set(versions).size !== 1) {
+    console.error(`  ✗ ${label} — expected eight synchronized asset versions`);
     fail++; return;
   }
   console.log(`  ✓ ${label}`);

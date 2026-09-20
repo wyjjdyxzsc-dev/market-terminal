@@ -21,12 +21,12 @@ IN PROGRESS / PASS / PARTIAL / BLOCKED.
   new AI watchers; broker connections; trading execution.
 
 ## MT2-1 — REWIND — Original Deep Research restoration
-- STATUS: NOT STARTED
+- STATUS: IN PROGRESS (authorized 2026-09-20; local verification complete, deploying)
 - OBJECTIVE: Restore the original first-complete Claude Deep Research experience identified in
   MT2-0, reconciled with the current evidence/authority model rather than blindly reverted.
 - ENTRY REQUIREMENT: MT2-0 PASS (met) and origin confirmed by OWNER (D-001 CONFIRMED:
   `42af0f6`, with `6fafe78` for same-experience extensions only); explicit MT2-1 authorization
-  (NOT yet given).
+  (given 2026-09-20).
 - DONE CONTRACT: restored experience runs locally and in production, verified in a real browser,
   with evidence recorded in EVIDENCE.md; no regression of the regression baseline.
 - OUT OF SCOPE: new UI system, India, Portfolio, Watchlist 2.0, watchers.

@@ -161,3 +161,94 @@ RESTART VERIFIED · HUMAN ACCEPTED
   Console: no errors on any of the five views. Level: REAL BROWSER TESTED (production).
 - Not verified in production: ETF Nasdaq fallback branch (see above), mobile viewport on
   production, physical Enter on watchlist (B-012), push delivery, installed PWA.
+
+---
+
+## MT2-1 REWIND — 2026-09-20 — source HEAD `70bc973` + REWIND working tree
+
+### Baseline and routing
+- Repo: `main` @ `70bc973`, tracked tree clean, 3 untracked owner files preserved untouched.
+- Route verified from the live session (not inherited): `claude-opus-5` / effort `medium` /
+  bypass-permissions / serial. Classification BEHAVIORAL + STRUCTURAL (frontend render
+  extraction; no durable state, no security authority, no secrets). Change required: NO.
+
+### Historical source of truth (git, not memory)
+- `42af0f6` diff read in full: `public/index.html` (tab + form + status + result), `public/intel.js`
+  (render + load + tab lifecycle), `public/style.css` (dd-* rules), `worker.js`
+  (`DEEPDIVE_SYSTEM` + `fetchDeepDive` + route; `server.js` caught up in `f316b3f`).
+- `6fafe78` diff read for the level chips only (`technicalBias/entryZone/stopLoss/priceTarget`
+  → `.dd-levels`); the AI chat panel in the same commit is unrelated and untouched.
+- Restoration matrix (12 rows) recorded in the checkpoint transcript and summarised in
+  DECISIONS D-003: RESTORE report-first hierarchy, STOCK/OPTIONS cards in both states, status
+  clearing, submit/first-open/REFRESH/timer refresh model; ADAPT provenance/evidence into a
+  bottom "KEY DATA & SOURCES" section and the unavailable notice into one compact strip;
+  PRESERVE pooled quote, dossier, chain normalisation, merge authority, evidence gate, provider
+  safety, URL sanitation, hardened logo error handling, QUANT LAB, 15-min timer.
+
+### Current implementation audit (narrow)
+- Backend already carries the restored analyst prompt grounded in the Nasdaq chain (`1bf0c64`),
+  the evidence gate, heavy-tier requirement, and `mergeAnalysisWithDossier` /
+  `mergeFallbackWithDossier`. No backend change was needed; `server.js`, `worker.js`, and
+  `shared/` are byte-identical to `70bc973` (parity preserved by construction).
+- Observed defect in the live local product before change: policy panel + 5-tile provenance grid
+  rendered **above** the executive summary; fallback replaced the STOCK card with a green
+  "EQUITY DATA 100/100 AVAILABLE" coverage card that reads as a score; the status line duplicated
+  the in-card notice. Level: REAL BROWSER TESTED (local, pre-change screenshots).
+
+### Change
+- New `public/deepdive.js`: pure renderer `renderDeepDiveReport(d)` (no DOM), dual-exported
+  (`module.exports` + `globalThis.MarketTerminalDeepDiveRender`), render contract `2026-09-20a`.
+- `public/intel.js`: Deep Dive block reduced to mount + click wiring + QUANT LAB; status clears on
+  success; loading text restored to the 42af0f6 phrasing (stages are real: gather, then attempt
+  generation); `analyze` exempt from focus/visibility refresh; Quant Lab history fetch returns if
+  the report was re-rendered mid-flight.
+- `public/style.css`: `.dd-notice`, `.rate-unrated`, `.bias-chain`, `.dd-sources`, `.dd-chain-ctx`,
+  `.dd-grounding`, `.dd-cited`; stale `rate-data/rate-partial/bias-data/dd-data-note` removed.
+- `public/index.html`: original tab subtitle/status copy; `deepdive.js` loaded before `intel.js`;
+  all eight `?v=` refs → `20260920c` (`20260920b` was the deployed version).
+- `tests/smoke.js`: shell contract now expects eight synchronized asset versions.
+
+### Tests
+- New `tests/deep-dive-render.test.js` (5 tests): contract version; analysis-state hierarchy
+  (ordering assertion over 16 markers, STOCK/OPTIONS content, IV "(inferred)", measured chain
+  context, level chips, measured stats/consensus win, sources at bottom, cited links); fallback
+  state (notice first, NOT RATED / —/100, no fair value, CHAIN ONLY with measured ATM bid/ask
+  and P/C, no levels, observation labels, model-supplied `Strong Buy`/`$999` ignored); no-chain
+  fallback; URL/escape safety (`javascript:` logo, chain URL, evidence URL never emitted; model
+  text escaped).
+- Test-the-test: forcing the fallback to render the model's rating → 4/5 pass, 1 fail (the
+  fallback test), restored → 5/5.
+- `npm run test:unit` → **67/67** (62 baseline + 5 new). Level: UNIT TESTED.
+- `node tests/smoke.js` (local) → **34/34**, 2 keyed skips (fires, webcams-live); the deep-dive
+  contract check (`2026-08-11a` schema, dossier fields, chain fields, Not Rated / Data Only under
+  fallback) passes unchanged. Level: INTEGRATION TESTED.
+- `npm run test:ai-eval` → `thresholdsPassed: true` (offline fixtures).
+- `wrangler deploy --dry-run` → bundles.
+
+### Local browser acceptance (built-in pane, http://localhost:3000)
+- Desktop fallback (real live path, AAPL then NVDA): restored hierarchy — head → compact amber
+  "AI ANALYSIS UNAVAILABLE — LIVE DATA SHOWN" strip (reason: evidence gate for NVDA / no approved
+  provider for AAPL) → summary → STOCK `NOT RATED —/100` + OPTIONS `CHAIN ONLY 47 rows` with
+  measured ATM 222.50 call 1.45/1.59, put 1.88/2.01, P/C 0.381, source-chain link → observed
+  inputs → four observation quadrants → stats → consensus bar → KEY DATA & SOURCES (5 tiles + 6
+  evidence rows) → Open in Terminal → disclaimer → QUANT LAB. Status line empty after load.
+- Desktop analysis state: the real live NVDA dossier merged with a simulated analysis payload and
+  pushed through the real `renderDeepDiveReport` in the page: STOCK `Buy 76/100`, fair value,
+  OPTIONS `Calls 63/100` with `IV Medium (inferred)` + measured chain context, level chips, bull/
+  bear/catalysts/risks, cited-source markers, grounding line, no notice above the summary.
+  **Simulated payload** — the live heavy-provider path is not exercisable locally (B-002 applies
+  to `.env` too). Level: REAL BROWSER TESTED (render path), not LIVE TESTED (generation).
+- Refresh model: synthetic `focus` + `visibilitychange` → deep-dive fetch count stays 1; double
+  REFRESH click → 3 fetches, Quant Lab intact, no new console error (the one `TypeError` in the
+  pane log is from the previous `20260920b` bundle and reproduced the pre-existing race that the
+  guard now prevents).
+- Mobile 375×812: no horizontal overflow (card 343 px), input usable, notice/cards/quadrants/
+  tiles reflow to one or two columns, evidence rows stack, button reachable.
+- Reload with `?tab=analyze`: one fetch, report renders, all seven script tags `20260920c`.
+- Click-through "Open NVDA in Terminal →" → terminal view active, `state.symbol = NVDA`.
+- Console: only the pane's ServiceWorker registration failure ("unknown error occurred when
+  fetching the script"), a built-in-browser artifact seen on every page load, unrelated to Deep
+  Dive. Level: REAL BROWSER TESTED (local).
+- Stale-asset finding: with the version unchanged the pane served the cached `intel.js`
+  (transfer 300 B) and ran the old focus handler — direct evidence for the bump-on-every-deploy
+  rule; verified again after the bump (transfer 120 KB, exemption active).

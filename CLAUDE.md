@@ -140,6 +140,13 @@ Deploys to `https://market-terminal.wyjjdyxzsc.workers.dev`
 - Verified locally: `61/61` unit tests, `32/32` available local smoke contracts, AI fixture thresholds, Wrangler dry-run bundling, and a browser pass covering both the analysis and fallback renders with no Deep Dive console errors.
 - **Not yet verified in production, and the live AI path is unproven.** The local `.env` has only `GROQ_API_KEY` (speed tier); `intel.deep-dive` requires a heavy provider (`gemini`, `deepseek`, `cohere`, `github`, `cfai`, `ai21`, `openrouter`, or `huggingface`), so locally it always takes the fallback branch. The analysis render and merge were verified against a simulated payload through the real render path, not against a live model response.
 
+**MT2-1 REWIND — Deep Dive analyst-report experience restored (2026-09-20)**:
+- Restoration target (DECISIONS D-001): the first-go DEEP DIVE at `42af0f6` (+ `6fafe78` level chips). The report body now lives in `public/deepdive.js` (`MarketTerminalDeepDiveRender.renderDeepDiveReport`), a pure HTML-string renderer loaded before `intel.js` and unit-tested in `tests/deep-dive-render.test.js`; `intel.js` only mounts it, wires clicks, and appends QUANT LAB.
+- Original hierarchy restored: head → summary → STOCK / OPTIONS rating cards → drivers → level chips → bull/bear → catalysts/risks → stats → consensus → **KEY DATA & SOURCES** (provenance tiles + evidence rows + grounding line, moved below the report) → open-in-terminal. The status line clears after load, as originally.
+- Two intentional states, both from the same skeleton: **analysis** (`aiNarrativeStatus: 'ready'`) shows rating/score/conviction/horizon/fair value, options idea with IV labelled *(inferred)* plus measured chain context; **fallback** (B-002 or evidence gate) shows one compact `AI ANALYSIS UNAVAILABLE — LIVE DATA SHOWN` strip, a neutral `NOT RATED · —/100` stock card, a `CHAIN ONLY` options card built from measured Nasdaq rows (no IV, no idea), and observation quadrants. The old "EQUITY DATA 100/100 coverage" card is gone.
+- Deep Dive is exempt from the focus/visibility auto-refresh (it refreshes on submit, first open, REFRESH, and the 15-min timer only); the Quant Lab history fetch tolerates a re-render mid-flight. Shell contract is now **eight** synchronized `?v=` assets.
+- Backend, shared core, evidence/policy gates, and provider safety are unchanged; the shared core's measured-data merge remains authoritative.
+
 **Branches**: All work on `main` (no feature branches yet).
 
 ## Key Files
@@ -150,7 +157,8 @@ Deploys to `https://market-terminal.wyjjdyxzsc.workers.dev`
 | `server.js` | Local dev (Express), same routes as worker.js |
 | `public/app.js` | UI, drawChart(), loadSymbol(), panel logic |
 | `public/quant.js` | Math lib (no DOM), IIFE export |
-| `public/intel.js` | Deep Dive UI + QUANT LAB |
+| `public/intel.js` | Deep Dive mount + QUANT LAB, intel views |
+| `public/deepdive.js` | Pure Deep Dive report renderer (analysis + fallback states), unit-tested |
 | `shared/deep-dive-core.js` | Deep Dive dossier, options-chain prompt grounding, and the shared analysis/fallback merges |
 | `shared/options-chain-core.js` | Bounded Nasdaq options-chain normalization and availability contract |
 | `shared/ticker-core.js` | Pooled ticker normalization and last-good fallback contract |
