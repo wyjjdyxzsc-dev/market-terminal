@@ -126,6 +126,12 @@ async function checkHtml(label, url) {
   await check('GET /api/chart?symbol=AAPL&range=1D', `${BASE}/api/chart?symbol=AAPL&range=1D`,
     { skipError: true, validate: d => Array.isArray(d.points) || d.error });
 
+  // ETF benchmark used by the quant panel (beta/tracking error). Both chart
+  // sources must be able to serve an ETF, so a 502 here is a real failure of
+  // the Yahoo -> Nasdaq fallback, not a missing key.
+  await check('GET /api/chart?symbol=SPY&range=1Y (ETF fallback)', `${BASE}/api/chart?symbol=SPY&range=1Y`,
+    { validate: d => Array.isArray(d.points) && d.points.length > 5 && d.points.every(pt => Number.isFinite(pt.c)) });
+
   await check('GET /api/search?q=Apple', `${BASE}/api/search?q=Apple`,
     { skipError: true, validate: d => Array.isArray(d.result) || Array.isArray(d.results) || d.error });
 
@@ -183,8 +189,10 @@ async function checkHtml(label, url) {
   await check('GET /api/map/events', `${BASE}/api/map/events`,
     { skipError: true, validate: d => Array.isArray(d.points) || d.error });
 
+  // NWS is keyless, so a 5xx here is a real contract failure (e.g. an upstream
+  // query-parameter change), not a missing key — do not skip it.
   await check('GET /api/map/weather', `${BASE}/api/map/weather`,
-    { skipError: true, validate: d => Array.isArray(d.points) || d.error });
+    { validate: d => Array.isArray(d.points) && d.points.length > 0 && d.provenance });
 
   await check('GET /api/map/flights?bbox=-10,-10,60,40', `${BASE}/api/map/flights?bbox=-10,-10,60,40`,
     { skipError: true, validate: d => Array.isArray(d.points) || d.error });

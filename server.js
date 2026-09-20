@@ -400,6 +400,7 @@ function _buildBody(p, sys, usr, maxOutputTokens = 2_000) {
   };
   body[p.outputTokenParam || 'max_tokens'] = boundedOutputTokens;
   if (p.supportsJsonMode !== false) body.response_format = { type: 'json_object' };
+  if (p.reasoningEffort) body.reasoning_effort = p.reasoningEffort;
   return JSON.stringify(body);
 }
 
@@ -919,12 +920,33 @@ function etOffsetMinutes(date) {
   return m ? -parseInt(m[1], 10) * 60 : 300;
 }
 
+// Nasdaq keys its quote/chart endpoints by asset class. Equities live under
+// `stocks`; ETFs (SPY, QQQ, DIA, IWM...) return `rCode 400 "Symbol not exists"`
+// there and must be requested under `etf`. Try each class in turn and only
+// fall through when Nasdaq explicitly reports the symbol as unknown.
+const NASDAQ_ASSET_CLASSES = ['stocks', 'etf'];
+
+function nasdaqSymbolUnknown(payload) {
+  const codes = payload?.status?.bCodeMessage;
+  return payload?.data == null && Array.isArray(codes) && codes.some((c) => Number(c?.code) === 1001);
+}
+
+async function fetchNasdaqByAssetClass(buildUrl) {
+  let last = null;
+  for (const assetClass of NASDAQ_ASSET_CLASSES) {
+    const res = await fetchWithTimeout(buildUrl(assetClass), { headers: NASDAQ_HEADERS }, 12000);
+    if (!res.ok) throw new Error(`Nasdaq responded ${res.status}`);
+    const data = await res.json();
+    if (!nasdaqSymbolUnknown(data)) return data;
+    last = data;
+  }
+  return last;
+}
+
 async function chartFromNasdaq(symbol, rangeKey) {
   if (rangeKey === '1D') {
-    const url = `https://api.nasdaq.com/api/quote/${encodeURIComponent(symbol)}/chart?assetclass=stocks`;
-    const res = await fetchWithTimeout(url, { headers: NASDAQ_HEADERS }, 12000);
-    if (!res.ok) throw new Error(`Nasdaq responded ${res.status}`);
-    const data   = await res.json();
+    const data = await fetchNasdaqByAssetClass((assetClass) =>
+      `https://api.nasdaq.com/api/quote/${encodeURIComponent(symbol)}/chart?assetclass=${assetClass}`);
     const rows   = data?.data?.chart || [];
     const offMs  = etOffsetMinutes(new Date()) * 60000;
     const points = rows.filter(r => r && r.y != null).map(r => ({ t: r.x + offMs, c: Number(r.y) }));
@@ -939,12 +961,9 @@ async function chartFromNasdaq(symbol, rangeKey) {
     };
   }
   const days = NASDAQ_DAYS[rangeKey] || 35;
-  const url  =
+  const data = await fetchNasdaqByAssetClass((assetClass) =>
     `https://api.nasdaq.com/api/quote/${encodeURIComponent(symbol)}/historical` +
-    `?assetclass=stocks&fromdate=${isoDaysAgo(days)}&todate=${isoDaysAgo(0)}&limit=9999`;
-  const res  = await fetchWithTimeout(url, { headers: NASDAQ_HEADERS }, 12000);
-  if (!res.ok) throw new Error(`Nasdaq responded ${res.status}`);
-  const data = await res.json();
+    `?assetclass=${assetClass}&fromdate=${isoDaysAgo(days)}&todate=${isoDaysAgo(0)}&limit=9999`);
   const rows = data?.data?.tradesTable?.rows || [];
   const toMs = (mdy) => { const [m, d, y] = mdy.split('/').map(Number); return Date.UTC(y, m - 1, d); };
   let points = rows
@@ -1003,12 +1022,16 @@ const rss = new RssParser({
 
 // ── 6a: RSS helpers ────────────────────────────────────────────────────────
 
+const NAMED_ENTITIES = { nbsp: '\u00a0', lsquo: '\u2018', rsquo: '\u2019', ldquo: '\u201c', rdquo: '\u201d', ndash: '\u2013', mdash: '\u2014', hellip: '\u2026' };
+
 function decodeEntities(s) {
   return String(s)
     .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
     .replace(/&lt;/g, '<').replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&apos;/g, "'")
-    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(+n))
+    .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(+n))
+    .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16)))
+    .replace(/&(nbsp|lsquo|rsquo|ldquo|rdquo|ndash|mdash|hellip);/g, (_, name) => NAMED_ENTITIES[name])
     .replace(/&amp;/g, '&')
     .replace(/<[^>]+>/g, '')
     .trim();
@@ -3325,7 +3348,7 @@ async function fetchWindyWebcams() {
 }
 
 async function fetchWeatherAlerts() {
-  const res = await fetchWithTimeout('https://api.weather.gov/alerts/active?status=actual&limit=250', {
+  const res = await fetchWithTimeout('https://api.weather.gov/alerts/active?status=actual', {
     headers: { 'User-Agent': 'MarketTerminal/1.0 (contact: alerts@market-terminal)', Accept: 'application/geo+json' },
   }, 12000);
   if (!res.ok) throw new Error('NWS ' + res.status);
@@ -3357,6 +3380,7 @@ async function fetchWeatherAlerts() {
       area: props.areaDesc,
       urgency: props.urgency,
     });
+    if (out.length >= 250) break; // NWS no longer accepts a `limit` query parameter; bound here instead.
   }
   return out;
 }

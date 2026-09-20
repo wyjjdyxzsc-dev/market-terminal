@@ -1,0 +1,90 @@
+# Project Meridian — BACKLOG
+
+Legitimate findings outside the active checkpoint. Discovery is not authorization.
+Severity: P0 security/privacy/data corruption/dangerous financial authority · P1 broken primary
+functionality, wrong data, major routing/API/update defect · P2 material UX/persistence/
+accessibility/degraded-state defect · P3 minor.
+
+---
+
+## B-001 · P1 · ENVIRONMENT · Repository lives in an iCloud-synced folder
+- OBSERVATION: `~/Desktop/claude projects/market-terminal` is under iCloud Desktop sync; 1,711
+  files (incl. `worker.js` and 196 `.git` objects/packs) were evicted (`dataless`). `git status`
+  hung >120 s; reads stalled ~10 s/file. `.git` also carries stale `HEAD.lock.*`, `index.lock.*`,
+  `index2..6`, and `rebase-merge-stale-*` artifacts from earlier interrupted operations.
+- EVIDENCE: `ls -lO worker.js` → `compressed,dataless`; EVIDENCE.md R5.
+- WHY DEFERRED: moving the repo or disabling "Optimize Mac Storage" is an OWNER machine decision.
+- SUGGESTED: HUMAN ACTION now (move repo outside iCloud or pin it), before MT2-1.
+
+## B-002 · P1 · AI AUTHORITY / CONFIG · Production high-risk surfaces always abstain
+- OBSERVATION: Situation Room, Investment Report, Instability, Sectors, and Deep Dive analysis
+  all `abstained` in production. Runtime attempts show only `github` (`openai/gpt-4.1`) failing in
+  ~300–800 ms with failureCode `Error`, and `cfai` timing out at ~19 s. No second heavy provider
+  is configured, and the policy requires two independent heavy providers for verified tasks.
+- EVIDENCE: EVIDENCE.md baseline probes 2026-09-20.
+- WHY DEFERRED: needs Worker secrets (e.g. `GEMINI_API_KEY`, a valid `GITHUB_MODELS_TOKEN`)
+  and/or a policy decision on provider requirements; not repairable from the repo.
+- SUGGESTED: HUMAN ACTION (secrets) now; policy revisit in MT2-1 REWIND (Deep Dive) / MT2-7.
+
+## B-003 · P2 · MAP / FRONTEND · Aircraft layer: dead browser-direct path + empty in production
+- OBSERVATION: `public/mapintel.js` fetches up to 12 `api.airplanes.live/v2/point/…` tiles
+  directly from the browser every 8 s; the host now returns 403 / no CORS headers, producing
+  an error storm (400+ console errors in one session). Server fallback `/api/map/flights` works
+  locally (816 points) but returns 0 points in production (datacenter-IP blocks).
+- EVIDENCE: browser console; `curl -D - https://api.airplanes.live/v2/point/40/-100/250` → 403.
+- WHY DEFERRED: needs a provider decision (OpenSky auth, adsb.lol, or drop) — feature work.
+- SUGGESTED: MT2-5 MARKETGRID or a dedicated map-data checkpoint.
+
+## B-004 · P2 · FRONTEND · Live map layer timers run while the map is not visible
+- OBSERVATION: `setLayer()` starts `setInterval` refreshers that keep polling (aircraft every
+  8 s, quakes/weather every 60 s) after the user leaves Global Map or the tab is hidden.
+- EVIDENCE: `public/mapintel.js:589-591`; console shows polling continuing on Watchlist view.
+- WHY DEFERRED: behavioural change beyond baseline repair; low risk but not blocking.
+- SUGGESTED: MT2-2 QUARTZ (shell lifecycle owns visibility) or earlier as a small fix.
+
+## B-005 · P2 · BACKEND / SECURITY · Unregistered worker route bypasses the rate limiter
+- OBSERVATION: `worker.js` serves `/api/map/conflictnews` (not in `shared/api-contract.js`).
+  Because `getRoute()` returns null, `requireRateLimit()` is skipped and no provenance envelope
+  is attached. It currently returns 502 (GDELT) and nothing in the frontend calls it.
+- EVIDENCE: `worker.js:3136`; prod probe 502.
+- WHY DEFERRED: dead route; deletion or registration is a contract decision. Minimal.
+- SUGGESTED: MT2-1 or any next backend touch — delete it (or register + rate-limit).
+
+## B-006 · P3 · BACKEND · server.js / worker.js route drift
+- OBSERVATION: `server.js` serves `/api/map/eonet` (unregistered, duplicates `/api/map/events`);
+  `/api/map/overpass` is in the contract and `server.js` but absent from `worker.js` (prod 404).
+  Neither is used by the frontend.
+- EVIDENCE: route extraction 2026-09-20; prod probes.
+- SUGGESTED: same touch as B-005.
+
+## B-007 · P3 · BACKEND · server.js applies rate limiting inconsistently
+- OBSERVATION: 10 Express routes have no rate-limit middleware (`/api/map/{overpass,earthquakes,
+  fires,eonet,disease,gpsjam,conflict,layers,infrastructure}`, `/api/macro/shock`), while the
+  Worker limits every registered route uniformly. Local-only exposure.
+- SUGGESTED: same touch as B-005.
+
+## B-008 · P3 · BACKEND · Chart route error shape breaks the JSON error contract
+- OBSERVATION: `/api/chart` failures return `{"error":"Yahoo responded 429"}` (string), while the
+  contract elsewhere is `{ error: true, code, message }`; the frontend tolerates it.
+- SUGGESTED: MT2-3 TWINCORE when chart contracts are touched for multi-market.
+
+## B-009 · P3 · DEPENDENCY · `qs` moderate advisories via express/body-parser
+- OBSERVATION: `npm audit --omit=dev` → 3 moderate (`qs` ≤6.15.3). Fix available.
+- SUGGESTED: next dependency touch; verify smoke afterwards.
+
+## B-010 · P3 · DOCS · AGENTS.md has drifted from CLAUDE.md
+- OBSERVATION: `AGENTS.md` still states Deep Dive levels/valuation/options are disabled and lacks
+  the 2026-08-11 section; CLAUDE.md supersedes it. Both files also say the 08-11 commit is "not
+  yet verified in production" while production serves `20260811a`.
+- SUGGESTED: fold into the first MT2 doc sync (MT2-1 closure).
+
+## B-011 · P3 · AI / SPEED TIER · Cerebras gpt-oss may share the reasoning-token overrun
+- OBSERVATION: R3 pinned `reasoning_effort: low` for Groq only (verified). Cerebras
+  `gpt-oss-120b` uses `max_completion_tokens` and may need the same parameter; unverified.
+- SUGGESTED: verify when a Cerebras key is available.
+
+## B-012 · P3 · UX · Watchlist Enter-key submission unverified
+- OBSERVATION: in the built-in browser pane a synthetic Enter in `#watchInput` did not submit,
+  while the same synthetic Enter submitted the AI chat input (explicit keydown handler). DOM
+  `requestSubmit()` and the ADD button work. May be a pane artifact.
+- SUGGESTED: HUMAN check in a real browser; fix in MT2-6 WATCHTOWER if real.

@@ -49,3 +49,11 @@ test('provider health snapshots preserve bounded operational state', () => {
   assert.match(snapshot.lastFailureReason, /quota details/);
   assert.equal(snapshot.cooldownUntil, '2026-07-26T10:01:00.000Z');
 });
+
+test('groq gpt-oss requests pin low reasoning effort so JSON batches fit the race ceiling', () => {
+  const groq = registry.getProvider('groq');
+  assert.equal(groq.defaultModel, 'openai/gpt-oss-120b');
+  assert.equal(groq.reasoningEffort, 'low');
+  // Providers without an explicit setting must not send the parameter at all.
+  assert.equal(registry.getProvider('cerebras').reasoningEffort, undefined);
+});

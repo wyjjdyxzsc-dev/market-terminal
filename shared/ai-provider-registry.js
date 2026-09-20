@@ -25,6 +25,11 @@
       defaultModel: 'openai/gpt-oss-120b',
       contextWindowTokens: 131_072,
       maxOutputTokens: 65_536,
+      // gpt-oss reasoning tokens are billed against max_tokens. At the default
+      // effort a 60-headline NEWS batch spends ~2.5k tokens reasoning, overruns
+      // the shared 4k race ceiling, and Groq's JSON mode rejects the truncated
+      // output (400 "Failed to validate JSON"). Low effort keeps it well inside.
+      reasoningEffort: 'low',
       timeoutMs: 15_000,
       costTier: 'low',
       costUnits: 1,
