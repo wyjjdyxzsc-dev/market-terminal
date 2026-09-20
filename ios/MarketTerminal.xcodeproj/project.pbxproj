@@ -283,7 +283,7 @@
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.marketterminal.app.tests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.krishivjain.marketterminal.tests;
 				SDKROOT = iphoneos;
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Market Terminal.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Market Terminal";
 			};
@@ -432,7 +432,7 @@
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.marketterminal.app.tests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.krishivjain.marketterminal.tests;
 				SDKROOT = iphoneos;
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Market Terminal.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Market Terminal";
 			};
@@ -561,7 +561,7 @@
 					"@executable_path/Frameworks",
 					"@loader_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.marketterminal.app.tests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.krishivjain.marketterminal.tests;
 				SDKROOT = iphoneos;
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Market Terminal.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Market Terminal";
 			};

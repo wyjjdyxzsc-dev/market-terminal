@@ -1,11 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Scheme
    LastUpgradeVersion = "1600"
-   version = "1.7">
+   version = "1.3">
    <BuildAction
       parallelizeBuildables = "YES"
-      buildImplicitDependencies = "YES"
-      runPostActionsOnFailure = "NO">
+      buildImplicitDependencies = "YES">
       <BuildActionEntries>
          <BuildActionEntry
             buildForTesting = "YES"
@@ -16,7 +15,7 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "FA7D2526601776ECCC3EDE8C"
-               BuildableName = "MarketTerminal.app"
+               BuildableName = "Market Terminal.app"
                BlueprintName = "MarketTerminal"
                ReferencedContainer = "container:MarketTerminal.xcodeproj">
             </BuildableReference>
@@ -30,7 +29,7 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "8F1D301C560E0BE8085D3BD0"
-               BuildableName = "MarketTerminalTests.xctest"
+               BuildableName = "Market Terminal.xctest"
                BlueprintName = "MarketTerminalTests"
                ReferencedContainer = "container:MarketTerminal.xcodeproj">
             </BuildableReference>
@@ -41,13 +40,12 @@
       buildConfiguration = "Debug"
       selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB"
       selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
-      shouldUseLaunchSchemeArgsEnv = "YES"
-      onlyGenerateCoverageForSpecifiedTargets = "NO">
+      shouldUseLaunchSchemeArgsEnv = "YES">
       <MacroExpansion>
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "FA7D2526601776ECCC3EDE8C"
-            BuildableName = "MarketTerminal.app"
+            BuildableName = "Market Terminal.app"
             BlueprintName = "MarketTerminal"
             ReferencedContainer = "container:MarketTerminal.xcodeproj">
          </BuildableReference>
@@ -59,14 +57,12 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "8F1D301C560E0BE8085D3BD0"
-               BuildableName = "MarketTerminalTests.xctest"
+               BuildableName = "Market Terminal.xctest"
                BlueprintName = "MarketTerminalTests"
                ReferencedContainer = "container:MarketTerminal.xcodeproj">
             </BuildableReference>
          </TestableReference>
       </Testables>
-      <CommandLineArguments>
-      </CommandLineArguments>
    </TestAction>
    <LaunchAction
       buildConfiguration = "Debug"
@@ -83,13 +79,11 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "FA7D2526601776ECCC3EDE8C"
-            BuildableName = "MarketTerminal.app"
+            BuildableName = "Market Terminal.app"
             BlueprintName = "MarketTerminal"
             ReferencedContainer = "container:MarketTerminal.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
-      <CommandLineArguments>
-      </CommandLineArguments>
    </LaunchAction>
    <ProfileAction
       buildConfiguration = "Release"
@@ -102,13 +96,11 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "FA7D2526601776ECCC3EDE8C"
-            BuildableName = "MarketTerminal.app"
+            BuildableName = "Market Terminal.app"
             BlueprintName = "MarketTerminal"
             ReferencedContainer = "container:MarketTerminal.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
-      <CommandLineArguments>
-      </CommandLineArguments>
    </ProfileAction>
    <AnalyzeAction
       buildConfiguration = "Debug">

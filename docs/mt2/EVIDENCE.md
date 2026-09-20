@@ -467,3 +467,46 @@ RESTART VERIFIED · HUMAN ACCEPTED
   VERIFIED, OWNER ACCEPTED: **none** — no Xcode, no signing identity, no iPhone connected.
   Evidence level reached: **UNIT TESTED (pure logic) / IMPLEMENTED (shell)**.
 - No IPA produced (requires Xcode). AltStore not required.
+
+### POCKET continuation — 2026-09-20T09:45Z — HEAD `2eb8a84` + working tree (Xcode phase)
+- Environment now: Xcode 26.6 (17F113) at `/Applications/Xcode.app`, iOS 26.5 SDK, iOS 26.5
+  simulator runtime (downloaded this session, 8.5 GB), Apple ID account with Personal Team
+  `S9HRQZG54C` (found in `com.apple.dt.Xcode.plist` `IDEProvisioningTeamByIdentifier`; pinned
+  in git-ignored `ios/Config/Local.xcconfig`). iPhone 17 Pro (`iPhone18,1`, iOS **27.0**,
+  UDID `00008150-000A6C923CC0401C`) paired via `devicectl manage pair` (no prompt — previously
+  trusted), Developer Mode enabled by the OWNER, DDI services available.
+- **IOS BUILD TESTED**: `xcodebuild build` Debug, `platform=iOS,id=<UDID>`, arm64, iphoneos26.5
+  → `** BUILD SUCCEEDED **` after two real fixes: (1) `PRODUCT_MODULE_NAME` in `Base.xcconfig`
+  leaked to the test target ("Multiple commands produce …swiftmodule") — removed, the app-target
+  setting in `project.yml` stands; (2) `codesign: resource fork, Finder information, or similar
+  detritus not allowed` — the `.app` under the in-repo `ios/build/` (iCloud-synced, B-001) carried
+  `com.apple.FinderInfo`; building into `~/Library/Developer/Xcode/DerivedData/…` resolved it and
+  the README now says so.
+- **SIGNED**: `Signing Identity: "Apple Development: krishivjain20000@icloud.com (N24JRWS3B9)"`,
+  `Provisioning Profile: "iOS Team Provisioning Profile: com.krishivjain.marketterminal"`,
+  `codesign -dv` → `TeamIdentifier=S9HRQZG54C`, `get-task-allow` present. The originally chosen
+  `com.marketterminal.app` failed with "cannot be registered to your development team because it
+  is not available" (owned by another team) → bundle id changed to
+  `com.krishivjain.marketterminal` (tracked default; D-008 amended).
+- **DEVICE INSTALLED**: `devicectl device install app` → installationURL
+  `/private/var/containers/Bundle/Application/53472F4B-…/Market Terminal.app/`;
+  `devicectl device info apps` lists `Market Terminal   com.krishivjain.marketterminal   1.0.0   1`.
+- First launch refused: `FBSOpenApplicationErrorDomain error 3 … profile has not been explicitly
+  trusted by the user` (expected Personal-Team gate). OWNER trusted the profile on the phone.
+- **DEVICE LAUNCHED**: `devicectl device process launch` → "Launched application"; process
+  `…/Market Terminal.app/Market Terminal` pid 1158 alive after 8 s; `device info crashes` → no
+  Market Terminal entries.
+- **RESTART VERIFIED (process level)**: `process terminate --pid 1158` → 0 matching processes →
+  `process launch` → new pid 1164 alive after 6 s → still 0 crash logs. Visual state restoration
+  (last symbol/workspace) was not observed by the engineering session.
+- **UNIT TESTED (XCTest, iOS)**: `xcodebuild test` on iPhone 17e simulator → AppConfig 4/4,
+  DeepLinkRouter 5/5, NavigationPolicy 8/8 = **17/17**, `** TEST SUCCEEDED **`. The first attempt
+  hung 33 min at 0 % CPU while `diskimagesiod` mounted the runtime on the 8 GB M1 (load avg 44–60,
+  2.8 GB swap, iCloud daemons syncing the in-repo build dir) — killed, `ios/build/` deleted, rerun
+  into `~/Library` DerivedData succeeded.
+- Web after the change: `test:unit` 75/75, `test:ai-eval` thresholdsPassed. No `public/` change.
+- **NOT achieved / not claimed**: REAL DEVICE TESTED (the 28-point visual acceptance: no Safari
+  chrome, production render, navigation, search, workspaces, external-link sheet, portrait/
+  landscape, keyboard, background/resume, state after relaunch) — requires eyes on the phone;
+  the OWNER took the device. OWNER ACCEPTED: pending. Production connectivity from the phone is
+  inferred from launch + no crash only, not observed.

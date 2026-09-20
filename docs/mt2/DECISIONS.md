@@ -162,5 +162,10 @@ Do not pre-decide future architecture; add records only when a real decision is 
   committed; a `Development` configuration carries the only ATS exception (loopback/local
   network) in a separate Info.plist; the production plist has none. Web Push cannot work inside
   `WKWebView` (B-018), so SENTINEL/WORLDWIRE/ORACLE notifications will need a native push seam.
+- AMENDMENT 2026-09-20 (Xcode phase): `com.marketterminal.app` is registered to another Apple
+  team ("cannot be registered to your development team because it is not available"), so the
+  tracked default bundle id is **`com.krishivjain.marketterminal`** (tests:
+  `com.krishivjain.marketterminal.tests`). The Personal Team id lives only in the git-ignored
+  `Config/Local.xcconfig`.
 - STATUS: ACCEPTED (engineering default under the POCKET authorization; OWNER may override the
   bundle id via `Config/Local.xcconfig`).

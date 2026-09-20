@@ -36,8 +36,9 @@ ios/
   MarketTerminalTests/             XCTest: AppConfig, NavigationPolicy, DeepLinkRouter
 ```
 
-Identity: **Market Terminal**, bundle id `com.marketterminal.app` (override in `Local.xcconfig`
-if your Personal Team already owns a different app with that id), iOS 16.0+, iPhone and iPad,
+Identity: **Market Terminal**, bundle id `com.krishivjain.marketterminal` (the generic
+`com.marketterminal.app` is already registered to another Apple team and cannot be used; override
+in `Local.xcconfig` if you sign with a different account), iOS 16.0+, iPhone and iPad,
 portrait + landscape.
 
 ## Prerequisites (one time)
@@ -93,20 +94,24 @@ data on the phone survives), and a free account may hold at most **3 sideloaded 
    ```bash
    cd ios
    xcrun devicectl list devices                       # note the phone's identifier
+   DD="$HOME/Library/Developer/Xcode/DerivedData/MarketTerminal-Device"   # NOT inside the repo (see below)
    xcodebuild -project MarketTerminal.xcodeproj -scheme MarketTerminal -configuration Debug \
-     -destination 'platform=iOS,name=<Your iPhone name>' -allowProvisioningUpdates \
-     -derivedDataPath build/DerivedData build
-   APP="build/DerivedData/Build/Products/Debug-iphoneos/Market Terminal.app"
+     -destination 'platform=iOS,id=<UDID from the list>' -allowProvisioningUpdates \
+     -derivedDataPath "$DD" build
+   APP="$DD/Build/Products/Debug-iphoneos/Market Terminal.app"
    xcrun devicectl device install app --device <identifier> "$APP"
-   xcrun devicectl device process launch --device <identifier> com.marketterminal.app
+   xcrun devicectl device process launch --device <identifier> com.krishivjain.marketterminal
    ```
-4. First launch on the phone: iOS shows **"Untrusted Developer"**. Go to Settings ▸ General ▸
-   VPN & Device Management ▸ your Apple ID ▸ Trust. Launch again.
+4. First launch on the phone: iOS refuses with **"Untrusted Developer"** (from the shell:
+   `FBSOpenApplicationErrorDomain error 3 … profile has not been explicitly trusted`). Go to
+   Settings ▸ General ▸ VPN & Device Management ▸ "Apple Development: <your Apple ID>" ▸ Trust.
+   Launch again.
 
 Verify it really landed (do not trust "Build Succeeded"):
 
 ```bash
 xcrun devicectl device info apps --device <identifier> | grep -i marketterminal
+# → "Market Terminal   com.krishivjain.marketterminal   1.0.0   1"
 ```
 
 ## REINSTALL / RE-SIGN
@@ -125,10 +130,11 @@ Not needed when a Mac with Xcode and a cable are available. If you want an IPA a
 
 ```bash
 cd ios
+OUT="$HOME/Library/Developer/MarketTerminal-dist"; mkdir -p "$OUT"   # outside the iCloud-synced repo
 xcodebuild -project MarketTerminal.xcodeproj -scheme MarketTerminal -configuration Release \
   -destination 'generic/platform=iOS' -allowProvisioningUpdates \
-  -archivePath dist/MarketTerminal.xcarchive archive
-cat > dist/ExportOptions.plist <<'EOF'
+  -archivePath "$OUT/MarketTerminal.xcarchive" archive
+cat > "$OUT/ExportOptions.plist" <<'EOF'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
@@ -137,12 +143,13 @@ cat > dist/ExportOptions.plist <<'EOF'
   <key>compileBitcode</key><false/>
 </dict></plist>
 EOF
-xcodebuild -exportArchive -archivePath dist/MarketTerminal.xcarchive \
-  -exportOptionsPlist dist/ExportOptions.plist -exportPath dist -allowProvisioningUpdates
-ls dist/*.ipa
+xcodebuild -exportArchive -archivePath "$OUT/MarketTerminal.xcarchive" \
+  -exportOptionsPlist "$OUT/ExportOptions.plist" -exportPath "$OUT" -allowProvisioningUpdates
+ls "$OUT"/*.ipa
 ```
 
-`ios/dist/` is git-ignored. AltStore re-signs the IPA with your Apple ID on the phone and
+Keep archives and IPAs out of the repository (`ios/build/` and `ios/dist/` are git-ignored as a
+backstop, but anything under the iCloud-synced folder can trip codesign — see Troubleshooting). AltStore re-signs the IPA with your Apple ID on the phone and
 refreshes it weekly on its own; the direct Xcode route above is simpler and is the one this
 delivery targets.
 
@@ -202,7 +209,9 @@ workspace shows its own unsupported state there.
 |---|---|
 | `xcodebuild: error: tool 'xcodebuild' requires Xcode` | `sudo xcode-select -s /Applications/Xcode.app` |
 | "No signing certificate" / "No profiles for com.marketterminal.app" | Select the team (SIGN above) and keep `-allowProvisioningUpdates` |
-| "Failed to register bundle identifier" | Personal-Team id quota; change `PRODUCT_BUNDLE_IDENTIFIER` in `Local.xcconfig` |
+| "Failed Registering Bundle Identifier … not available" | The id belongs to another team (this is why the default is `com.krishivjain.marketterminal`, not `com.marketterminal.app`); pick another in `Local.xcconfig` |
+| `codesign … resource fork, Finder information, or similar detritus not allowed` | The build products are inside the iCloud-synced repo folder; use a `-derivedDataPath` under `~/Library` (or Xcode's default), never `ios/build/` |
+| `xcodebuild test` hangs at 0 % CPU with `diskimagesiod` busy | First mount of the simulator runtime on an 8 GB Mac; wait for `diskimagesiod` to finish or run the device build (it does not need the simulator) |
 | Phone not listed / "not paired" | Cable in, unlocked, tap Trust; `xcrun devicectl list devices` |
 | "Developer Mode disabled" | Settings ▸ Privacy & Security ▸ Developer Mode; restart phone |
 | "Untrusted Developer" on launch | Settings ▸ General ▸ VPN & Device Management ▸ Trust |

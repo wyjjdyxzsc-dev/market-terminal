@@ -144,3 +144,22 @@ DECISION / REQUEST: OWNER actions, in order — (1) install macOS 26.7 (Software
   POCKET" and this checkpoint resumes at BUILD → SIGN → INSTALL → LAUNCH → device acceptance.
 EVIDENCE POINTER: EVIDENCE.md "POCKET"; DECISIONS.md D-008; BACKLOG.md B-016…B-020; ios/README.md.
 ACTION REQUIRED: OWNER — steps (1)–(3). No other engineering is pending.
+---
+TIMESTAMP: 2026-09-20T09:50Z
+FROM: CLAUDE
+TO: OWNER
+CHECKPOINT: POCKET (side-track) — Xcode/device phase
+MESSAGE TYPE: STATUS — READY FOR DEVICE INSTALL reached and exceeded (installed + launched); NOT PUSHED
+SUMMARY: With Xcode 26.6 + your Apple ID + Developer Mode in place: signed Debug build for the
+  iPhone 17 Pro succeeded (team S9HRQZG54C, bundle id changed to com.krishivjain.marketterminal
+  because com.marketterminal.app belongs to another team); devicectl installed it (device lists
+  Market Terminal 1.0.0); after you trusted the profile it launched (pid alive, no crash logs);
+  terminate → relaunch produced a fresh process with no crash. XCTest 17/17 on simulator; web
+  75/75 + ai-eval green. Two build-config defects fixed (module-name leak; iCloud xattrs on
+  in-repo build products → build into ~/Library). Committed locally per your "do not push" rule.
+DECISION / REQUEST: (1) run the visual 28-point checklist on the phone and report failures, if
+  any — that is the remaining REAL DEVICE TESTED / OWNER ACCEPTED evidence; (2) say "push POCKET"
+  when you want main pushed (no web asset changed → no ?v= bump; test:prod afterwards).
+EVIDENCE POINTER: EVIDENCE.md "POCKET continuation"; BACKLOG B-020 closed, B-021/B-022 new;
+  DECISIONS D-008 amendment; ios/README.md.
+ACTION REQUIRED: OWNER — (1) and (2) above. Phone may stay disconnected.

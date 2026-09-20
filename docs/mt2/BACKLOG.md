@@ -150,11 +150,24 @@ accessibility/degraded-state defect · P3 minor.
 - SUGGESTED: `LAContext` gate in `ContentView` behind a Settings toggle, in a later mobile
   checkpoint.
 
-## B-020 · P2 · IOS · XCTest suite and iOS build have not been executed
-- OBSERVATION: the Mac has only Command Line Tools (no Xcode, no iOS SDK, 0 signing
-  identities), so `MarketTerminalTests` and the iOS build could not run in POCKET. The
-  Foundation-only logic (AppConfig, NavigationPolicy, DeepLinkRouter) was compiled and executed
-  with the macOS toolchain (28/28); the UIKit/WebKit/SwiftUI files are parse-checked only.
-- SUGGESTED: first action after Xcode is installed — `xcodebuild test` on a simulator, then the
-  device install (ios/README.md). Any compile error there is an IMPLEMENTATION class fix
-  inside POCKET, not a new checkpoint.
+## B-020 · P2 · IOS · XCTest suite and iOS build have not been executed — CLOSED 2026-09-20
+- RESOLUTION: Xcode 26.6 installed; `xcodebuild test` 17/17 on iPhone 17e simulator; signed
+  device build succeeded and installed/launched on the iPhone 17 Pro (EVIDENCE.md POCKET
+  continuation). Two config defects fixed in the process (module-name leak, iCloud xattrs on
+  in-repo build products).
+
+## B-021 · P2 · ENVIRONMENT · In-repo build output trips codesign and iCloud sync (B-001 corollary)
+- OBSERVATION: any `-derivedDataPath`/`-archivePath` under the iCloud-synced repo folder gets
+  `com.apple.FinderInfo` on the `.app` → `codesign … detritus not allowed`; the 199 MB
+  `ios/build/` also drove `cloudd`/`fileproviderd`/`bird` to ~70 % CPU each with 2.8 GB swap on
+  the 8 GB M1 and starved the simulator (`xcodebuild test` idle 33 min).
+- SUGGESTED: keep B-001 (move the repo out of iCloud) as the real fix; until then always build
+  into `~/Library/Developer/Xcode/DerivedData` (README updated).
+
+## B-022 · P3 · IOS · Real-device visual acceptance and iOS-27 behaviour unobserved by engineering
+- OBSERVATION: the device runs iOS 27.0 while the SDK is 26.5; install/launch/relaunch succeeded
+  and no crash logs exist, but no screenshot or accessibility read of the phone was possible
+  from the Mac (no iPhone Mirroring session, no idevicescreenshot). The 28-point checklist in
+  ios/README.md / the POCKET brief is the OWNER's to run.
+- SUGGESTED: on the next Xcode update, rebuild with the iOS 27 SDK; record the OWNER's checklist
+  result in EVIDENCE.md as HUMAN ACCEPTED or as defects.
