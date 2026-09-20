@@ -164,7 +164,7 @@ accessibility/degraded-state defect · P3 minor.
 - SUGGESTED: keep B-001 (move the repo out of iCloud) as the real fix; until then always build
   into `~/Library/Developer/Xcode/DerivedData` (README updated).
 
-## B-022 · P3 · IOS · Real-device visual acceptance and iOS-27 behaviour unobserved by engineering
+## B-022 · P3 · IOS · iOS-27 SDK rebuild (visual acceptance since OWNER ACCEPTED 2026-09-20)
 - OBSERVATION: the device runs iOS 27.0 while the SDK is 26.5; install/launch/relaunch succeeded
   and no crash logs exist, but no screenshot or accessibility read of the phone was possible
   from the Mac (no iPhone Mirroring session, no idevicescreenshot). The 28-point checklist in

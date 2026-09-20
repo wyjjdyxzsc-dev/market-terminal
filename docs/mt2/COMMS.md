@@ -163,3 +163,13 @@ DECISION / REQUEST: (1) run the visual 28-point checklist on the phone and repor
 EVIDENCE POINTER: EVIDENCE.md "POCKET continuation"; BACKLOG B-020 closed, B-021/B-022 new;
   DECISIONS D-008 amendment; ios/README.md.
 ACTION REQUIRED: OWNER — (1) and (2) above. Phone may stay disconnected.
+---
+TIMESTAMP: 2026-09-20T10:32Z
+FROM: OWNER
+TO: CLAUDE
+CHECKPOINT: POCKET
+MESSAGE TYPE: OWNER ACCEPTANCE — PASS + CLOSURE AUTHORIZATION
+SUMMARY: Real-device acceptance on the iPhone 17 Pro: PASS. Close POCKET: record OWNER ACCEPTED,
+  final secrets/diff/Git check, closure commit, push per repository policy, verify production
+  health, STOP. No further Meridian phase.
+ACTION REQUIRED: CLAUDE — execute closure.

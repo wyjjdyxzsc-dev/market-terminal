@@ -510,3 +510,12 @@ RESTART VERIFIED · HUMAN ACCEPTED
   landscape, keyboard, background/resume, state after relaunch) — requires eyes on the phone;
   the OWNER took the device. OWNER ACCEPTED: pending. Production connectivity from the phone is
   inferred from launch + no crash only, not observed.
+
+### POCKET closure — 2026-09-20T10:32Z — HEAD `3d100fe`
+- **OWNER ACCEPTED**: the OWNER ran the visual acceptance on the iPhone 17 Pro and reported
+  "OWNER ACCEPTANCE: PASS" (COMMS 10:32Z). Level: HUMAN ACCEPTED. The engineering session did
+  not itself observe the screen (B-022 note stands as provenance, not as an open defect).
+- Final checks before push: tracked diff free of team ids / identities / profiles; only
+  `ios/Config/Local.xcconfig` and `xcuserdata/` hold owner-specific state and both are ignored;
+  the three untracked owner files are untouched; no `public/` change → no `?v=` bump.
+- Push + production health recorded in COMMS closure entry.
