@@ -56,3 +56,52 @@ Do not pre-decide future architecture; add records only when a real decision is 
   fallback keeps truthful observation labels (not "BULL CASE") because those bullets are
   deterministic counts, not analyst judgement; the original four-quadrant colour/icon flow is kept.
 - STATUS: ACCEPTED
+
+## D-004 · 2026-09-20 · MT2-2 · Navigation architecture and reserved surfaces
+- DECISION: the primary navigation is the eight-workspace hierarchy MARKETS · TERMINAL · PORTFOLIO ·
+  WATCHLIST · RESEARCH · INTELLIGENCE · QUANT · ALERTS, defined once in `public/shell.js` and rendered
+  by `app.js`. RESEARCH groups Deep Dive + Sectors; INTELLIGENCE groups Briefing, Situation Room,
+  Investment Report, Supply Chain, Global Map as a contextual subnav. Legacy view ids and their
+  lifecycles in `app.js`/`intel.js` are unchanged; the shell maps targets onto them.
+- RESERVED SURFACES: PORTFOLIO is rendered as a disabled tab marked "Soon" and resolves to no view
+  (`resolve().enabled === false`, note "MT2-4 LEDGER"); clicking it only writes the note to the
+  status line. The nav item is kept (rather than omitted) so the hierarchy is visible, but it can
+  never masquerade as implemented — enforced by `tests/shell-nav.test.js`.
+- WHY: the flat seven-tab row could not absorb Markets/Portfolio/Quant without overload; a pure
+  registry makes the hierarchy, deep links (`#/workspace/item`, legacy `?tab=`) and the "disabled
+  cannot open" rule testable in Node.
+- ALTERNATIVES: (a) keep flat tabs and add three more — rejected (overload); (b) sidebar navigation —
+  rejected for a desktop-first data terminal where vertical space matters more than horizontal.
+- STATUS: ACCEPTED
+
+## D-005 · 2026-09-20 · MT2-2 · Market-mode control placement and India behaviour
+- DECISION: the global market mode lives in the application chrome between the brand and the
+  command bar as a compact segmented control (`#marketMode`), rendered from `shell.js` `MARKETS`.
+  US is the only active entry; India is present, `aria-disabled`, marked "Soon", has no click
+  handler and no data path. MARKETS shows a market-context table that states this explicitly.
+- WHY: the control must exist in the shell before TWINCORE so TWINCORE adds market identity without
+  a navigation rewrite, while never faking a switch. Placement in the chrome (not inside MARKETS)
+  because the mode will scope every workspace, not one.
+- STATUS: ACCEPTED (TWINCORE owns the actual context switch; not authorized here)
+
+## D-006 · 2026-09-20 · MT2-2 · Design-token architecture, typography, and the Quant workspace
+- DECISION: `public/style.css` is organised in ten layers with semantic CSS-variable tokens on
+  `:root` (surfaces, separators, text tiers, accent, positive/negative/warning/critical/info,
+  spacing 4–32, radius by hierarchy 3/5/8, control heights, durations, z-index). Legacy aliases
+  (`--panel`, `--panel-2`, `--border`, `--amber`, `--mono` …) are kept as a strangler seam so
+  JS-rendered markup that still uses them continues to work. Body type is the system UI stack
+  (SF Pro / Segoe / Inter fallback); every numeric surface uses the monospace data stack with
+  tabular numerals. No framework, no bundler, no new runtime dependency.
+- ALSO DECIDED: the Quant Lab becomes its own QUANT workspace with a single mounted instance
+  (subject = Deep Dive subject if a report ran, else the Terminal symbol, or an explicit "Use
+  Terminal symbol" override). The Deep Dive report keeps its full 42af0f6 hierarchy and gains a
+  one-line "Open … in Quant Lab" action instead of embedding the lab. Market sentiment moves from
+  the Terminal to MARKETS because it is market-wide, not security-scoped.
+- WHY: the all-monospace, amber-everywhere, rounded-card presentation read as a generic AI
+  dashboard; a two-stack type system with restrained accent, tonal surfaces and hierarchy-based
+  radius gives a quieter professional workstation while keeping the amber identity for selection.
+- ALTERNATIVES: (a) restyle in place without tokens — rejected (drift continues); (b) full CSS
+  rewrite without aliases — rejected (would require touching every JS template in one checkpoint).
+- CONSEQUENCES: shell contract is nine synchronized assets; D-003's "intel.js appends QUANT LAB"
+  is superseded for the lab's location only — the report renderer and its tests are untouched.
+- STATUS: ACCEPTED

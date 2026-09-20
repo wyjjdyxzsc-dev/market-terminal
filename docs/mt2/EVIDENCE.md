@@ -280,3 +280,80 @@ RESTART VERIFIED · HUMAN ACCEPTED
   cfai produces no accepted output); the analysis state is REAL BROWSER TESTED locally through the
   real render path with a simulated payload and UNIT TESTED, not LIVE TESTED.
 - Closure commit bumps assets to `20260920d` (deploy rule), docs/seam only otherwise.
+
+---
+
+## MT2-2 QUARTZ — design system + application shell (2026-09-20)
+
+### Baseline and routing
+- Baseline: `main` @ `6ffb81c` (= expected), single worktree, tracked tree clean, three untracked
+  owner files preserved untouched. Route verified from the live session: `claude-opus-5`, serial,
+  bypass-permissions; effort not observable in-session (STATE.md records medium). Classified
+  STRUCTURAL + BEHAVIORAL frontend; no routing stop.
+- No owner-supplied Apple/platform research existed in the workspace (grep of docs/ and the
+  master prompt); HIG principles were applied directly (hierarchy, deference, system type,
+  tabular numerals, 8-pt spacing, segmented controls, toolbars, visible focus, reduced motion).
+
+### Before (narrow UI inventory, from index.html/style.css/app.js/intel.js at 6ffb81c)
+- Website-style header with emoji "💬 ASK AI" and "🤖 Why is it moving?"; seven flat tabs; emoji
+  pill sub-tabs (📡 🛰 📈 🚢) inside Global Intel; 7–10 px rounded cards with gradient banners;
+  amber as text colour for every label/heading; all-monospace body type; per-panel ad-hoc
+  spacing and colours (≈40 hard-coded hex values); AI chat as blue speech bubbles; Quant Lab
+  embedded at the bottom of every Deep Dive; sentiment gauge inside the Terminal.
+
+### Implemented
+- `public/shell.js` (new, 2026-09-20a): pure navigation + market-mode registry, dual export.
+- `tests/shell-nav.test.js` (new, 8 tests): hierarchy/order, every enabled target → existing
+  `#view-*`/`#gi-*` id in index.html, Portfolio cannot resolve/hash/appear in enabledTargets,
+  exactly one active market (US) with India reserved, locate() inverse of resolve(), legacy
+  `?tab=` and `#/…` mapping. Test-the-test: the index.html assertion failed before the new views
+  existed (`index.html is missing #view-markets`) and passed after.
+- `public/index.html`: chrome (brand · market mode · command · session), tape, `#primaryNav`,
+  `#subNav`, workspaces MARKETS/TERMINAL/INTELLIGENCE/SECTORS/DEEP DIVE/SUPPLY/WATCHLIST/QUANT/
+  ALERTS, research-assistant drawer, status bar; nine `?v=20260920e` assets. All JS-bound ids
+  preserved (`symbolInput`, `goBtn`, `autocomplete`, `qSymbol`…`sPE`, `chartCanvas`, osc/KC/MC
+  buttons, `sent*`, `dd*`, `sc*`, `watch*`, `alert*`, `aiChat*`, map/globe containers).
+- `public/style.css`: rewritten in ten layers with semantic tokens + legacy aliases (see D-006).
+- `public/app.js`: `navigateTo()/renderShellNav()/renderSubnav()/syncShellNav()` with roving
+  tabindex (←/→/Home/End, Enter/Space), `/` focuses the command bar, hash + legacy `?tab=` deep
+  links, command → Terminal, MARKETS loader (`/api/quote` for SPY/QQQ/DIA/IWM, freshness badge
+  derived only from the quote timestamp and session state), market-context registry, chart
+  "Loading" overlay suppressed during silent refreshes, aria-pressed on chart toggles, emoji
+  labels removed.
+- `public/intel.js`: `mt:gisub` listener, Quant Lab extracted into `mountQuantLab()` for the
+  QUANT workspace with Deep Dive/Terminal subject rules, "Open … in Quant Lab" action, emoji
+  labels removed, aria-expanded on the assistant toggle. `public/deepdive.js` untouched.
+- `tests/smoke.js`: shell contract = nine synchronized assets + nav/workspace ids + shell.js.
+
+### Local verification
+- Unit: `node --test tests/*.test.js` → **75/75** (67 prior + 8 shell-nav). Deep Dive render
+  tests unchanged and passing (REWIND contract).
+- Smoke (local server): **34/34** passed, keyed fires/webcams skipped as before.
+- AI eval: `npm run test:ai-eval` → thresholdsPassed true.
+- Wrangler dry-run bundling: OK.
+- Browser (built-in pane, http://localhost:3000, viewport 1440×900 and 1280×800):
+  Terminal renders security band + chart-dominant grid + rail; MARKETS renders 4 benchmark rows
+  (SPY 761.69 −0.12 % … IWM 284.10 −0.47 %) with `SNAPSHOT` freshness (market closed), the
+  sentiment gauge (Neutral −0.05, 4 benchmarks · 18 headlines · 9 sources) and the market
+  context table (US active · India "Not yet active"); RESEARCH subnav (Deep Dive · Sectors);
+  Deep Dive NVDA fallback keeps the full REWIND hierarchy (head → strip → summary → NOT RATED /
+  CHAIN ONLY 47 rows → observed inputs → quadrants → stats → consensus → KEY DATA & SOURCES →
+  Open in Terminal → disclaimer) and ends with "Open NVDA in Quant Lab"; QUANT workspace mounts
+  the lab (RJD MC 2,000 paths, B-S pricer, Greeks, indicator suite) for NVDA; INTELLIGENCE subnav
+  (Briefing · Situation Room · Investment Report · Supply Chain · Global Map) all open — briefing
+  cards, situation/report abstention states (B-002), supply chain + shock table, Leaflet map with
+  layer panel; Watchlist persisted NVDA and rendered; Alerts CTA + hint + empty state.
+- Disabled surfaces: clicking PORTFOLIO leaves the Terminal active and writes "Portfolio arrives
+  with MT2-4 LEDGER. Nothing is tracked yet." to the status line; `aria-disabled="true"`. India
+  is `aria-disabled`, `aria-pressed="false"`, inert.
+- Keyboard: nav ArrowRight×2 from Terminal → Watchlist focused; Enter (keydown) activates →
+  `view-watchlist`, hash `#/watchlist`; `/` from body focuses `#symbolInput`.
+- Explain move → interpretation block with evidence-insufficient label and related headlines;
+  Ask → drawer opens with `aria-expanded="true"`.
+- Mobile 375×812: `scrollWidth === innerWidth === 375` on Terminal, Markets, Deep Dive; chrome
+  reflows to brand/session · mode · command rows; nav scrolls horizontally; stats 4-up.
+- Console: only the pane's ServiceWorker registration artifact ("unknown error occurred when
+  fetching the script"), previously documented in REWIND; all nine local assets and all API
+  calls 200. Level: REAL BROWSER TESTED (local).
+- Screenshots were inspected in the pane; no binary artifacts were added to Git (repository
+  convention).

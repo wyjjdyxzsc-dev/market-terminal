@@ -1,5 +1,7 @@
 # Market Terminal
 
+> **Note (2026-09-20):** this file has drifted; `CLAUDE.md` is the maintained project guide and supersedes anything here that conflicts (Deep Dive is fully restored, the frontend runs the MT2-2 QUARTZ shell with nine versioned assets, and the Project Meridian seam lives in `docs/mt2/`).
+
 Real-time financial terminal w/ AI market intel, global hazard map, quant engine.
 
 ## Build & Run

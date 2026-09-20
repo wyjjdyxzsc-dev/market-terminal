@@ -81,6 +81,7 @@ accessibility/degraded-state defect · P3 minor.
 - SUGGESTED: fold into the first MT2 doc sync.
 - NOTE (MT2-1): CLAUDE.md updated with the REWIND entry; AGENTS.md still not synced (out of
   REWIND scope — documentation-only touch for the next checkpoint that edits docs).
+- NOTE (MT2-2): AGENTS.md now carries a superseded-by-CLAUDE.md banner; full rewrite still open.
 
 ## B-011 · P3 · AI / SPEED TIER · Cerebras gpt-oss may share the reasoning-token overrun
 - OBSERVATION: R3 pinned `reasoning_effort: low` for Groq only (verified). Cerebras
@@ -101,3 +102,19 @@ accessibility/degraded-state defect · P3 minor.
   focus before the exemption).
 - WHY DEFERRED: behavioural change to views outside REWIND scope; harmless (cached payloads).
 - SUGGESTED: a single debounced refresh-on-return in MT2-2 QUARTZ shell lifecycle.
+
+## B-014 · P3 · FRONTEND · Legacy in-view sub-tab binding is now dead code
+- OBSERVATION: `public/intel.js` still binds `document.querySelectorAll('.gi-subtab')` although the
+  QUARTZ shell removed those buttons; `showGiSub()` is driven by the `mt:gisub` event instead. The
+  `.maplayer-btn`/`.mapmode-btn` handlers still work because their buttons were kept.
+- SUGGESTED: delete the dead binding in the next intel.js touch (MT2-8 CONVERGENCE at the latest).
+
+## B-015 · P3 · UX · Map tile attribution shows "API KEY REQUIRED" watermark locally
+- OBSERVATION: the Global Map base tiles render an "API KEY REQUIRED" watermark in the local
+  built-in-browser session (2026-09-20). Pre-existing; unrelated to QUARTZ (tile provider config).
+- SUGGESTED: verify in production; if reproduced, choose a keyless tile source or add the key —
+  map-data checkpoint.
+
+## B-004 / B-013 · NOTE (MT2-2)
+- Not addressed in QUARTZ (shell lifecycle work stayed within navigation + presentation). Both
+  remain open for the next checkpoint that touches intel.js/mapintel.js lifecycle.

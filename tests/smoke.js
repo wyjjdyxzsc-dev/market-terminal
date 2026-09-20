@@ -98,10 +98,17 @@ async function checkHtml(label, url) {
   const t = await res.text();
   if (!t.includes('chartCanvas')) { console.error(`  ✗ ${label} — missing #chartCanvas`); fail++; return; }
   const versions = [...t.matchAll(/\?v=([0-9]{8}[a-z])/g)].map((match) => match[1]);
-  if (versions.length !== 8 || new Set(versions).size !== 1) {
-    console.error(`  ✗ ${label} — expected eight synchronized asset versions`);
+  if (versions.length !== 9 || new Set(versions).size !== 1) {
+    console.error(`  ✗ ${label} — expected nine synchronized asset versions`);
     fail++; return;
   }
+  // MT2-2 QUARTZ shell contract: primary nav mount, every workspace view, and the
+  // reserved (disabled) surfaces must exist in the served shell.
+  const shellIds = ['primaryNav', 'subNav', 'marketMode', 'view-markets', 'view-terminal', 'view-news', 'view-sectors',
+    'view-analyze', 'view-supply', 'view-watchlist', 'view-quant', 'view-alerts', 'quantLabMount', 'symbolInput'];
+  const missing = shellIds.filter((id) => !t.includes(`id="${id}"`));
+  if (missing.length) { console.error(`  ✗ ${label} — shell missing ${missing.join(', ')}`); fail++; return; }
+  if (!t.includes('shell.js?v=')) { console.error(`  ✗ ${label} — shell.js is not loaded`); fail++; return; }
   console.log(`  ✓ ${label}`);
   pass++;
 }

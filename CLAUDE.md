@@ -144,8 +144,16 @@ Deploys to `https://market-terminal.wyjjdyxzsc.workers.dev`
 - Restoration target (DECISIONS D-001): the first-go DEEP DIVE at `42af0f6` (+ `6fafe78` level chips). The report body now lives in `public/deepdive.js` (`MarketTerminalDeepDiveRender.renderDeepDiveReport`), a pure HTML-string renderer loaded before `intel.js` and unit-tested in `tests/deep-dive-render.test.js`; `intel.js` only mounts it, wires clicks, and appends QUANT LAB.
 - Original hierarchy restored: head → summary → STOCK / OPTIONS rating cards → drivers → level chips → bull/bear → catalysts/risks → stats → consensus → **KEY DATA & SOURCES** (provenance tiles + evidence rows + grounding line, moved below the report) → open-in-terminal. The status line clears after load, as originally.
 - Two intentional states, both from the same skeleton: **analysis** (`aiNarrativeStatus: 'ready'`) shows rating/score/conviction/horizon/fair value, options idea with IV labelled *(inferred)* plus measured chain context; **fallback** (B-002 or evidence gate) shows one compact `AI ANALYSIS UNAVAILABLE — LIVE DATA SHOWN` strip, a neutral `NOT RATED · —/100` stock card, a `CHAIN ONLY` options card built from measured Nasdaq rows (no IV, no idea), and observation quadrants. The old "EQUITY DATA 100/100 coverage" card is gone.
-- Deep Dive is exempt from the focus/visibility auto-refresh (it refreshes on submit, first open, REFRESH, and the 15-min timer only); the Quant Lab history fetch tolerates a re-render mid-flight. Shell contract is now **eight** synchronized `?v=` assets.
+- Deep Dive is exempt from the focus/visibility auto-refresh (it refreshes on submit, first open, REFRESH, and the 15-min timer only); the Quant Lab history fetch tolerates a re-render mid-flight. Shell contract was eight synchronized `?v=` assets at REWIND (nine after QUARTZ).
 - Backend, shared core, evidence/policy gates, and provider safety are unchanged; the shared core's measured-data merge remains authoritative.
+
+**MT2-2 QUARTZ — design system + application shell (2026-09-20)**:
+- `public/style.css` is rewritten as a layered system (tokens → base → shell → navigation → controls → data display → workspaces → states → responsive → accessibility). Semantic tokens (`--surface*`, `--separator*`, `--text-*`, `--accent`, `--positive/--negative/--warning/--critical/--info`, spacing `--s-1..6`, radius `--r-sm/md/lg`, control heights, durations, z-index) with legacy aliases (`--panel`, `--amber`, `--mono` …) so JS-rendered markup keeps working. Body type is the system UI stack; all numeric data is monospace with tabular numerals (`.num`).
+- `public/shell.js` (pure, dual-exported, tested in `tests/shell-nav.test.js`) is the navigation registry: MARKETS · TERMINAL · PORTFOLIO (reserved, disabled) · WATCHLIST · RESEARCH (Deep Dive, Sectors) · INTELLIGENCE (Briefing, Situation Room, Investment Report, Supply Chain, Global Map) · QUANT · ALERTS, plus the market-mode registry (US active; India reserved). Legacy view ids are unchanged; `app.js` `navigateTo()` maps targets onto them, renders the primary nav/subnav, keeps `#/workspace/item` hashes, and dispatches `mt:gisub` for Global Intel sections. `?tab=` push deep links still work.
+- Chrome: brand · market mode · global command (`#symbolInput`, `/` focuses it, choosing a symbol lands on the Terminal) · session status · clock · refresh · Ask. Terminal: security band (identity, price, eight stats, Explain move) → chart with priority space + quant snapshot, right rail with company and news. Market sentiment moved to MARKETS. MARKETS shows a US benchmark table (SPY/QQQ/DIA/IWM via the pooled `/api/quote`), the sentiment gauge, and a market-context registry; India is visibly reserved and inert.
+- QUANT is its own workspace: the single Quant Lab instance (`#quantLabMount`) is mounted by `intel.js` `mountQuantLab()` for the Deep Dive subject, else the Terminal symbol; the Deep Dive report ends with "Open … in Quant Lab" instead of embedding the lab. Deep Dive renderer and its render contract are untouched (restyle only).
+- Standard vocabularies: freshness badge `.fresh[data-fresh=live|delayed|snapshot|eod|cached|last-good|unavailable]`; `.status` line states (`error`, `policy-status`, `empty`, `data-state`); interpretation register (`.interp`, amber left rule) vs measured data vs `.evidence`. No emoji in navigation or labels; SVG icons only where they aid recognition.
+- Shell contract is **nine** synchronized `?v=` assets (`tests/smoke.js` also checks nav/workspace ids and `shell.js`). Unit suite 75 tests.
 
 **Branches**: All work on `main` (no feature branches yet).
 
@@ -157,12 +165,14 @@ Deploys to `https://market-terminal.wyjjdyxzsc.workers.dev`
 | `server.js` | Local dev (Express), same routes as worker.js |
 | `public/app.js` | UI, drawChart(), loadSymbol(), panel logic |
 | `public/quant.js` | Math lib (no DOM), IIFE export |
-| `public/intel.js` | Deep Dive mount + QUANT LAB, intel views |
+| `public/intel.js` | Deep Dive mount, Quant Lab mount (QUANT workspace), intel views, research assistant |
+| `public/shell.js` | MT2 navigation/market-mode registry (pure, unit-tested); app.js renders it |
+| `public/style.css` | QUARTZ layered design system (tokens, shell, controls, data display, workspaces, states) |
 | `public/deepdive.js` | Pure Deep Dive report renderer (analysis + fallback states), unit-tested |
 | `shared/deep-dive-core.js` | Deep Dive dossier, options-chain prompt grounding, and the shared analysis/fallback merges |
 | `shared/options-chain-core.js` | Bounded Nasdaq options-chain normalization and availability contract |
 | `shared/ticker-core.js` | Pooled ticker normalization and last-good fallback contract |
-| `public/index.html` | Layout, cache-buster versioning |
+| `public/index.html` | Application shell, workspace sections, cache-buster versioning |
 | `shared/ai-provider-registry.js` | Current provider/model lifecycle, eligibility, pricing, and health metadata |
 | `shared/ai-verification-core.js` | Bounded generation, independent verification, runtime usage/cost telemetry |
 | `shared/ai-evaluation-core.js` | Versioned offline AI safety metrics |

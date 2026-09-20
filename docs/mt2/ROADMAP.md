@@ -33,7 +33,7 @@ IN PROGRESS / PASS / PARTIAL / BLOCKED.
 - OUT OF SCOPE: new UI system, India, Portfolio, Watchlist 2.0, watchers.
 
 ## MT2-2 — QUARTZ — Apple/macOS-derived UI system + new shell
-- STATUS: NOT STARTED
+- STATUS: IN PROGRESS (authorized 2026-09-20; local acceptance complete, deploying)
 - OBJECTIVE: Introduce the MT2 design system and application shell alongside (not replacing) the
   existing shell.
 - ENTRY REQUIREMENT: MT2-1 closed; explicit authorization.

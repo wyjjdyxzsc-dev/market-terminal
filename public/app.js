@@ -456,11 +456,13 @@ document.addEventListener('DOMContentLoaded', () => {
       const panel = $('whyPanel');
       if (!whyPanelOpen) {
         whyPanelOpen = true;
-        btn.textContent = '✕ Close';
+        btn.textContent = 'Hide explanation';
+        btn.setAttribute('aria-expanded', 'true');
         if (state.symbol) loadPriceAction(state.symbol);
       } else {
         whyPanelOpen = false;
-        btn.textContent = '🤖 Why is it moving?';
+        btn.textContent = 'Explain move';
+        btn.setAttribute('aria-expanded', 'false');
         if (panel) panel.hidden = true;
       }
     });
@@ -543,8 +545,8 @@ async function loadNews(symbol) {
 // ───────────────────────── chart ─────────────────────────
 async function loadChart(symbol, range) {
   const msg = $('chartMsg');
-  msg.hidden = false;
-  msg.textContent = 'Loading chart…';
+  // A silent refresh keeps the drawn chart on screen; only a cold load shows the notice.
+  if (!state.chart) { msg.hidden = false; msg.textContent = 'Loading chart…'; }
   try {
     const data = await getJSON(
       `/api/chart?symbol=${encodeURIComponent(symbol)}&range=${encodeURIComponent(range)}`
@@ -1245,6 +1247,8 @@ function setupCommandBar() {
 
 function chooseSymbol(sym) {
   hideAC();
+  if (!String(sym || '').trim()) return;
+  if (currentView !== 'terminal') navigateTo('terminal');
   loadSymbol(sym);
 }
 
@@ -1288,7 +1292,7 @@ function setupRangeButtons() {
     const btn = e.target.closest('.range-btn');
     if (!btn) return;
     state.range = btn.dataset.range;
-    [...$('rangeButtons').children].forEach((b) => b.classList.toggle('active', b === btn));
+    [...$('rangeButtons').children].forEach((b) => { b.classList.toggle('active', b === btn); b.setAttribute('aria-pressed', String(b === btn)); });
     loadChart(state.symbol, state.range);
   });
   const tt = $('chartTypeToggle');
@@ -1296,7 +1300,7 @@ function setupRangeButtons() {
     const btn = e.target.closest('.ctype-btn');
     if (!btn) return;
     state.chartType = btn.dataset.ctype;
-    [...tt.children].forEach((b) => b.classList.toggle('active', b === btn));
+    [...tt.children].forEach((b) => { b.classList.toggle('active', b === btn); b.setAttribute('aria-pressed', String(b === btn)); });
     if (state.chart) drawChart(); // re-render from cached data, no refetch
   });
 }
@@ -1358,9 +1362,15 @@ function setupOscButtons() {
   $('mcToggle').classList.toggle('active', state.showMC);
 }
 
-// ───────────────────────── view tabs ─────────────────────────
-// Top-level navigation between the TERMINAL and the Intelligence views.
+// ───────────────────────── view tabs / application shell ─────────────────────────
+// Top-level navigation is the MT2 workspace hierarchy from shell.js (MARKETS ·
+// TERMINAL · PORTFOLIO(reserved) · WATCHLIST · RESEARCH · INTELLIGENCE · QUANT ·
+// ALERTS). Workspaces map onto the legacy view ids that app.js/intel.js own; the
+// shell only decides which view (+ Global Intel sub-panel) a destination shows.
 // Showing a view dispatches a `tabshown` event so intel.js can lazy-load its data.
+const Shell = window.MarketTerminalShell;
+let currentGiSub = 'briefing';
+
 function showView(name) {
   const views = document.querySelectorAll('.view');
   let matched = false;
@@ -1371,16 +1381,211 @@ function showView(name) {
   });
   if (!matched) { showView('terminal'); return; }
   currentView = name;
-  document.querySelectorAll('.ttab').forEach((t) => t.classList.toggle('active', t.dataset.view === name));
+  syncShellNav(name, currentGiSub);
   document.dispatchEvent(new CustomEvent('tabshown', { detail: { view: name } }));
 }
 
+// Navigate to a shell target (`research/analyze`, `intelligence/map`, `terminal` …).
+function navigateTo(target, { pushHash = true } = {}) {
+  if (!Shell) return;
+  const r = Shell.resolve(target);
+  if (!r.enabled) {
+    if (r.note) setStatus(r.note);
+    return;
+  }
+  if (r.sub) currentGiSub = r.sub;
+  showView(r.view);
+  if (r.sub) document.dispatchEvent(new CustomEvent('mt:gisub', { detail: { sub: r.sub } }));
+  if (pushHash) {
+    const hash = Shell.hashForTarget(target);
+    if (hash && location.hash !== hash) history.replaceState(null, '', hash);
+  }
+}
+
+function renderShellNav() {
+  const nav = document.getElementById('primaryNav');
+  if (!nav || !Shell) return;
+  nav.innerHTML = Shell.WORKSPACES.map((ws) => {
+    const enabled = Shell.isEnabled(ws);
+    const attrs = enabled
+      ? `aria-selected="false"`
+      : `aria-disabled="true" aria-selected="false" title="${escHtml(ws.note || 'Not available')}"`;
+    const reserved = ws.reserved ? '<span class="nav-reserved">Soon</span>' : '';
+    return `<button class="nav-item" type="button" role="tab" data-target="${ws.id}" ${attrs}>${escHtml(ws.label)}${reserved}</button>`;
+  }).join('');
+  nav.setAttribute('role', 'tablist');
+
+  const mode = document.getElementById('marketMode');
+  if (mode) {
+    mode.innerHTML = Shell.MARKETS.map((m) => {
+      if (m.active) return `<button type="button" aria-pressed="true" title="${escHtml(m.session || '')}">${escHtml(m.label)}</button>`;
+      return `<button type="button" aria-pressed="false" aria-disabled="true" title="${escHtml(m.note || '')}">${escHtml(m.label)}<span class="mode-note">Soon</span></button>`;
+    }).join('');
+  }
+}
+
+function renderSubnav(workspaceId, activeItem) {
+  const sub = document.getElementById('subNav');
+  if (!sub || !Shell) return;
+  const ws = Shell.workspace(workspaceId);
+  if (!ws || !Array.isArray(ws.items)) { sub.hidden = true; sub.innerHTML = ''; return; }
+  sub.innerHTML = `<span class="subnav-label">${escHtml(ws.label)}</span>` + ws.items.map((it) => {
+    const on = it.id === activeItem;
+    const dataSub = it.sub ? ` data-sub="${it.sub}"` : '';
+    return `<button class="subnav-item" type="button" role="tab" data-target="${ws.id}/${it.id}"${dataSub} aria-selected="${on}" tabindex="${on ? 0 : -1}">${escHtml(it.label)}</button>`;
+  }).join('');
+  sub.hidden = false;
+}
+
+function syncShellNav(view, sub) {
+  if (!Shell) return;
+  const loc = Shell.locate(view, sub);
+  document.querySelectorAll('#primaryNav .nav-item').forEach((b) => {
+    const on = b.dataset.target === loc.workspace;
+    b.setAttribute('aria-selected', String(on));
+    b.tabIndex = on ? 0 : -1;
+  });
+  renderSubnav(loc.workspace, loc.item);
+}
+
 function setupTabs() {
-  document.getElementById('ttabs').addEventListener('click', (e) => {
-    const btn = e.target.closest('.ttab');
-    if (btn) showView(btn.dataset.view);
+  renderShellNav();
+  const nav = document.getElementById('primaryNav');
+  const sub = document.getElementById('subNav');
+
+  nav.addEventListener('click', (e) => {
+    const btn = e.target.closest('.nav-item');
+    if (!btn) return;
+    if (btn.getAttribute('aria-disabled') === 'true') { setStatus(btn.title || 'Not available yet.'); return; }
+    navigateTo(btn.dataset.target);
+  });
+  sub.addEventListener('click', (e) => {
+    const btn = e.target.closest('.subnav-item');
+    if (btn) navigateTo(btn.dataset.target);
+  });
+
+  // Roving tabindex: ←/→ move between tabs, Home/End jump, Enter/Space activate.
+  function rove(container, selector) {
+    container.addEventListener('keydown', (e) => {
+      const items = [...container.querySelectorAll(selector)];
+      const i = items.indexOf(document.activeElement);
+      if (i < 0) return;
+      let next = null;
+      if (e.key === 'ArrowRight') next = items[(i + 1) % items.length];
+      else if (e.key === 'ArrowLeft') next = items[(i - 1 + items.length) % items.length];
+      else if (e.key === 'Home') next = items[0];
+      else if (e.key === 'End') next = items[items.length - 1];
+      else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); items[i].click(); return; }
+      if (next) { e.preventDefault(); next.focus(); }
+    });
+  }
+  rove(nav, '.nav-item');
+  rove(sub, '.subnav-item');
+
+  // `/` focuses the global command from anywhere outside a text field.
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== '/' || e.metaKey || e.ctrlKey || e.altKey) return;
+    const t = e.target;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+    e.preventDefault();
+    const input = $('symbolInput');
+    if (input) { input.focus(); input.select(); }
+  });
+
+  window.addEventListener('hashchange', () => {
+    const target = Shell && Shell.targetFromHash(location.hash);
+    if (target) navigateTo(target, { pushHash: false });
+  });
+
+  syncShellNav('terminal', currentGiSub);
+}
+
+// ───────────────────────── MARKETS workspace (US overview) ─────────────────────────
+// Uses the same pooled /api/quote route the Terminal uses — no new data authority.
+// India and other markets are shell reservations (shell.js MARKETS) and render disabled.
+const MARKET_BENCHMARKS = [
+  { symbol: 'SPY', name: 'S&P 500 · SPDR' },
+  { symbol: 'QQQ', name: 'Nasdaq-100 · Invesco' },
+  { symbol: 'DIA', name: 'Dow Jones · SPDR' },
+  { symbol: 'IWM', name: 'Russell 2000 · iShares' },
+];
+let marketsLoadedAt = 0;
+
+function freshnessForQuote(q) {
+  // Truthful vocabulary from what the payload carries: a quote timestamp and a price.
+  if (!q || q.c == null || (q.c === 0 && q.pc === 0)) return { key: 'unavailable', label: 'Unavailable' };
+  const ageMs = q.t ? Date.now() - q.t * 1000 : null;
+  const status = $('marketStatus');
+  const open = status && status.classList.contains('open');
+  if (ageMs != null && ageMs < 5 * 60_000 && open) return { key: 'live', label: 'Live' };
+  if (ageMs != null && ageMs < 20 * 60_000) return { key: 'delayed', label: 'Delayed' };
+  return { key: 'snapshot', label: q.t ? 'Snapshot · ' + new Date(q.t * 1000).toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: '2-digit', minute: '2-digit' }) + ' ET' : 'Snapshot' };
+}
+
+async function loadMarkets(force = false) {
+  const body = $('mkTableBody');
+  const fresh = $('mkFresh');
+  if (!body) return;
+  if (!force && Date.now() - marketsLoadedAt < 60_000) return; // cached view; the tape and quote poll carry liveness
+  fresh.dataset.fresh = 'loading'; fresh.textContent = 'Loading';
+
+  const rows = await Promise.all(MARKET_BENCHMARKS.map(async (b) => {
+    try { return { ...b, q: await getJSON('/api/quote?symbol=' + b.symbol) }; }
+    catch (err) { return { ...b, q: null, err: err.message }; }
+  }));
+  marketsLoadedAt = Date.now();
+
+  let live = 0, unavailable = 0;
+  body.innerHTML = rows.map((r) => {
+    const f = freshnessForQuote(r.q);
+    if (f.key === 'live') live++;
+    if (f.key === 'unavailable') unavailable++;
+    const q = r.q || {};
+    const cls = colorClass(q.d);
+    const cell = (v) => (Number.isFinite(v) ? fmtPrice(v) : '—');
+    return `<tr data-symbol="${r.symbol}" data-href="terminal" tabindex="0">
+      <td class="sym">${r.symbol}<small>${escHtml(r.name)}</small></td>
+      <td class="num">${cell(q.c)}</td>
+      <td class="num ${cls}">${Number.isFinite(q.d) ? fmtSigned(q.d) : '—'}</td>
+      <td class="num ${cls}">${Number.isFinite(q.dp) ? fmtSigned(q.dp) + '%' : '—'}</td>
+      <td class="num opt">${cell(q.o)}</td>
+      <td class="num opt">${cell(q.h)}</td>
+      <td class="num opt">${cell(q.l)}</td>
+      <td class="num opt">${cell(q.pc)}</td>
+      <td class="opt"><span class="fresh" data-fresh="${f.key}">${escHtml(f.label)}</span></td>
+    </tr>`;
+  }).join('');
+
+  const overall = unavailable === rows.length ? 'unavailable' : live === rows.length ? 'live' : live > 0 ? 'partial' : 'snapshot';
+  fresh.dataset.fresh = overall === 'partial' ? 'delayed' : overall;
+  fresh.textContent = overall === 'partial' ? `Partial · ${live}/${rows.length} live` : overall === 'live' ? 'Live' : overall === 'unavailable' ? 'Unavailable' : 'Snapshot';
+
+  body.querySelectorAll('tr[data-symbol]').forEach((tr) => {
+    const open = () => { navigateTo('terminal'); loadSymbol(tr.dataset.symbol); };
+    tr.addEventListener('click', open);
+    tr.addEventListener('keydown', (e) => { if (e.key === 'Enter') open(); });
   });
 }
+
+function renderMarketRegistry() {
+  const body = $('mkRegistryBody');
+  if (!body || !Shell) return;
+  const status = $('marketStatus');
+  const session = status ? ($('statusText').textContent || '—') : '—';
+  body.innerHTML = Shell.MARKETS.map((m) => m.active
+    ? `<tr class="is-active"><td class="sym">${escHtml(m.label)}<small>${escHtml(m.session || '')}</small></td><td class="num">${escHtml(session)}</td><td><span class="mk-status is-active">Active · data context</span></td></tr>`
+    : `<tr><td class="sym">${escHtml(m.label)}<small>${escHtml(m.note || '')}</small></td><td class="num">—</td><td><span class="mk-status is-reserved">Not yet active</span></td></tr>`
+  ).join('');
+}
+
+document.addEventListener('tabshown', (e) => {
+  const view = e.detail && e.detail.view;
+  if (view === 'markets') { renderMarketRegistry(); loadMarkets(); }
+});
+document.addEventListener('DOMContentLoaded', () => {
+  const btn = $('marketsRefresh');
+  if (btn) btn.addEventListener('click', () => { renderMarketRegistry(); loadMarkets(true); });
+});
 
 // ───────────────────────── quant lab (terminal panel) ─────────────────────────
 // Risk metrics + technical-indicator mini-chart, computed client-side from
@@ -1579,7 +1784,9 @@ function boot() {
 
   // Deep-link: /?tab=alerts (used by push notifications) opens that view on load.
   const startTab = new URLSearchParams(location.search).get('tab');
-  if (startTab) showView(startTab === 'analysis' ? 'sectors' : startTab);
+  const startTarget = (Shell && Shell.targetFromHash(location.hash)) || (startTab && Shell ? Shell.targetFromLegacyTab(startTab) : null);
+  if (startTarget) navigateTo(startTarget, { pushHash: false });
+  else if (startTab) showView(startTab === 'analysis' ? 'sectors' : startTab);
 
   // Auto-load the last viewed symbol (or AAPL) so the terminal never opens empty.
   let lastSym = null;
@@ -1696,7 +1903,7 @@ async function loadMacroShock() {
     const bar = `<div class="shock-bar-track"><div class="shock-bar-fill" style="width:${p.risk_score}%;background:${riskColor}"></div></div>`;
     return `<tr>
       <td class="shock-name">${p.name}</td>
-      <td class="shock-comm">${p.commodity === 'oil' ? '🛢' : '🔥'} ${p.commodity}</td>
+      <td class="shock-comm">${p.commodity}</td>
       <td class="shock-tp">${p.throughput}</td>
       <td class="shock-loss">$${p.daily_loss_musd.toLocaleString()}M/day</td>
       <td class="shock-pct" style="color:${riskColor}">${shock}%</td>

@@ -76,7 +76,7 @@ function formatAiRuntimeSummary(policy) {
   function watchBtn(item) {
     if (!hasLiveUrl(item) && !WATCHABLE.has(item.category)) return '';
     const live = hasLiveUrl(item);
-    return `<a class="watch-btn ${live ? 'live' : ''}" href="${esc(safeHttpUrl(watchHref(item)))}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">${live ? '🔴 Watch live' : '▶ Find live video'}</a>`;
+    return `<a class="watch-btn ${live ? 'live' : ''}" href="${esc(safeHttpUrl(watchHref(item)))}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">${live ? 'Watch live' : 'Find live video'}</a>`;
   }
 
   // ---------- robust JSON fetch ----------
@@ -488,7 +488,7 @@ function formatAiRuntimeSummary(policy) {
         const reg = swReg || (await registerSW());
         await ensureSubscribed(reg);
         await fetch('/api/test-push', { method: 'POST' });
-        setAlertHint('Sent a test notification — check your device. 🔔');
+        setAlertHint('Sent a test notification — check your device.');
         return;
       }
       btn.disabled = true;
@@ -501,7 +501,7 @@ function formatAiRuntimeSummary(policy) {
       if (!ok) { reflectAlertState(); return; }
       await fetch('/api/test-push', { method: 'POST' });
       reflectAlertState();
-      setAlertHint('You’re all set — a test notification is on its way. 🎉');
+      setAlertHint('You’re all set — a test notification is on its way.');
     } catch (err) {
       console.error(err);
       setAlertHint('Could not enable alerts: ' + ((err && err.message) || err));
@@ -871,15 +871,14 @@ function formatAiRuntimeSummary(policy) {
   }
 
 
-  function renderDeepDive(d) {
-    const report = window.MarketTerminalDeepDiveRender
-      ? window.MarketTerminalDeepDiveRender.renderDeepDiveReport(d)
-      : `<div class="dd-card"><p class="dd-summary">${esc(d.summary || '')}</p></div>`;
-    const html = `
-      ${report}
-
+  // ---------- QUANT workspace: the single Quant Lab instance ----------
+  // The lab lives in its own workspace (MT2-2 QUARTZ) and is driven by the active subject:
+  // the Deep Dive subject when a report has been run, otherwise the Terminal symbol.
+  // The ids inside are unique across the document because only one lab is ever mounted.
+  function quantLabHtml(ticker) {
+    return `
       <div class="quant-lab" id="quantLab">
-        <div class="quant-lab-head">QUANT LAB — ${esc(d.ticker)}</div>
+        <div class="quant-lab-head">QUANT LAB — ${esc(ticker)}</div>
         <div class="quant-lab-body">
 
           <!-- ── Monte Carlo simulator ── -->
@@ -964,6 +963,59 @@ function formatAiRuntimeSummary(policy) {
 
         </div>
       </div>`;
+  }
+
+  let quantMountedFor = null;
+  function mountQuantLab(ticker, lastPrice) {
+    const mount = $('#quantLabMount');
+    if (!mount) return;
+    const t = String(ticker || '').toUpperCase();
+    if (!t) {
+      mount.innerHTML = '<div class="quant-empty">Open a symbol in the Terminal or run a Deep Dive to compute the Quant Lab.</div>';
+      quantMountedFor = null;
+      return;
+    }
+    mount.innerHTML = quantLabHtml(t);
+    quantMountedFor = t;
+    const subject = $('#quantSubject');
+    if (subject) subject.textContent = `${t} · Monte Carlo (GBM / RJD / Heston), Black-Scholes and Malliavin Greeks, 40-indicator suite and volume profile — computed client-side from 1Y daily history.`;
+    setupQuantLab(t, lastPrice);
+  }
+  let quantOverride = null; // set when the user explicitly asks for the Terminal symbol
+  function quantSubject() {
+    if (quantOverride) return quantOverride;
+    if (ddLoadedFor && ddLoadedTicker) return { ticker: ddLoadedTicker, price: ddLoadedPrice };
+    const sym = (typeof state !== 'undefined' && state.symbol) ? state.symbol : null;
+    const price = (typeof state !== 'undefined' && state.quote && state.quote.c) ? state.quote.c : null;
+    return { ticker: sym, price };
+  }
+  function ensureQuantLab(force) {
+    const s = quantSubject();
+    if (force || s.ticker !== quantMountedFor) mountQuantLab(s.ticker, s.price);
+  }
+  window.MTIntel = Object.assign(window.MTIntel || {}, { mountQuantLab, ensureQuantLab });
+  const quantSubjectBtn = $('#quantSubjectBtn');
+  if (quantSubjectBtn) quantSubjectBtn.addEventListener('click', () => {
+    const sym = (typeof state !== 'undefined' && state.symbol) ? state.symbol : null;
+    const price = (typeof state !== 'undefined' && state.quote && state.quote.c) ? state.quote.c : null;
+    quantOverride = sym ? { ticker: sym, price } : null;
+    ensureQuantLab(true);
+  });
+
+  let ddLoadedTicker = null, ddLoadedPrice = null;
+
+  function renderDeepDive(d) {
+    const report = window.MarketTerminalDeepDiveRender
+      ? window.MarketTerminalDeepDiveRender.renderDeepDiveReport(d)
+      : `<div class="dd-card"><p class="dd-summary">${esc(d.summary || '')}</p></div>`;
+    ddLoadedTicker = d.ticker || null;
+    ddLoadedPrice = d.quote && d.quote.price ? d.quote.price : null;
+    quantOverride = null;
+    const html = `
+      ${report}
+      <div class="dd-tools">
+        <button class="btn btn-quiet" type="button" id="ddOpenQuant">Open ${esc(d.ticker)} in Quant Lab</button>
+      </div>`;
     const wrap = $('#ddResult');
     wrap.innerHTML = html;
     const logo = wrap.querySelector('.dd-logo');
@@ -972,7 +1024,15 @@ function formatAiRuntimeSummary(policy) {
       el.style.cursor = 'pointer';
       el.addEventListener('click', () => drillTo(el.dataset.ticker));
     });
-    setupQuantLab(d.ticker, d.quote && d.quote.price);
+    const openQuant = $('#ddOpenQuant');
+    if (openQuant) openQuant.addEventListener('click', () => {
+      if (typeof navigateTo === 'function') navigateTo('quant');
+      mountQuantLab(ddLoadedTicker, ddLoadedPrice);
+    });
+    // Keep an already-mounted lab in step with a newly analyzed subject.
+    if (quantMountedFor && quantMountedFor !== ddLoadedTicker && $('#view-quant') && $('#view-quant').classList.contains('active')) {
+      mountQuantLab(ddLoadedTicker, ddLoadedPrice);
+    }
   }
 
   // Plain-English read of a Monte Carlo run — computed instantly from the
@@ -1423,7 +1483,7 @@ function formatAiRuntimeSummary(policy) {
         <div class="pick-company">${esc(p.company || '')}</div>
         ${(d.quotes && d.quotes[String(p.ticker).toUpperCase()]) ? `<div class="pick-price">$${Number(d.quotes[String(p.ticker).toUpperCase()].price).toFixed(2)} <span class="${(d.quotes[String(p.ticker).toUpperCase()].change || 0) >= 0 ? 'up' : 'down'}">${(d.quotes[String(p.ticker).toUpperCase()].percent || 0).toFixed(2)}%</span></div>` : ''}
         <div class="pick-rationale">${esc(p.rationale || '')}</div>
-        <div class="pick-meta"><span>⚡ ${esc(p.catalyst || '')}</span><span class="pick-conv">${esc(p.conviction || '')} · ${esc(p.timeframe || '')}</span></div>
+        <div class="pick-meta"><span>Catalyst · ${esc(p.catalyst || '')}</span><span class="pick-conv">${esc(p.conviction || '')} · ${esc(p.timeframe || '')}</span></div>
       </div>`).join('');
 
     const themes = (d.themes || []).map((t) => `
@@ -1437,7 +1497,7 @@ function formatAiRuntimeSummary(policy) {
       </div>`).join('');
 
     const picksSection = picks
-      ? `<h3 class="section-label">★ TOP ACTIONABLE IDEAS</h3><div class="picks-grid">${picks}</div>`
+      ? `<h3 class="section-label">Top actionable ideas</h3><div class="picks-grid">${picks}</div>`
       : (d.abstained ? '<div class="policy-empty">No actionable ideas are shown until verified market and issuer inputs are available.</div>' : '');
     const themesSection = themes
       ? `<h3 class="section-label">⊞ THEMES IN PLAY</h3><div class="themes-wrap">${themes}</div>`
@@ -1456,8 +1516,8 @@ function formatAiRuntimeSummary(policy) {
         ${themesSection}
 
         <div class="report-foot">
-          <div class="report-col"><h4>⚠ KEY RISKS</h4><ul>${(d.risks || []).map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>
-          <div class="report-col"><h4>📅 WATCH NEXT</h4><ul>${(d.watchEvents || []).map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>
+          <div class="report-col"><h4>Key risks</h4><ul>${(d.risks || []).map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>
+          <div class="report-col"><h4>Watch next</h4><ul>${(d.watchEvents || []).map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>
         </div>
         <p class="dd-disclaimer">Evidence-gated research output — educational only, not investment advice.</p>
       </div>`;
@@ -1517,7 +1577,7 @@ function formatAiRuntimeSummary(policy) {
           <div class="gauge-sub">${esc(d.defconLabel || '')}</div>
         </div>
         <div class="gauge pizza">
-          <div class="gauge-lbl">🍕 PENTAGON PIZZA INDEX</div>
+          <div class="gauge-lbl">Pentagon pizza index</div>
           <div class="gauge-val" style="color:${PIZZA_COL};font-size:20px">${esc(pizza)}</div>
           <div class="gauge-sub">${esc(d.pizzaNote || '')}</div>
         </div>
@@ -1532,8 +1592,8 @@ function formatAiRuntimeSummary(policy) {
         ${gauges}
         <div class="sit-domains">${domains}</div>
         <div class="sit-conv"><span class="sit-lbl">⊕ CONVERGENCE</span> ${esc(d.convergence || '')}</div>
-        <div class="sit-conv"><span class="sit-lbl">📈 MARKET IMPLICATION</span> ${esc(d.marketImplication || '')}</div>
-        <div class="report-col" style="margin-top:12px"><h4>👁 WATCHLIST</h4><ul>${(d.watchlist || []).map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>
+        <div class="sit-conv"><span class="sit-lbl">Market implication</span> ${esc(d.marketImplication || '')}</div>
+        <div class="report-col" style="margin-top:12px"><h4>Watchlist</h4><ul>${(d.watchlist || []).map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>
         <p class="dd-disclaimer">Cited public-news interpretation — not an official threat assessment or investment advice.</p>
       </div>`;
   }
@@ -1564,6 +1624,9 @@ function formatAiRuntimeSummary(policy) {
     if (sub === 'map') { if (window.LiveMap) window.LiveMap.open(); }
   }
   document.querySelectorAll('.gi-subtab').forEach((b) => b.addEventListener('click', () => showGiSub(b.dataset.sub)));
+  // The application shell (app.js navigateTo) owns the INTELLIGENCE sub-navigation and
+  // announces the chosen section here; the legacy in-view buttons above no longer exist.
+  document.addEventListener('mt:gisub', (e) => { if (e.detail && e.detail.sub) showGiSub(e.detail.sub); });
 
   // ── Live data / Infrastructure layer toggle ───────────────────────────
   let activeMapLayer = 'livedata';
@@ -1591,6 +1654,7 @@ function formatAiRuntimeSummary(policy) {
     else if (currentView === 'alerts') loadAlerts();
     else if (currentView === 'supply') { if (scLoadedFor) loadSupplyChain(scLoadedFor); }
     else if (currentView === 'analyze') { if (ddLoadedFor) loadDeepDive(ddLoadedFor); }
+    else if (currentView === 'quant') ensureQuantLab(true);
   }
 
   // Auto-refresh intelligence views while they're open.
@@ -1657,7 +1721,8 @@ function formatAiRuntimeSummary(policy) {
       }
       setAutoRefresh();
     }
-    else if (autoRefreshTimer) clearInterval(autoRefreshTimer); // stop auto-refresh on terminal view
+    else if (view === 'quant') { ensureQuantLab(false); if (autoRefreshTimer) clearInterval(autoRefreshTimer); }
+    else if (autoRefreshTimer) clearInterval(autoRefreshTimer); // stop auto-refresh on terminal / markets
   });
 
   // ---------- Initial setup ----------
@@ -2039,7 +2104,7 @@ function formatAiRuntimeSummary(policy) {
       .then(r => r.json())
       .then(d => {
         infraData = d;
-        const src    = d.cable_source === 'telegeography' ? '📡 TeleGeography' : '📋 Curated';
+        const src    = d.cable_source === 'telegeography' ? 'TeleGeography' : 'Curated';
         const cCount = d.cable_count    || (d.cables    || []).length;
         const pCount = d.pipeline_count || (d.pipelines || []).length;
         const rCount = d.route_count    || (d.routes    || []).length;
@@ -2232,6 +2297,7 @@ function formatAiRuntimeSummary(policy) {
   function openPanel() {
     panel.hidden = false;
     toggleBtn.classList.add('active');
+    toggleBtn.setAttribute('aria-expanded', 'true');
     updateCtxLabel();
     inputEl.focus();
   }
@@ -2239,6 +2305,7 @@ function formatAiRuntimeSummary(policy) {
   function closePanel() {
     panel.hidden = true;
     toggleBtn.classList.remove('active');
+    toggleBtn.setAttribute('aria-expanded', 'false');
   }
 
   toggleBtn.addEventListener('click', () => panel.hidden ? openPanel() : closePanel());

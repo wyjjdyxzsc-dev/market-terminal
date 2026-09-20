@@ -2,11 +2,11 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="color-scheme" content="dark" />
   <title>Market Terminal</title>
-  <meta name="description" content="A Bloomberg-Terminal-inspired live market dashboard — real-time quotes, charts, news, AI sector analysis, watchlist sentiment and breaking-news alerts." />
-  <meta name="theme-color" content="#0a0a0a" />
+  <meta name="description" content="Market Terminal — a live market workstation: quotes, charts, company data, evidence-gated intelligence, quant tools and breaking-news alerts." />
+  <meta name="theme-color" content="#0b0c0f" />
   <link rel="manifest" href="manifest.json" />
   <link rel="apple-touch-icon" href="apple-touch-icon.png" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -14,23 +14,44 @@
   <meta name="apple-mobile-web-app-title" content="MktTerminal" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
     integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-  <link rel="stylesheet" href="style.css?v=20260920d" />
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%230a0a0a'/><text x='8' y='12' font-size='11' text-anchor='middle' fill='%23ffa028' font-family='monospace'>M</text></svg>" />
+  <link rel="stylesheet" href="style.css?v=20260920e" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' rx='3' fill='%230b0c0f'/><path d='M3 12V4l2.5 4L8 4l2.5 4L13 4v8' fill='none' stroke='%23e8b25c' stroke-width='1.6' stroke-linejoin='round'/></svg>" />
 </head>
 <body>
-  <!-- ───────────── Top bar ───────────── -->
-  <header class="topbar">
-    <div class="brand">
-      <span class="brand-mark">▌</span>MARKET<span class="brand-amber">TERMINAL</span>
+  <a class="skip-link" href="#workspace">Skip to workspace</a>
+
+  <!-- ───────────── Application chrome: identity · market mode · command · session ───────────── -->
+  <header class="chrome" role="banner">
+    <div class="chrome-brand" aria-label="Market Terminal">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <span class="brand-name">Market Terminal</span>
     </div>
-    <div class="topbar-right">
-      <button id="intelRefresh" class="intel-refresh" type="button" title="Refresh this view" hidden>⟳</button>
-      <button id="aiChatToggle" class="ai-chat-toggle" type="button" title="Ask the AI analyst">💬 ASK AI</button>
-      <div class="market-status" id="marketStatus">
-        <span class="dot" id="statusDot"></span>
+
+    <div class="market-mode" id="marketMode" role="group" aria-label="Market context"></div>
+
+    <div class="command" role="search">
+      <span class="command-prompt" aria-hidden="true">›</span>
+      <div class="cmd-input-wrap">
+        <input
+          id="symbolInput" class="cmd-input" type="text" autocomplete="off" spellcheck="false"
+          placeholder="Symbol or company — AAPL, NVDA, Tesla"
+          aria-label="Symbol search" aria-autocomplete="list" aria-controls="autocomplete" />
+        <kbd class="command-key" aria-hidden="true">/</kbd>
+        <ul class="autocomplete" id="autocomplete" role="listbox" hidden></ul>
+      </div>
+      <button class="btn btn-primary" id="goBtn" type="button">Open</button>
+    </div>
+
+    <div class="chrome-session">
+      <div class="market-status" id="marketStatus" aria-live="polite">
+        <span class="dot" id="statusDot" aria-hidden="true"></span>
         <span id="statusText">—</span>
       </div>
-      <div class="clock" id="clock">--:--:-- ET</div>
+      <time class="clock" id="clock" aria-label="Eastern time">--:--:-- ET</time>
+      <button id="intelRefresh" class="btn btn-icon" type="button" title="Refresh this view" aria-label="Refresh this view" hidden>
+        <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M13.5 3v3h-3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <button id="aiChatToggle" class="btn btn-quiet" type="button" title="Open the research assistant" aria-controls="aiChatPanel" aria-expanded="false">Ask</button>
     </div>
   </header>
 
@@ -39,127 +60,160 @@
     <div class="tape-track" id="tapeTrack"><span class="tape-loading">Loading market data…</span></div>
   </div>
 
-  <!-- ───────────── Tab bar ───────────── -->
-  <nav class="ttabs" id="ttabs" role="tablist">
-    <button class="ttab active" data-view="terminal" role="tab">TERMINAL</button>
-    <button class="ttab" data-view="news" role="tab">GLOBAL&nbsp;INTEL</button>
-    <button class="ttab" data-view="sectors" role="tab">SECTORS</button>
-    <button class="ttab" data-view="analyze" role="tab">DEEP&nbsp;DIVE</button>
-    <button class="ttab" data-view="supply" role="tab">SUPPLY&nbsp;CHAIN</button>
-    <button class="ttab" data-view="watchlist" role="tab">WATCHLIST</button>
-    <button class="ttab" data-view="alerts" role="tab">ALERTS</button>
-  </nav>
+  <!-- ───────────── Primary navigation (rendered by shell.js from the workspace registry) ───────────── -->
+  <nav class="nav" id="primaryNav" aria-label="Workspaces"></nav>
+  <div class="subnav" id="subNav" role="tablist" aria-label="Workspace sections" hidden></div>
 
-  <main class="views">
-    <!-- ═══════════ TERMINAL VIEW ═══════════ -->
-    <section id="view-terminal" class="view active">
-      <!-- Command bar -->
-      <div class="commandbar">
-        <span class="prompt">&gt;</span>
-        <div class="cmd-input-wrap">
-          <input
-            id="symbolInput" class="cmd-input" type="text" autocomplete="off" spellcheck="false"
-            placeholder="ENTER SYMBOL (e.g. AAPL, MSFT, NVDA) — press GO"
-            aria-label="Symbol search" aria-autocomplete="list" aria-controls="autocomplete" />
-          <span class="cmd-cursor" id="cmdCursor" aria-hidden="true"></span>
-          <ul class="autocomplete" id="autocomplete" role="listbox" hidden></ul>
+  <main class="workspace" id="workspace" tabindex="-1">
+
+    <!-- ═══════════ MARKETS — shell + US overview (India reserved, not active) ═══════════ -->
+    <section id="view-markets" class="view ws">
+      <header class="ws-head">
+        <div>
+          <h2 class="ws-title">Markets</h2>
+          <p class="ws-sub">US equities · session, benchmarks and composite sentiment from the pooled quote providers</p>
         </div>
-        <button class="go-btn" id="goBtn" type="button">GO</button>
+        <div class="ws-tools">
+          <button class="btn btn-quiet" id="marketsRefresh" type="button">Refresh</button>
+        </div>
+      </header>
+
+      <div class="markets-grid">
+        <section class="panel" aria-labelledby="mkBenchTitle">
+          <header class="section-head">
+            <h3 id="mkBenchTitle">US benchmarks</h3>
+            <span class="fresh" id="mkFresh" data-fresh="loading">Loading</span>
+          </header>
+          <div class="table-wrap">
+            <table class="table table-compact" id="mkTable" aria-describedby="mkFresh">
+              <thead>
+                <tr>
+                  <th scope="col">Symbol</th>
+                  <th scope="col" class="num">Last</th>
+                  <th scope="col" class="num">Chg</th>
+                  <th scope="col" class="num">Chg %</th>
+                  <th scope="col" class="num opt">Open</th>
+                  <th scope="col" class="num opt">High</th>
+                  <th scope="col" class="num opt">Low</th>
+                  <th scope="col" class="num opt">Prev</th>
+                  <th scope="col" class="opt">Freshness</th>
+                </tr>
+              </thead>
+              <tbody id="mkTableBody"><tr><td colspan="9" class="table-empty">Loading benchmark quotes…</td></tr></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel" id="sentimentPanel" aria-labelledby="sentTitle">
+          <header class="section-head">
+            <h3 id="sentTitle">Market sentiment</h3>
+            <button class="btn btn-icon" id="sentRefreshBtn" type="button" title="Refresh market sentiment" aria-label="Refresh market sentiment">
+              <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M13.5 3v3h-3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+          </header>
+          <div class="panel-body sentiment-body">
+            <div class="sent-gauge-wrap">
+              <div class="sent-track" aria-hidden="true">
+                <div class="sent-fill" id="sentFill"></div>
+                <div class="sent-needle" id="sentNeedle"></div>
+              </div>
+              <div class="sent-scale" aria-hidden="true">
+                <span>Bearish</span><span>Neutral</span><span>Bullish</span>
+              </div>
+            </div>
+            <div class="sent-meta">
+              <span class="sent-label" id="sentLabel">—</span>
+              <span class="sent-score num" id="sentScore"></span>
+            </div>
+            <p class="sent-summary" id="sentSummary">Loading market sentiment…</p>
+            <p class="sent-coverage caption" id="sentTweets"></p>
+            <p class="caption">Interpretation — deterministic composite of benchmark moves and a headline lexicon. Not a forecast.</p>
+          </div>
+        </section>
+
+        <section class="panel" aria-labelledby="mkRegTitle">
+          <header class="section-head">
+            <h3 id="mkRegTitle">Market context</h3>
+          </header>
+          <div class="table-wrap">
+            <table class="table table-compact" id="mkRegistry">
+              <thead>
+                <tr><th scope="col">Market</th><th scope="col">Session</th><th scope="col">Status</th></tr>
+              </thead>
+              <tbody id="mkRegistryBody"></tbody>
+            </table>
+          </div>
+          <p class="caption panel-foot">Only the US market carries data in this release. Additional markets are shell reservations until their data architecture ships.</p>
+        </section>
+      </div>
+    </section>
+
+    <!-- ═══════════ TERMINAL ═══════════ -->
+    <section id="view-terminal" class="view active">
+      <div class="security-band" id="quoteBody">
+        <div class="security-id">
+          <div class="quote-symbol" id="qSymbol">—</div>
+          <div class="quote-meta">
+            <span class="quote-name" id="qName">—</span>
+            <span class="quote-exch" id="qExch"></span>
+          </div>
+        </div>
+        <div class="security-price">
+          <div class="quote-price num" id="qPrice">—</div>
+          <div class="quote-change num" id="qChange">—</div>
+        </div>
+        <div class="security-stats" id="statGrid">
+          <div class="stat"><span class="stat-label">Open</span><span class="stat-val num" id="sOpen">—</span></div>
+          <div class="stat"><span class="stat-label">Prev</span><span class="stat-val num" id="sPrev">—</span></div>
+          <div class="stat"><span class="stat-label">High</span><span class="stat-val num" id="sHigh">—</span></div>
+          <div class="stat"><span class="stat-label">Low</span><span class="stat-val num" id="sLow">—</span></div>
+          <div class="stat"><span class="stat-label">52w H</span><span class="stat-val num" id="s52h">—</span></div>
+          <div class="stat"><span class="stat-label">52w L</span><span class="stat-val num" id="s52l">—</span></div>
+          <div class="stat"><span class="stat-label">Mkt cap</span><span class="stat-val num" id="sCap">—</span></div>
+          <div class="stat"><span class="stat-label">P/E</span><span class="stat-val num" id="sPE">—</span></div>
+        </div>
+        <div class="security-actions">
+          <button class="btn btn-quiet" id="whyMoveBtn" type="button" title="Evidence-gated read of today's price action" aria-controls="whyPanel" aria-expanded="false">Explain move</button>
+        </div>
       </div>
 
-      <div class="grid">
-        <!-- LEFT COLUMN -->
-        <section class="col col-left">
-          <div class="panel panel-quote" id="quotePanel">
-            <div class="panel-head">QUOTE</div>
-            <div class="panel-body" id="quoteBody">
-              <div class="quote-id">
-                <div class="quote-symbol" id="qSymbol">—</div>
-                <div class="quote-meta">
-                  <span class="quote-name" id="qName">—</span>
-                  <span class="quote-exch" id="qExch"></span>
-                </div>
-              </div>
-              <div class="quote-price-block">
-                <div class="quote-price" id="qPrice">—</div>
-                <div class="quote-change" id="qChange">—</div>
-              </div>
-              <button class="why-btn" id="whyMoveBtn" type="button" title="Ask AI why this stock is moving">🤖 Why is it moving?</button>
-              <div class="why-panel" id="whyPanel" hidden>
-                <div class="why-loading" id="whyLoading" hidden>Analyzing price action…</div>
-                <div class="why-sentiment" id="whySentiment"></div>
-                <div class="why-text" id="whyText"></div>
-                <div class="why-runtime" id="whyRuntime"></div>
-                <ul class="why-catalysts" id="whyCatalysts"></ul>
-                <div class="why-headlines" id="whyHeadlines"></div>
-              </div>
-            </div>
-          </div>
+      <div class="why-panel interp" id="whyPanel" hidden>
+        <div class="interp-head"><span class="interp-kind">Interpretation</span><span class="why-sentiment" id="whySentiment"></span></div>
+        <div class="why-loading" id="whyLoading" hidden><span class="spinner"></span>Analyzing price action…</div>
+        <div class="why-text" id="whyText"></div>
+        <ul class="why-catalysts" id="whyCatalysts"></ul>
+        <div class="why-headlines evidence" id="whyHeadlines"></div>
+        <div class="why-runtime caption" id="whyRuntime"></div>
+      </div>
 
-          <div class="panel" id="snapPanel">
-            <div class="panel-head">SNAPSHOT</div>
-            <div class="panel-body">
-              <div class="stat-grid" id="statGrid">
-                <div class="stat"><span class="stat-label">OPEN</span><span class="stat-val" id="sOpen">—</span></div>
-                <div class="stat"><span class="stat-label">PREV CLOSE</span><span class="stat-val" id="sPrev">—</span></div>
-                <div class="stat"><span class="stat-label">DAY HIGH</span><span class="stat-val" id="sHigh">—</span></div>
-                <div class="stat"><span class="stat-label">DAY LOW</span><span class="stat-val" id="sLow">—</span></div>
-                <div class="stat"><span class="stat-label">52W HIGH</span><span class="stat-val" id="s52h">—</span></div>
-                <div class="stat"><span class="stat-label">52W LOW</span><span class="stat-val" id="s52l">—</span></div>
-                <div class="stat"><span class="stat-label">MKT CAP</span><span class="stat-val" id="sCap">—</span></div>
-                <div class="stat"><span class="stat-label">P/E</span><span class="stat-val" id="sPE">—</span></div>
-              </div>
-            </div>
-          </div>
-
-          <div class="panel panel-sentiment" id="sentimentPanel">
-            <div class="panel-head">
-              <span>MARKET SENTIMENT</span>
-              <button class="sent-refresh-btn" id="sentRefreshBtn" type="button" title="Refresh market sentiment">↺</button>
-            </div>
-            <div class="panel-body sentiment-body">
-              <div class="sent-gauge-wrap">
-                <div class="sent-track">
-                  <div class="sent-fill" id="sentFill"></div>
-                  <div class="sent-needle" id="sentNeedle"></div>
-                </div>
-                <div class="sent-scale">
-                  <span>Bearish</span><span>Neutral</span><span>Bullish</span>
-                </div>
-              </div>
-              <div class="sent-meta">
-                <span class="sent-label" id="sentLabel">—</span>
-                <span class="sent-score" id="sentScore"></span>
-              </div>
-              <div class="sent-summary" id="sentSummary">Loading market sentiment…</div>
-              <div class="sent-tweets" id="sentTweets"></div>
-            </div>
-          </div>
-
+      <div class="terminal-grid">
+        <!-- CHART (priority space) -->
+        <section class="terminal-main">
           <div class="panel panel-chart" id="chartPanel">
-            <div class="panel-head">
-              <span>PRICE</span>
-              <div class="chart-type-toggle" id="chartTypeToggle">
-                <button data-ctype="line" class="ctype-btn active" type="button">⤢ Line</button>
-                <button data-ctype="candle" class="ctype-btn" type="button">▮ Candle</button>
+            <header class="section-head toolbar">
+              <div class="segmented" id="chartTypeToggle" role="group" aria-label="Chart type">
+                <button data-ctype="line" class="ctype-btn active" type="button" aria-pressed="true">Line</button>
+                <button data-ctype="candle" class="ctype-btn" type="button" aria-pressed="false">Candles</button>
               </div>
-              <div class="range-buttons" id="rangeButtons" role="tablist">
-                <button data-range="1D" class="range-btn active" type="button">1D</button>
-                <button data-range="5D" class="range-btn" type="button">5D</button>
-                <button data-range="1M" class="range-btn" type="button">1M</button>
-                <button data-range="6M" class="range-btn" type="button">6M</button>
-                <button data-range="1Y" class="range-btn" type="button">1Y</button>
-                <button data-range="5Y" class="range-btn" type="button">5Y</button>
+              <div class="segmented" id="rangeButtons" role="group" aria-label="Range">
+                <button data-range="1D" class="range-btn active" type="button" aria-pressed="true">1D</button>
+                <button data-range="5D" class="range-btn" type="button" aria-pressed="false">5D</button>
+                <button data-range="1M" class="range-btn" type="button" aria-pressed="false">1M</button>
+                <button data-range="6M" class="range-btn" type="button" aria-pressed="false">6M</button>
+                <button data-range="1Y" class="range-btn" type="button" aria-pressed="false">1Y</button>
+                <button data-range="5Y" class="range-btn" type="button" aria-pressed="false">5Y</button>
               </div>
-            </div>
+            </header>
             <div class="panel-body chart-body">
               <div class="chart-msg" id="chartMsg" hidden></div>
-              <canvas id="chartCanvas"></canvas>
-              <div class="chart-osc-bar" id="chartOscBar">
+              <canvas id="chartCanvas" role="img" aria-label="Price chart"></canvas>
+              <div class="chart-osc-bar toolbar-quiet" id="chartOscBar">
+                <span class="toolbar-label">Lower</span>
                 <button class="osc-btn active" data-osc="MACD" type="button" title="MACD histogram + signal">MACD</button>
                 <button class="osc-btn" data-osc="CCI" type="button" title="Commodity Channel Index (20)">CCI</button>
                 <button class="osc-btn" data-osc="WR" type="button" title="Williams %R (14)">W%R</button>
-                <span class="osc-divider">|</span>
+                <span class="osc-divider" aria-hidden="true"></span>
+                <span class="toolbar-label">Overlay</span>
                 <button class="osc-btn" id="kcToggle" data-active="1" type="button" title="Keltner Channel overlay">KC</button>
                 <button class="osc-btn" id="mcToggle" data-active="0" type="button" title="Monte Carlo forward fan (500 paths)">MC</button>
                 <div class="mc-model-toggle" id="mcModelToggle">
@@ -169,146 +223,136 @@
               </div>
             </div>
           </div>
+
+          <div class="panel panel-quant" id="quantPanel">
+            <header class="section-head">
+              <h3>Quant snapshot</h3>
+              <div class="segmented segmented-quiet" id="quantTechToggle" role="group" aria-label="Indicator">
+                <button data-ind="boll" class="qind-btn" type="button">Bollinger</button>
+                <button data-ind="rsi" class="qind-btn" type="button">RSI</button>
+                <button data-ind="macd" class="qind-btn" type="button">MACD</button>
+              </div>
+            </header>
+            <div class="panel-body">
+              <div class="quant-msg status" id="quantMsg">Computing risk metrics…</div>
+              <div class="metric-row" id="quantRiskGrid" hidden>
+                <div class="stat"><span class="stat-label">Volatility (ann)</span><span class="stat-val num" id="qrVol">—</span></div>
+                <div class="stat"><span class="stat-label">Sharpe</span><span class="stat-val num" id="qrSharpe">—</span></div>
+                <div class="stat"><span class="stat-label">Sortino</span><span class="stat-val num" id="qrSortino">—</span></div>
+                <div class="stat"><span class="stat-label">Beta vs SPY</span><span class="stat-val num" id="qrBeta">—</span></div>
+                <div class="stat"><span class="stat-label">Max drawdown</span><span class="stat-val num" id="qrDD">—</span></div>
+                <div class="stat"><span class="stat-label">CAGR</span><span class="stat-val num" id="qrCagr">—</span></div>
+              </div>
+              <canvas id="quantIndCanvas" height="90" hidden></canvas>
+            </div>
+          </div>
         </section>
 
-        <!-- RIGHT COLUMN -->
-        <section class="col col-right">
+        <!-- DETAIL RAIL -->
+        <aside class="terminal-rail" aria-label="Security detail">
           <div class="panel" id="companyPanel">
-            <div class="panel-head">COMPANY</div>
+            <header class="section-head"><h3>Company</h3></header>
             <div class="panel-body">
               <div class="company">
                 <img class="company-logo" id="cLogo" alt="" hidden />
                 <div class="company-info">
-                  <div class="company-row"><span class="stat-label">INDUSTRY</span><span class="stat-val" id="cIndustry">—</span></div>
-                  <div class="company-row"><span class="stat-label">COUNTRY</span><span class="stat-val" id="cCountry">—</span></div>
-                  <div class="company-row"><span class="stat-label">IPO</span><span class="stat-val" id="cIpo">—</span></div>
-                  <div class="company-row"><span class="stat-label">WEB</span><a class="stat-val link" id="cWeb" target="_blank" rel="noopener noreferrer">—</a></div>
+                  <div class="company-row"><span class="stat-label">Industry</span><span class="stat-val" id="cIndustry">—</span></div>
+                  <div class="company-row"><span class="stat-label">Country</span><span class="stat-val" id="cCountry">—</span></div>
+                  <div class="company-row"><span class="stat-label">IPO</span><span class="stat-val num" id="cIpo">—</span></div>
+                  <div class="company-row"><span class="stat-label">Web</span><a class="stat-val link" id="cWeb" target="_blank" rel="noopener noreferrer">—</a></div>
                 </div>
               </div>
             </div>
           </div>
 
           <div class="panel panel-news" id="companyNewsPanel">
-            <div class="panel-head">NEWS</div>
+            <header class="section-head"><h3>News</h3></header>
             <div class="panel-body news-body" id="newsBody">
               <div class="news-loading">—</div>
             </div>
           </div>
-
-          <div class="panel panel-quant" id="quantPanel">
-            <div class="panel-head">
-              <span>QUANT LAB</span>
-              <div class="quant-tech-toggle" id="quantTechToggle">
-                <button data-ind="boll" class="qind-btn" type="button">Bollinger</button>
-                <button data-ind="rsi" class="qind-btn" type="button">RSI</button>
-                <button data-ind="macd" class="qind-btn" type="button">MACD</button>
-              </div>
-            </div>
-            <div class="panel-body">
-              <div class="quant-msg" id="quantMsg">Computing risk metrics…</div>
-              <div class="quant-risk-grid" id="quantRiskGrid" hidden>
-                <div class="stat"><span class="stat-label">VOLATILITY (ANN)</span><span class="stat-val" id="qrVol">—</span></div>
-                <div class="stat"><span class="stat-label">SHARPE</span><span class="stat-val" id="qrSharpe">—</span></div>
-                <div class="stat"><span class="stat-label">SORTINO</span><span class="stat-val" id="qrSortino">—</span></div>
-                <div class="stat"><span class="stat-label">BETA (vs SPY)</span><span class="stat-val" id="qrBeta">—</span></div>
-                <div class="stat"><span class="stat-label">MAX DRAWDOWN</span><span class="stat-val" id="qrDD">—</span></div>
-                <div class="stat"><span class="stat-label">CAGR</span><span class="stat-val" id="qrCagr">—</span></div>
-              </div>
-              <canvas id="quantIndCanvas" height="90" hidden></canvas>
-            </div>
-          </div>
-        </section>
+        </aside>
       </div>
     </section>
 
-    <!-- ═══════════ GLOBAL INTEL VIEW ═══════════ -->
-    <section id="view-news" class="view intel">
-      <div class="intel-head">
-        <h2 class="intel-title">GLOBAL INTEL</h2>
-        <span class="intel-sub">Geopolitics · markets · cited public evidence and constrained research briefs</span>
-      </div>
-
-      <!-- Sub-navigation -->
-      <div class="gi-subnav" id="giSubnav" role="tablist">
-        <button class="gi-subtab active" data-sub="briefing" type="button">📡 BRIEFING</button>
-        <button class="gi-subtab" data-sub="situation" type="button">🛰 SITUATION ROOM</button>
-        <button class="gi-subtab" data-sub="report" type="button">📈 INVESTMENT REPORT</button>
-        <button class="gi-subtab" data-sub="map" type="button">🚢 GLOBAL MAP</button>
-      </div>
+    <!-- ═══════════ INTELLIGENCE — Briefing · Situation Room · Investment Report · Global Map ═══════════ -->
+    <section id="view-news" class="view ws">
+      <header class="ws-head">
+        <div>
+          <h2 class="ws-title">Intelligence</h2>
+          <p class="ws-sub">Geopolitics and markets · cited public evidence and constrained research briefs</p>
+        </div>
+      </header>
 
       <!-- ── BRIEFING: live world-events feed ── -->
-      <div id="gi-briefing" class="gi-panel active">
+      <div id="gi-briefing" class="gi-panel active" role="tabpanel">
         <section id="breaking" class="breaking hidden">
-          <h3 class="section-label breaking-label">● BREAKING</h3>
+          <h3 class="section-label breaking-label">Breaking</h3>
           <div id="breakingList" class="card-list"></div>
         </section>
-        <div id="filterChips" class="chips"></div>
+        <div id="filterChips" class="chips" role="group" aria-label="Filter"></div>
         <div id="newsStatus" class="status">Loading live world &amp; market intelligence…</div>
         <div id="newsList" class="card-list"></div>
       </div>
 
       <!-- ── SITUATION ROOM: cross-domain AI synthesis ── -->
-      <div id="gi-situation" class="gi-panel">
+      <div id="gi-situation" class="gi-panel" role="tabpanel">
         <div id="situationStatus" class="status">Synthesizing the global situation across military, economic, political, disaster and cyber/energy signals…</div>
         <div id="situationBody" class="situation-body"></div>
       </div>
 
-      <!-- ── INVESTMENT REPORT: continuous AI stock-picks from world events ── -->
-      <div id="gi-report" class="gi-panel">
-        <div class="gi-report-head">
-          <span class="gi-report-sub">AI continuously reads the world-events feed and produces an actionable investment brief — what's happening, who it moves, and what to buy.</span>
-        </div>
+      <!-- ── INVESTMENT REPORT ── -->
+      <div id="gi-report" class="gi-panel" role="tabpanel">
+        <p class="ws-note">Reads the world-events feed and produces an evidence-bounded investment brief — what is happening, who it moves, and what remains unverified.</p>
         <div id="reportStatus" class="status">Generating the latest investment report…</div>
         <div id="reportBody" class="report-body"></div>
       </div>
 
-      <!-- ── GLOBAL MAP: live data layers + infrastructure canvas ── -->
-      <div id="gi-map" class="gi-panel">
-        <!-- Map layer selector -->
-        <div class="map-layer-toggle" id="mapLayerToggle">
-          <button class="maplayer-btn active" data-layer="livedata" type="button">🌍 LIVE DATA</button>
-          <button class="maplayer-btn" data-layer="infra" type="button">🛢 INFRASTRUCTURE</button>
+      <!-- ── GLOBAL MAP ── -->
+      <div id="gi-map" class="gi-panel" role="tabpanel">
+        <div class="toolbar-row">
+          <div class="segmented" id="mapLayerToggle" role="group" aria-label="Map layer set">
+            <button class="maplayer-btn active" data-layer="livedata" type="button">Live data</button>
+            <button class="maplayer-btn" data-layer="infra" type="button">Infrastructure</button>
+          </div>
+          <div class="segmented" id="mapModeToggle" role="group" aria-label="Projection">
+            <button class="mapmode-btn active" data-mode="2d" type="button">2D map</button>
+            <button class="mapmode-btn" data-mode="3d" type="button">3D globe</button>
+          </div>
         </div>
 
-        <!-- Live data layer (Leaflet + mapintel overlays) -->
         <div id="mapLayerLivedata">
-          <div class="map-mode-toggle">
-            <button class="mapmode-btn active" data-mode="2d" type="button">🗺 2D MAP</button>
-            <button class="mapmode-btn" data-mode="3d" type="button">🌍 3D GLOBE</button>
-          </div>
           <div id="liveMap" class="ship-map"></div>
           <div id="globeMap" class="globe-map" hidden></div>
         </div>
 
-        <!-- Infrastructure canvas layer -->
         <div id="mapLayerInfra" hidden>
-          <div style="padding:6px 0 8px;font-size:11px;color:var(--muted);font-family:monospace;">
-            🛢 Pipelines &nbsp;·&nbsp; 🌊 Undersea Cables &nbsp;·&nbsp; 🚢 Trade Routes &nbsp;·&nbsp;
-            <span style="color:#888">Hover a line for details · Scroll to zoom · Drag to pan</span>
-          </div>
-          <div id="worldMapContainer" style="width:100%;height:520px;"></div>
+          <p class="caption map-legend">Pipelines · undersea cables · trade routes — hover a line for details, scroll to zoom, drag to pan.</p>
+          <div id="worldMapContainer" class="world-map"></div>
         </div>
       </div>
     </section>
 
-    <!-- ═══════════ SECTORS VIEW ═══════════ -->
-    <section id="view-sectors" class="view intel">
-      <div class="intel-head">
-        <h2 class="intel-title">SECTOR ANALYSIS</h2>
-        <span class="intel-sub">Evidence-bounded sector context · rankings withheld without verified datasets</span>
-      </div>
+    <!-- ═══════════ RESEARCH · SECTORS ═══════════ -->
+    <section id="view-sectors" class="view ws">
+      <header class="ws-head">
+        <div>
+          <h2 class="ws-title">Sectors</h2>
+          <p class="ws-sub">Evidence-bounded sector context · rankings withheld without verified datasets</p>
+        </div>
+      </header>
 
       <div id="sentimentBanner" class="sentiment-banner hidden"></div>
 
       <section id="topPicks" class="top-picks hidden">
-        <h3 class="section-label">★ TOP STOCK IDEAS TO INVEST IN NOW</h3>
+        <h3 class="section-label">Top ideas</h3>
         <div id="topPicksList" class="picks-list"></div>
       </section>
 
       <div class="toggle-row">
-        <div class="seg-toggle">
-          <button class="seg active" data-mode="invest" type="button">BEST TO INVEST (STOCKS)</button>
-          <button class="seg" data-mode="options" type="button">BEST FOR OPTIONS</button>
+        <div class="segmented" role="group" aria-label="Lens">
+          <button class="seg active" data-mode="invest" type="button">Stocks</button>
+          <button class="seg" data-mode="options" type="button">Options</button>
         </div>
       </div>
 
@@ -316,42 +360,46 @@
       <div id="industryList" class="card-list"></div>
     </section>
 
-    <!-- ═══════════ DEEP DIVE VIEW ═══════════ -->
-    <section id="view-analyze" class="view intel">
-      <div class="intel-head">
-        <h2 class="intel-title">DEEP DIVE</h2>
-        <span class="intel-sub">Full AI analyst report on any stock · live news + fundamentals + options chain + analyst consensus → invest &amp; options ratings</span>
-      </div>
+    <!-- ═══════════ RESEARCH · DEEP DIVE ═══════════ -->
+    <section id="view-analyze" class="view ws">
+      <header class="ws-head">
+        <div>
+          <h2 class="ws-title">Deep Dive</h2>
+          <p class="ws-sub">Analyst report on any stock · live news, fundamentals, options chain and consensus → stock and options ratings</p>
+        </div>
+      </header>
 
-      <form id="ddForm" class="watch-form">
-        <input id="ddInput" class="watch-input" type="text" autocomplete="off"
-          placeholder="Enter a stock or company — e.g. NVDA, Apple, Tesla, Palantir…" />
-        <button type="submit" class="watch-add">ANALYZE</button>
+      <form id="ddForm" class="watch-form" role="search">
+        <input id="ddInput" class="watch-input" type="text" autocomplete="off" aria-label="Stock or company to analyze"
+          placeholder="Stock or company — NVDA, Apple, Tesla, Palantir" />
+        <button type="submit" class="btn btn-primary">Analyze</button>
       </form>
 
-      <div id="ddStatus" class="status">Enter a stock above for a deep AI analysis — a buy/sell rating, an options play, the bull &amp; bear case, catalysts and risks. When the analyst model is unavailable, the live data report is shown instead.</div>
+      <div id="ddStatus" class="status">Enter a stock above for a full analyst report — rating, options idea, bull and bear case, catalysts and risks. When the analyst model is unavailable, the live data report is shown instead.</div>
       <div id="ddResult" class="dd-result"></div>
     </section>
 
-    <!-- ═══════════ SUPPLY CHAIN VIEW ═══════════ -->
-    <section id="view-supply" class="view intel">
-      <div class="intel-head">
-        <h2 class="intel-title">SUPPLY CHAIN</h2>
-        <span class="intel-sub">Verified primary records required · unsupported supplier and customer edges are withheld</span>
-      </div>
+    <!-- ═══════════ INTELLIGENCE · SUPPLY CHAIN ═══════════ -->
+    <section id="view-supply" class="view ws">
+      <header class="ws-head">
+        <div>
+          <h2 class="ws-title">Supply Chain</h2>
+          <p class="ws-sub">Verified primary records required · unsupported supplier and customer edges are withheld</p>
+        </div>
+      </header>
 
-      <form id="scForm" class="watch-form">
-        <input id="scInput" class="watch-input" type="text" autocomplete="off"
-          placeholder="Company or ticker — e.g. GM, Apple, TSMC, Boeing…" />
-        <button type="submit" class="watch-add">MAP</button>
+      <form id="scForm" class="watch-form" role="search">
+        <input id="scInput" class="watch-input" type="text" autocomplete="off" aria-label="Company or ticker to map"
+          placeholder="Company or ticker — GM, Apple, TSMC, Boeing" />
+        <button type="submit" class="btn btn-primary">Map</button>
       </form>
 
       <div id="scFocal" class="sc-focal hidden"></div>
 
       <div class="toggle-row sc-toggle" id="scToggle" hidden>
-        <div class="seg-toggle">
-          <button class="sc-mode-btn active" data-mode="graph" type="button">◇ GRAPH</button>
-          <button class="sc-mode-btn" data-mode="list" type="button">≣ LIST</button>
+        <div class="segmented" role="group" aria-label="Layout">
+          <button class="sc-mode-btn active" data-mode="graph" type="button">Graph</button>
+          <button class="sc-mode-btn" data-mode="list" type="button">List</button>
         </div>
       </div>
 
@@ -360,44 +408,63 @@
       <div id="scGrid" class="sc-grid"></div>
       <div id="scPeers" class="sc-peers"></div>
 
-      <!-- Macroeconomic Shock Simulator -->
-      <div class="intel-head" style="margin-top:32px">
-        <h2 class="intel-title">PIPELINE SHOCK SIMULATOR</h2>
-        <span class="intel-sub">Live oil/gas prices · Estimated daily loss &amp; market price shock if pipeline disrupted</span>
-      </div>
+      <header class="ws-head ws-head-inner">
+        <div>
+          <h2 class="ws-title">Pipeline shock simulator</h2>
+          <p class="ws-sub">Live oil and gas prices · estimated daily loss and market price shock if a pipeline is disrupted</p>
+        </div>
+      </header>
       <div id="shockSpot" class="shock-spot"></div>
-      <div id="shockTable" class="shock-table"></div>
+      <div id="shockTable" class="shock-table table-wrap"></div>
     </section>
 
-    <!-- ═══════════ WATCHLIST VIEW ═══════════ -->
-    <section id="view-watchlist" class="view intel">
-      <div class="intel-head">
-        <h2 class="intel-title">WATCHLIST</h2>
-        <span class="intel-sub">Per-company evidence with cited impact interpretation</span>
-      </div>
+    <!-- ═══════════ WATCHLIST ═══════════ -->
+    <section id="view-watchlist" class="view ws">
+      <header class="ws-head">
+        <div>
+          <h2 class="ws-title">Watchlist</h2>
+          <p class="ws-sub">Per-company evidence with cited impact interpretation</p>
+        </div>
+      </header>
 
-      <form id="watchForm" class="watch-form">
-        <input id="watchInput" class="watch-input" type="text" autocomplete="off"
-          placeholder="Add a company or ticker — e.g. Apple, NVDA, Tesla…" />
-        <button type="submit" class="watch-add">+ ADD</button>
+      <form id="watchForm" class="watch-form" role="search">
+        <input id="watchInput" class="watch-input" type="text" autocomplete="off" aria-label="Company or ticker to watch"
+          placeholder="Add a company or ticker — Apple, NVDA, Tesla" />
+        <button type="submit" class="btn btn-primary">Add</button>
       </form>
-      <div id="watchEmpty" class="status">Your watchlist is empty. Add a company above to track every bit of news about it — or tap a ticker chip anywhere in the app.</div>
+      <div id="watchEmpty" class="status empty">Your watchlist is empty. Add a company above to track its news — or open a ticker chip anywhere in the app.</div>
       <div id="watchList" class="watch-companies"></div>
     </section>
 
-    <!-- ═══════════ ALERTS VIEW ═══════════ -->
-    <section id="view-alerts" class="view intel">
-      <div class="intel-head">
-        <h2 class="intel-title">BREAKING ALERTS</h2>
-        <span class="intel-sub">Corroborated recent reports eligible for device notification</span>
-      </div>
+    <!-- ═══════════ QUANT — Quant Lab for the active subject ═══════════ -->
+    <section id="view-quant" class="view ws">
+      <header class="ws-head">
+        <div>
+          <h2 class="ws-title">Quant Lab</h2>
+          <p class="ws-sub" id="quantSubject">Monte Carlo, options pricing, Greeks and the 40-indicator suite for the active security.</p>
+        </div>
+        <div class="ws-tools">
+          <button class="btn btn-quiet" id="quantSubjectBtn" type="button" title="Recompute for the active Terminal symbol">Use Terminal symbol</button>
+        </div>
+      </header>
+      <div id="quantLabMount"></div>
+    </section>
+
+    <!-- ═══════════ ALERTS ═══════════ -->
+    <section id="view-alerts" class="view ws">
+      <header class="ws-head">
+        <div>
+          <h2 class="ws-title">Alerts</h2>
+          <p class="ws-sub">Corroborated recent reports eligible for device notification</p>
+        </div>
+      </header>
 
       <div id="alertCta" class="alert-cta">
         <div class="alert-cta-text">
           <div class="alert-cta-title">Get notified when major news is corroborated</div>
           <div class="alert-cta-sub">Recent breaking-language reports are pushed only after distinct source-domain and freshness checks pass.</div>
         </div>
-        <button id="enableAlertsBtn" class="alert-enable" type="button">Enable Alerts</button>
+        <button id="enableAlertsBtn" class="btn btn-primary alert-enable" type="button">Enable alerts</button>
       </div>
       <div id="alertHint" class="alert-hint hidden"></div>
 
@@ -406,17 +473,19 @@
     </section>
   </main>
 
-  <!-- ───────────── AI Chat Panel ───────────── -->
-  <div id="aiChatPanel" class="ai-chat-panel" hidden>
+  <!-- ───────────── Research assistant drawer ───────────── -->
+  <aside id="aiChatPanel" class="ai-chat-panel" aria-label="Research assistant" hidden>
     <div class="ai-chat-header">
-      <span class="ai-chat-title">💬 AI RESEARCH</span>
-      <span class="ai-chat-ctx" id="aiChatCtx"></span>
-      <button class="ai-chat-clear" id="aiChatClear" type="button" title="Clear chat">Clear</button>
-      <button class="ai-chat-close" id="aiChatClose" type="button" title="Close">✕</button>
+      <span class="ai-chat-title">Research assistant</span>
+      <span class="ai-chat-ctx caption" id="aiChatCtx"></span>
+      <button class="btn btn-quiet btn-sm ai-chat-clear" id="aiChatClear" type="button" title="Clear conversation">Clear</button>
+      <button class="btn btn-icon ai-chat-close" id="aiChatClose" type="button" title="Close" aria-label="Close research assistant">
+        <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </button>
     </div>
-    <div class="ai-chat-messages" id="aiChatMessages">
+    <div class="ai-chat-messages" id="aiChatMessages" aria-live="polite">
       <div class="ai-chat-welcome">
-        <div class="ai-chat-welcome-title">What do you want to know?</div>
+        <div class="ai-chat-welcome-title">Ask about evidence, risks or research</div>
         <div class="ai-chat-suggestions" id="aiChatSuggestions">
           <button class="ai-sug" data-q="What's moving the market right now?">What's moving the market?</button>
           <button class="ai-sug" data-q="What evidence explains the currently loaded stock's move today?">Explain this stock's move</button>
@@ -428,28 +497,29 @@
       </div>
     </div>
     <div class="ai-chat-input-row">
-      <input type="text" id="aiChatInput" class="ai-chat-input" placeholder="Ask about market evidence, risks, or research…" autocomplete="off" />
-      <button id="aiChatSend" class="ai-chat-send" type="button">↑</button>
+      <input type="text" id="aiChatInput" class="ai-chat-input" placeholder="Ask about market evidence, risks, or research…" autocomplete="off" aria-label="Message the research assistant" />
+      <button id="aiChatSend" class="btn btn-primary btn-sm" type="button" aria-label="Send">Send</button>
     </div>
-  </div>
+  </aside>
 
   <!-- ───────────── Status bar ───────────── -->
-  <footer class="statusbar">
-    <span id="statusMsg">Ready.</span>
+  <footer class="statusbar" role="contentinfo">
+    <span id="statusMsg" aria-live="polite">Ready.</span>
     <span class="status-disclaimer">
-      Data: Finnhub · Yahoo/Nasdaq · Google News + Groq — educational use, not investment advice, not affiliated with Bloomberg L.P.
+      Finnhub · Yahoo/Nasdaq · Google News · Groq — educational use, not investment advice, not affiliated with Bloomberg L.P.
     </span>
   </footer>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
     integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-  <script src="quant.js?v=20260920d"></script>
-  <script src="app.js?v=20260920d"></script>
-  <script src="deepdive.js?v=20260920d"></script>
-  <script src="intel.js?v=20260920d"></script>
-  <script src="mapintel.js?v=20260920d"></script>
-  <script src="ships.js?v=20260920d"></script>
+  <script src="shell.js?v=20260920e"></script>
+  <script src="quant.js?v=20260920e"></script>
+  <script src="app.js?v=20260920e"></script>
+  <script src="deepdive.js?v=20260920e"></script>
+  <script src="intel.js?v=20260920e"></script>
+  <script src="mapintel.js?v=20260920e"></script>
+  <script src="ships.js?v=20260920e"></script>
   <script src="https://unpkg.com/globe.gl@2.34.0/dist/globe.gl.min.js" integrity="sha384-mGWIMpfF9wMIV/OPDBkP9zd5uJ0D5XOls3hZGSdPlyIKzoTw7ETT4f/Uc0Bu0/T3" crossorigin="anonymous"></script>
-  <script src="globe.js?v=20260920d"></script>
+  <script src="globe.js?v=20260920e"></script>
 </body>
 </html>
