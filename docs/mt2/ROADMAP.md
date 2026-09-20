@@ -58,7 +58,7 @@ IN PROGRESS / PASS / PARTIAL / BLOCKED.
 - OUT OF SCOPE: India derivatives depth (MT2-5), portfolio.
 
 ## MT2-4 — ATLAS — Maps (geographic market-intelligence foundation)
-- STATUS: IN PROGRESS → see STATE.md (2026-09-21)
+- STATUS: PASS (closed 2026-09-21; D-010; EVIDENCE.md "MT2-4 ATLAS")
 - OBJECTIVE: canonical GeoEntity / MapLayer / CompanyGeoLink / GeoEvent model, sourced datasets,
   reusable map API, clustering, search, detail drawer, company → security path.
 - DONE CONTRACT: PASS contract in the ATLAS brief (COMMS 2026-09-21).

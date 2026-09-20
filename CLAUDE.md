@@ -163,6 +163,14 @@ Deploys to `https://market-terminal.wyjjdyxzsc.workers.dev`
 - **Invariant tests** (`tests/market-core.test.js`, negative controls): no SPY under India, INR never `$`, no NYSE holidays for NSE, no market-less cache key, no suffix in canonical identity, Yahoo India never REALTIME. Keep them green when touching any market-scoped path.
 - **Do not build or run inside the repo folder** — it is iCloud-synced and gets evicted under disk pressure (B-001/B-023). Run the local server from a non-iCloud mirror (`~/Library/Developer/market-terminal-run`: rsync + `npm ci` + copy `.env`).
 
+**MT2-4 ATLAS — geographic market-intelligence foundation (2026-09-21)**:
+- `shared/atlas-core.js` (schema `2026-09-21a`): `createGeoEntity()` (validated, sourced, frozen; `authoritative === false` for UNVERIFIED and hidden by default), `LAYERS` registry (5 categories; `renders:false` layers exist for cables/pipelines/facilities with a coverage note), `createCompanyGeoLink()` keyed by the TWINCORE canonical identity (never `.NS`), `createGeoEvent()`/`classifyEventStatus()` (per-category freshness → active/stale/resolved), `filterEntities()` (bbox, market emphasis, ≤2,500), `clusterPoints()`, `searchEntities()`, `atlasCacheKey()`, `buildFromSnapshot()`.
+- `shared/atlas-snapshot.js` is **generated** by `tools/atlas-build-snapshot.js` (Wikidata CC0 companies + reference verification, Natural Earth PD ports/airports, WRI GPPD CC BY 4.0 plants) — never hand-edit; rerun the tool (≈10 min, `--verify` for reference points only) and commit.
+- Routes: `/api/map/atlas` (registry + snapshot + coverage), `/api/map/entities?layer=&market=&bbox=&zoom=` (clusters below z7), `/api/map/entity?id=`, `/api/map/search?q=&market=`, `/api/map/geoevents?bbox=&category=`. Keep server.js ↔ worker.js parity (the block is copied with adapters for `fetch_cached_data`/`getData`).
+- Frontend `public/atlas.js` on the Leaflet map (`mapready`); company → security via `window.MarketTerminal.openSecurity('IN:NSE:RELIANCE', 'terminal'|'deepdive')`. Legacy overlays remain in `mapintel.js` (labelled LEGACY, curated, off by default); the "Infrastructure" canvas mode and all hand-drawn line geometry are retired (D-010) — do not reintroduce unsourced coordinates. Base tiles are OpenStreetMap (attribution required; keep the control).
+- Shell contract is **ten** synchronized `?v=` assets (atlas.js added).
+- **Canonical working path is `~/Developer/market-terminal`** (non-iCloud). The iCloud copy on the Desktop is frozen; do not engineer there.
+
 **Branches**: All work on `main` (no feature branches yet).
 
 ## Key Files
@@ -181,6 +189,9 @@ Deploys to `https://market-terminal.wyjjdyxzsc.workers.dev`
 | `shared/options-chain-core.js` | Bounded Nasdaq options-chain normalization and availability contract |
 | `shared/ticker-core.js` | Pooled ticker normalization and last-good fallback contract |
 | `shared/market-core.js` | Canonical US/India market definitions, instrument identity, cache keys, sessions, money, data truth, provider matrix |
+| `shared/atlas-core.js` | ATLAS GeoEntity / MapLayer / CompanyGeoLink / GeoEvent model, filtering, clustering, search |
+| `shared/atlas-snapshot.js` | Generated sourced datasets (Wikidata, Natural Earth, WRI GPPD) — rebuild with `tools/atlas-build-snapshot.js` |
+| `public/atlas.js` | ATLAS map layers, search, drawer, company → security path |
 | `public/index.html` | Application shell, workspace sections, cache-buster versioning |
 | `shared/ai-provider-registry.js` | Current provider/model lifecycle, eligibility, pricing, and health metadata |
 | `shared/ai-verification-core.js` | Bounded generation, independent verification, runtime usage/cost telemetry |

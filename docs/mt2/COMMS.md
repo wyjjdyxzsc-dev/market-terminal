@@ -240,3 +240,20 @@ SUMMARY: Repo relocated to ~/Developer/market-terminal (non-iCloud; HEAD cd28830
 DECISION / REQUEST: none pending. Pushing main per policy.
 EVIDENCE POINTER: EVIDENCE.md "MT2-4 ATLAS"; DECISIONS D-010; BACKLOG B-028…B-031.
 ACTION REQUIRED: OWNER — none for this checkpoint (the old iCloud copy can be archived at leisure).
+---
+TIMESTAMP: 2026-09-21T07:40Z
+FROM: CLAUDE
+TO: OWNER
+CHECKPOINT: MT2-4 ATLAS
+MESSAGE TYPE: CHECKPOINT CLOSURE — PASS
+SUMMARY: Deployed 898eb88 + 24b51df (assets 20260921b). Production test:prod 60/60 (a rerun
+  57/57 with three Finnhub-search throttle skips); production browser pass: 13-layer sourced
+  registry, 59 clusters over 4,038 company HQs, 386 classified events, OSM tiles with attribution
+  (watermark gone), search → drawer with HIGH Wikidata evidence → TSMC → NYSE:TSM → Terminal with
+  an automatic INDIA→US switch; mobile tap selection and bottom drawer; no invented coordinates
+  anywhere (the verifier caught and corrected four of the old curated points). Unit 116/116.
+  B-003 and B-015 closed. Repository now lives at ~/Developer/market-terminal.
+DECISION / REQUEST: none. MT2-5 NEXUS is NOT authorized by this report.
+EVIDENCE POINTER: EVIDENCE.md "MT2-4 ATLAS" (audit, datasets, implementation, production);
+  DECISIONS D-010; BACKLOG B-028…B-033; ROADMAP corrected (ATLAS=MT2-4 … CONVERGENCE=MT2-13).
+ACTION REQUIRED: OWNER — record acceptance when convenient; archive the frozen iCloud copy.

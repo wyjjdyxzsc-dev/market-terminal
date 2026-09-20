@@ -2,8 +2,9 @@
 
 PROJECT: Market Terminal 2.0 — Project Meridian
 CHECKPOINT: MT2-4 ATLAS — geographic market-intelligence foundation
-STATUS: IMPLEMENTED + UNIT/INTEGRATION/LOCAL-BROWSER TESTED; deploying for production acceptance
-  (2026-09-21). PASS/PARTIAL decided after test:prod + production browser pass.
+STATUS: PASS — CLOSED 2026-09-21. Deployed 898eb88 → 24b51df (assets 20260921b); test:prod 60/60 then
+  57/57 (Finnhub-search throttle skips); production browser pass desktop + mobile incl. TSMC →
+  NYSE:TSM → Terminal. OWNER acceptance not yet recorded; POCKET WKWebView pass not claimed (B-033).
 PREVIOUS: MT2-3 TWINCORE — PASS (cd28830). POCKET side-track — PASS.
 CANONICAL LOCAL PATH: /Users/krishivjain/Developer/market-terminal (non-iCloud clone of
   origin/main, created this checkpoint; .env, owner files and ios/Config/Local.xcconfig copied).
@@ -30,8 +31,8 @@ DONE: iCloud relocation; roadmap corrected (ATLAS=MT2-4 … CONVERGENCE=MT2-13);
   local); unit 116/116; ai-eval pass; Wrangler dry-run 2.2 MB / 385 KB gzip; local browser pass
   desktop + mobile portrait/landscape, US and INDIA emphasis, search → drawer → Terminal.
 OPEN: B-001/B-023 (owner: old iCloud copy remains), B-002, B-004 (legacy timers), B-016…B-019,
-  B-021, B-022, B-024…B-027, new B-028…B-031.
-NEXT EXACT ACTION: git commit; git push origin main; wait for ten 20260921a refs; npm run
-  test:prod; production browser pass (desktop, mobile, US/INDIA, search, select, company →
-  Terminal, evidence, console); EVIDENCE "Production acceptance"; COMMS closure; STATE → PASS/
-  PARTIAL; STOP. NEXUS is not authorized.
+  B-021, B-022, B-024…B-027, B-028…B-033. CLOSED this checkpoint: B-003, B-015.
+NEXT EXACT ACTION: none. MT2-4 is closed. MT2-5 NEXUS requires explicit OWNER authorization
+  (entry: ATLAS closed — satisfied; a DECISIONS record on the listed-company universe and
+  relationship evidence model). Owner-side: archive the frozen iCloud copy (B-001/B-023);
+  optional POCKET map pass on the phone (B-033).

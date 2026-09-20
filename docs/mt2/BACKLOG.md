@@ -28,7 +28,7 @@ accessibility/degraded-state defect · P3 minor.
 - CLOSURE NOTE (2026-09-20): re-observed on the deployed fa52e1a build; abstention is truthful
   and safe; no verification/evidence/separation was weakened and no secrets were added.
 
-## B-003 · P2 · MAP / FRONTEND · Aircraft layer: dead browser-direct path + empty in production
+## B-003 · P2 · MAP / FRONTEND · Aircraft layer: dead browser-direct path + empty in production — CLOSED 2026-09-21 (MT2-4: browser-direct tiles removed; proxy only)
 - OBSERVATION: `public/mapintel.js` fetches up to 12 `api.airplanes.live/v2/point/…` tiles
   directly from the browser every 8 s; the host now returns 403 / no CORS headers, producing
   an error storm (400+ console errors in one session). Server fallback `/api/map/flights` works
@@ -109,7 +109,7 @@ accessibility/degraded-state defect · P3 minor.
   `.maplayer-btn`/`.mapmode-btn` handlers still work because their buttons were kept.
 - SUGGESTED: delete the dead binding in the next intel.js touch (MT2-8 CONVERGENCE at the latest).
 
-## B-015 · P3 · UX · Map tile attribution shows "API KEY REQUIRED" watermark locally
+## B-015 · P3 · UX · Map tile attribution shows "API KEY REQUIRED" watermark locally — CLOSED 2026-09-21 (MT2-4: OSM tiles + attribution)
 - OBSERVATION: the Global Map base tiles render an "API KEY REQUIRED" watermark in the local
   built-in-browser session (2026-09-20). Pre-existing; unrelated to QUARTZ (tile provider config).
 - SUGGESTED: verify in production; if reproduced, choose a keyless tile source or add the key —
@@ -238,3 +238,16 @@ accessibility/degraded-state defect · P3 minor.
   `/api/map/atlas` reports `coverage.companies.perMarket` truthfully. Not a fabrication risk,
   a coverage limit.
 - SUGGESTED: NEXUS measures security-universe completeness and adds an India-specific source.
+
+## B-032 · P3 · MAP · Live-event aggregate is slow cold in the Worker
+- OBSERVATION: `/api/map/geoevents` (USGS + EONET + NWS + GDELT/ACLED) takes several seconds
+  cold from Cloudflare; the entity drawer's nearby-events lookup is bounded to 1.5 s and shows
+  "still loading" (`nearbyEventsState: pending`) instead of blocking (was 9.3 s).
+- SUGGESTED: warm the aggregate on a Worker cron; split per-source caches so one slow feed does
+  not delay the rest (WORLDWIRE territory).
+
+## B-033 · P3 · MOBILE · ATLAS map not yet exercised inside the POCKET WKWebView
+- OBSERVATION: the iPhone was not connected during MT2-4; mobile acceptance ran in the browser
+  pane at 375×812 / 812×375. Leaflet touch (pinch/pan/tap) is native and the page is the same,
+  but the WKWebView pass is not claimed.
+- SUGGESTED: reinstall POCKET (profile expires weekly) and run the map checklist on the phone.

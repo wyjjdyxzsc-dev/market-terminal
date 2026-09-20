@@ -692,3 +692,57 @@ RESTART VERIFIED · HUMAN ACCEPTED
   `nvkelso/natural-earth-vector` mirror).
 - WRI GPPD v1.3 zip (CC BY 4.0, README licence text captured): 34,936 plants; 195 nuclear;
   1,618 ≥ 1 GW.
+
+### Implementation + verification (levels as achieved)
+- `shared/atlas-core.js` (schema `2026-09-21a`) + `tests/atlas-core.test.js` **20 tests**:
+  impossible coordinates (incl. null/NaN/strings), unsourced entity rejected, UNVERIFIED never
+  authoritative and hidden by default, taxonomy enforced, provider ticker ≠ canonical identity,
+  wrong-market link detected, stale event never active, hidden layer never drawable, bbox +
+  antimeridian, market emphasis without hiding, bounded responses, clustering, search, cache
+  identity, snapshot build, committed-snapshot integrity (0 rejected rows, canonical links,
+  `IN:NSE:RELIANCE` present), **50,000-point stress** (filter + cluster ≈ 120 ms, output bounded
+  by the grid ceiling). Level: UNIT TESTED. Unit suite **116/116**; ai-eval thresholds pass.
+- Snapshot (`tools/atlas-build-snapshot.js`, 1.56 MiB): 4,039 companies (US 3,860 · IN 186 with
+  HQ coordinates), 1,081 ports, 847 airports, 1,653 plants (195 nuclear), 55 reference points
+  → **53 HIGH** via Wikidata (own P625, or HQ P159 / location P276 coordinates), 2 UNVERIFIED
+  (B3 label unresolved; "Cape of Good Hope" corrected to the exact-label item). The check
+  exposed memory-typed errors in the old curated set: Strait of Malacca 258 km, Cape of Good
+  Hope 157 km, Danish straits 109 km, Port of Shanghai 88 km — all replaced by the Wikidata
+  coordinate (source URL in payload) or hidden.
+- API (server.js ↔ worker.js parity): `/api/map/atlas`, `/entities` (server clusters below
+  z7, ≤2,500 entities, 400 on bad layer/bbox), `/entity` (evidence, canonical links, ≤250 km
+  active events bounded to 1.5 s with `pending` state, reserved extension seams), `/search`,
+  `/geoevents` (USGS ≥M3 · EONET · NWS Extreme/Severe · GDELT/ACLED clusters as GeoEvents with
+  classified status). Local timings: world clusters 16 ms, Mumbai z9 2 ms, search 7 ms.
+  Local smoke **56/56** (+12 ATLAS contracts; shell contract now ten synchronized assets and
+  asserts the retired Infrastructure canvas is gone). Wrangler dry-run 2.2 MB / 385 KB gzip.
+- Retired in both runtimes: hand-drawn cable/pipeline/route polylines (`/api/map/layers`
+  serves `lines: { …[], retired }`, `/api/map/infrastructure` returns empty geometry + note),
+  the Worker's TeleGeography ingestion, the Infrastructure canvas mode; legacy curated point
+  layers now covered by ATLAS removed from the legacy panel; browser-direct aircraft tiles
+  removed (B-003); CARTO keyed tiles replaced by OSM (ODbL, attribution shown) with a QUARTZ
+  dark filter (B-015).
+- Local browser pass (localhost, desktop + 375×812 + 812×375): 13-layer registry with counts/
+  licences/coverage notes; 59 cluster badges at z2 over 4,038 companies; 387 events; toggling
+  ports; INDIA emphasis (`market=IN` on every request, 6 on · IN emphasis); z10 Mumbai → 72
+  HQs + NSE + BSE in entity mode; search "reliance" → Reliance Industries / Reliance Inc (NYSE:RS)
+  / Reliance Infrastructure / Reliance Power with canonical subtitles (no `.NS`); drawer with
+  HIGH Wikidata evidence + link, `NSE:RELIANCE` and `BSE:500325`, Terminal / Deep Dive buttons;
+  Terminal button → market switched US→IN, RELIANCE ₹1,226.40 on the Terminal; mobile tap
+  selection → bottom drawer (ACC Limited), `scrollWidth 375`, panels start collapsed on phones;
+  landscape 812×375 usable. Defect found and fixed during the pass: search-result click
+  detached the `<li>` mid-bubble so Leaflet fired a map click and closed the drawer.
+- Production (`898eb88` → `24b51df`, assets `20260921b`): `test:prod` **60/60** then **57/57**
+  (three Finnhub-search per-minute throttle skips from repeated runs); `/api/map/atlas` live
+  with snapshot `20260920a`; production browser: 13 layers, 59 clusters, 386 events, OSM
+  attribution, no watermark, no Infrastructure canvas; search "tsmc" → TSMC (Hsinchu Science
+  Park, HIGH Wikidata) → `NYSE:TSM` → **Terminal** (INDIA→US switch, TSM $434.67, US tape, ET
+  clock) — the brief's own example path; mobile tap → Bombay Stock Exchange drawer, no
+  overflow. Entity route cold 9.3 s before the bound → 2.1–2.8 s after (B-032). Console: only
+  the pre-existing airplanes.live CORS noise from cached pre-ATLAS `mapintel.js` in the long-
+  lived tab (the deployed file no longer fetches it) and the unrelated service-worker fetch
+  message. Level: LIVE TESTED + REAL BROWSER TESTED (production).
+- Not claimed: POCKET WKWebView on the physical iPhone (not connected this session; the map is
+  the same responsive page and tap/pinch are native Leaflet — B-033); facility-level datasets
+  (fabs, refineries, mines, LNG, pipelines, cables — registry-only, B-029); complete company
+  coverage (B-031); OWNER acceptance.

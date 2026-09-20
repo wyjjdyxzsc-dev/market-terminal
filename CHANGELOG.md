@@ -1,5 +1,25 @@
 # Changelog
 
+## 2026-09-21 — MT2-4 ATLAS
+
+- Added `shared/atlas-core.js`: canonical GeoEntity / MapLayer / CompanyGeoLink / GeoEvent model
+  with validation (impossible coordinates, unsourced objects, provider tickers as identity,
+  wrong-market links, stale events), evidence bands (HIGH/MEDIUM/LOW/UNVERIFIED — UNVERIFIED is
+  never shown), bbox filtering, market emphasis, grid clustering, search and cache identity.
+- Added `tools/atlas-build-snapshot.js` → `shared/atlas-snapshot.js`: Wikidata (CC0) NSE/BSE/
+  NYSE/Nasdaq company headquarters and Wikidata-verified reference points, Natural Earth
+  (public domain) ports/airports, WRI Global Power Plant Database (CC BY 4.0) plants. Every
+  object carries a source URL.
+- Added `/api/map/atlas`, `/api/map/entities`, `/api/map/entity`, `/api/map/search`,
+  `/api/map/geoevents` (server.js / worker.js parity; server-side clusters below zoom 7).
+- Added `public/atlas.js`: layer registry panel with licences and coverage truth, viewport-driven
+  fetching, clusters, search, intelligence drawer (place → entity → company → security) and
+  `window.MarketTerminal.openSecurity` to the Terminal / Deep Dive with market switching.
+- Retired unsourced map geometry (hand-drawn cables/pipelines/trade routes, the Infrastructure
+  canvas, the Worker's TeleGeography CC BY-NC-SA ingestion); OSM tiles replace keyed CARTO
+  tiles (fixes the "API KEY REQUIRED" watermark); the aircraft layer no longer calls
+  airplanes.live from the browser. Repository relocated out of iCloud. Assets `20260921b`.
+
 ## 2026-09-20 — MT2-3 TWINCORE
 
 - Added `shared/market-core.js`: canonical US / India market definitions (currency, locale,
