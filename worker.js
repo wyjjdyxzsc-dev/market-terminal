@@ -3280,7 +3280,7 @@ function routeBucket(pathname) {
   if (pathname === '/api/intel/chat') return 'aiChat';
   if (pathname === '/api/subscribe' || pathname === '/api/unsubscribe') return 'subscriptions';
   if (pathname === '/api/test-push' || pathname === '/api/ai-status' || pathname === '/api/data-status' || pathname === '/api/debug/providers') return 'admin';
-  if (pathname.startsWith('/api/intel/') || pathname.startsWith('/api/sentiment/') || pathname === '/api/macro/shock') return 'expensiveRead';
+  if (pathname.startsWith('/api/intel/') || pathname.startsWith('/api/sentiment/') || pathname.startsWith('/api/nexus/') || pathname === '/api/macro/shock') return 'expensiveRead';
   return 'publicRead';
 }
 
@@ -3681,7 +3681,7 @@ async function handleApi(request, env, ctx, url) {
         nexusCore.nexusCacheKey('registry', qs.get('query') || '', qs.get('sector') || '', qs.get('market') || ''),
         async () => nexusRegistrySearch(Object.fromEntries(qs.entries())), 86400 * 1000);
       return json({ ...data, fresh });
-    } catch (err) { return json({ error: true, message: friendlyError(err) }, 502); }
+    } catch (err) { return json({ error: true, message: friendlyError(err) }, 500); }
   }
   if (p === '/api/nexus/company') {
     const id = (qs.get('id') || '').toUpperCase();

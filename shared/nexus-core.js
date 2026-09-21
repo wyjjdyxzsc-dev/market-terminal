@@ -181,7 +181,7 @@
   }
 
   function nexusCacheKey(...parts) {
-    return 'nexus:' + parts.map((p) => String(p)).join(':');
+    return 'nexus:' + parts.map((p) => encodeURIComponent(String(p))).join(':');
   }
 
   const api = {
