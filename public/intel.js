@@ -654,6 +654,37 @@ function formatAiRuntimeSummary(policy) {
     return hit ? hit.id : null;
   }
 
+  // NEXUS → ATLAS drill-through (the mirror of atlas.js's ATLAS → NEXUS button).
+  // Registry nodes that carry a geoEntityId map onto a sourced ATLAS GeoEntity; the
+  // map workspace owns the navigation, so this only switches workspace and hands the
+  // entity id to atlas.js's own openEntity/focusEntity path.
+  function openOnAtlas(geoEntityId) {
+    if (!geoEntityId) return;
+    if (typeof navigateTo === 'function') navigateTo('intelligence/map');
+    const start = Date.now();
+    (function waitForAtlas() {
+      const atlas = window.MarketTerminalAtlas;
+      if (atlas && atlas.focusEntity) { atlas.focusEntity(geoEntityId); return; }
+      // atlas.js only initialises on the map's `mapready` event, which fires the first
+      // time the Global Map panel is shown — poll briefly rather than dropping the click.
+      if (Date.now() - start < 8000) setTimeout(waitForAtlas, 150);
+    })();
+  }
+
+  function wireNexusPanel(container) {
+    container.querySelectorAll('[data-nexus-open]').forEach((el) => {
+      const open = () => {
+        const id = el.dataset.nexusOpen;
+        if (window.MarketTerminal && window.MarketTerminal.openSecurity) window.MarketTerminal.openSecurity(id, 'nexus');
+      };
+      el.addEventListener('click', open);
+      el.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } });
+    });
+    container.querySelectorAll('[data-geo-entity]').forEach((el) => {
+      el.addEventListener('click', () => openOnAtlas(el.dataset.geoEntity));
+    });
+  }
+
   async function loadSupplyChain(query) {
     const q = String(query || '').trim();
     if (!q) return;
@@ -678,6 +709,7 @@ function formatAiRuntimeSummary(policy) {
       if (companyRes.error) throw new Error(companyRes.message || 'company lookup failed');
       bodyEl.innerHTML = window.MarketTerminalNexusRender.renderNexusCompany(companyRes) +
         (graphRes && !graphRes.error ? window.MarketTerminalNexusRender.renderNexusGraphSvg(graphRes, canonicalId) : '');
+      wireNexusPanel(bodyEl);
       statusEl.textContent = '';
     } catch (err) {
       statusEl.className = 'status error';

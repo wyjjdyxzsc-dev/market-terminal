@@ -273,6 +273,24 @@
     }));
   }
 
+  // NEXUS → ATLAS entry point (mirror of the drawer's ATLAS → NEXUS buttons).
+  // Centres the map on a sourced GeoEntity, then opens its drawer. The coordinates come
+  // from /api/map/entity — nothing is inferred client-side.
+  async function focusEntity(id) {
+    if (!map || !id) return false;
+    try {
+      const d = await getJSON(`/api/map/entity?id=${encodeURIComponent(id)}`);
+      const e = d && d.entity;
+      if (!e || !Number.isFinite(Number(e.lat)) || !Number.isFinite(Number(e.lon))) return false;
+      map.flyTo([Number(e.lat), Number(e.lon)], Math.max(map.getZoom(), 8), { duration: 0.6 });
+    } catch (err) {
+      console.warn('[atlas] focusEntity:', err.message);
+      return false;
+    }
+    openEntity(id);
+    return true;
+  }
+
   function openEvent(ev, marker) {
     const drawer = ensureDrawer();
     selectedId = ev.id; highlight(marker);
@@ -301,6 +319,6 @@
     document.addEventListener('mt:market', () => { updateCount(); refreshAll(); });
     document.addEventListener('mt:gisub', (ev) => { if (ev.detail && ev.detail.sub === 'map') setTimeout(refreshAll, 200); });
     document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshAll(); });
-    window.MarketTerminalAtlas = { refreshAll, openEntity, get map() { return map; }, get catalog() { return catalog; }, get enabled() { return { ...enabled }; } };
+    window.MarketTerminalAtlas = { refreshAll, openEntity, focusEntity, get map() { return map; }, get catalog() { return catalog; }, get enabled() { return { ...enabled }; } };
   });
 })();
