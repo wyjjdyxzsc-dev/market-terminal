@@ -1181,28 +1181,6 @@ Do not rank sectors, assign numeric scores, select stocks, infer implied volatil
 The backend fills unsupported sectors with an explicit insufficient-evidence state.
 Return ONLY the JSON object. No markdown, no commentary.`;
 
-const SUPPLYCHAIN_SYSTEM = `You are a supply-chain and equity research analyst. Given a company,
-identify ALL significant real-world suppliers (vendors it buys parts, components, services or inputs from)
-and customers (companies that buy or resell its products/services) — include both public AND private companies,
-domestic AND international. Use well-established, factual relationships from your knowledge.
-
-Return ONE JSON object:
-{
-  "company": official company name,
-  "ticker": the company's primary US-listed stock ticker in caps (or "" if not US-listed / private),
-  "summary": one sentence on the company's position in its supply chain,
-  "suppliers": array of ALL significant suppliers, MOST IMPORTANT FIRST, each {
-    "name": company name,
-    "ticker": US stock ticker in caps if publicly listed, or "" if private or foreign-only,
-    "relationship": short phrase naming what it supplies (e.g. "Chip fabrication", "Seats & interiors"),
-    "tier": "key" | "major" | "minor"
-  },
-  "customers": array of ALL significant customers, MOST IMPORTANT FIRST, same shape (relationship = what they buy / use it for)
-}
-Include private companies (e.g. Foxconn, Koch Industries, Cargill) and foreign-listed ones — just leave ticker "".
-Give real tickers only for US-listed companies; never invent a ticker. Omit a relationship rather than invent a fake one.
-Return ONLY the JSON object. No markdown, no commentary.`;
-
 const DEEPDIVE_SYSTEM = `You are a senior buy-side analyst and derivatives strategist. You will be given a
 company's LIVE market data, its LISTED OPTIONS CHAIN, and REAL, current news headlines pulled moments ago.
 Combine the hard data with the news flow and your market knowledge to produce a rigorous deep-dive with two
@@ -1659,28 +1637,6 @@ async function fetchCompany(env, query) {
   }
 }
 
-async function fetchSupplyChain(env, query) {
-  let focalName = query;
-  let focalTicker = /^[A-Z.]{1,6}$/.test(query) ? query.toUpperCase() : '';
-  if (focalTicker) {
-    try { const p = await finnhub(env, '/stock/profile2', { symbol: focalTicker }); if (p && p.name) focalName = p.name; } catch {}
-  }
-  const preparation = prepareAiTask('intel.supply-chain', [], {
-    inputs: { verifiedRelationships: false },
-  });
-  return policyAbstention(preparation,
-    'Supplier and customer relationships require verified company-primary records, which are not connected.', {
-      ticker: focalTicker,
-      company: focalName,
-      summary: 'Supply-chain relationships are withheld until a verified primary-record adapter is available.',
-      suppliers: [],
-      customers: [],
-      peers: [],
-      focalQuote: null,
-    }
-  );
-}
-
 // ── MT2-5 NEXUS — canonical company registry + evidence-backed relationships ──
 
 // MT2-5 Task 5: tier-2 (AI-extracted, live) relationships. See server.js's
@@ -1766,12 +1722,16 @@ async function fetchNexusTier2Relationships(env, companyId) {
     if (!citedIds.length) continue;
     const counterpartyTicker = String(rel.counterpartyTicker || '').trim().toUpperCase();
     if (!counterpartyTicker) continue;
-    const target = marketCore.parseInstrument(counterpartyTicker, instrument.market);
-    if (!target || target.canonical === instrument.canonical) continue;
+    // The citation gate proves the *evidence* exists; it says nothing about whether the
+    // counterparty does. Resolve the proposed ticker against the registry itself and drop
+    // the relationship when it is not a real node, rather than storing a
+    // hallucinated-but-plausible ticker as an edge.
+    const targetId = nexusResolveSymbol(instrument.market, counterpartyTicker);
+    if (!targetId || targetId === instrument.canonical || !nexusCompanyIds().has(targetId)) continue;
     try {
       const edge = nexusCore.createRelationshipEdge({
         sourceId: instrument.canonical,
-        targetId: target.canonical,
+        targetId,
         relation: rel.relation,
         tier: 2,
         evidence: citedIds.map((id) => {
@@ -1791,18 +1751,72 @@ async function fetchNexusTier2Relationships(env, companyId) {
   };
 }
 
+// Rank a registry hit against the query. An exact ticker match ALWAYS outranks a
+// substring name match — without this, raw registry insertion order made "RELIANCE"
+// resolve to Reliance Communications and "F" to Microsoft, because the first consumer
+// (intel.js) takes results[0]. Lower rank sorts first; -1 means "no match".
+// Kept byte-identical to server.js's copy.
+function nexusMatchRank(company, q) {
+  const symbol = String(company.symbol || '').toLowerCase();
+  const name = String(company.name || '').toLowerCase();
+  if (symbol === q) return 0;
+  if (name === q) return 1;
+  if (name.startsWith(q)) return 2;
+  if (name.includes(q)) return 3;
+  return -1;
+}
+
 function nexusRegistrySearch({ query = '', sector = '', market = '' }) {
   const q = String(query || '').trim().toLowerCase();
   let rows = nexusSnapshot.companies;
   if (market) rows = rows.filter((c) => c.market === String(market).toUpperCase());
   if (sector) rows = rows.filter((c) => c.sector.toLowerCase() === String(sector).toLowerCase());
-  if (q) rows = rows.filter((c) => c.name.toLowerCase().includes(q) || c.symbol.toLowerCase() === q);
+  if (q) {
+    rows = rows
+      .map((c) => ({ c, rank: nexusMatchRank(c, q) }))
+      .filter((r) => r.rank >= 0)
+      // Deterministic order: rank, then the shortest (closest) name, then alphabetical.
+      .sort((a, b) => a.rank - b.rank || a.c.name.length - b.c.name.length || (a.c.name < b.c.name ? -1 : a.c.name > b.c.name ? 1 : 0))
+      .map((r) => r.c);
+  }
   return {
     nexusSnapshotVersion: nexusSnapshot.nexusSnapshotVersion,
     coverage: nexusCore.registryCoverage(nexusSnapshot.companies),
     results: rows.slice(0, 200),
     truncated: rows.length > 200,
   };
+}
+
+// Every canonical id that is a real node in the generated snapshot. Task 3's
+// tier-1/tier-3 generator already guards on this set; the live tier-2 path needs the
+// same guard so a model cannot mint an edge to a plausible-looking ticker that does
+// not exist in the registry.
+let nexusCompanyIdSet = null;
+function nexusCompanyIds() {
+  if (!nexusCompanyIdSet) nexusCompanyIdSet = new Set(nexusSnapshot.companies.map((c) => c.id));
+  return nexusCompanyIdSet;
+}
+
+// (market, SYMBOL) → the registry's own canonical id. A bare ticker parsed by
+// marketCore gets the generic 'US:US:' exchange placeholder ('AVGO' → 'US:US:AVGO'),
+// which matches no registry node, so a counterparty must be resolved through the
+// registry itself: that both proves the node exists and yields the right exchange.
+let nexusSymbolIndexMap = null;
+function nexusResolveSymbol(market, symbol) {
+  if (!nexusSymbolIndexMap) {
+    nexusSymbolIndexMap = new Map(nexusSnapshot.companies.map((c) => [`${c.market}:${c.symbol}`, c.id]));
+  }
+  return nexusSymbolIndexMap.get(`${String(market || '').toUpperCase()}:${String(symbol || '').toUpperCase()}`) || null;
+}
+
+// Free-text (ticker or company name) → canonical registry id, using the same ranked
+// search every other consumer uses. Shared by the deprecated /api/intel/supplychain
+// alias so it genuinely resolves to NEXUS data.
+function nexusResolveQuery(query, market = '') {
+  const q = String(query || '').trim();
+  if (!q) return null;
+  const hit = (nexusRegistrySearch({ query: q, market }).results || [])[0];
+  return hit ? hit.id : null;
 }
 
 function nexusCompanyDetail(id) {
@@ -1816,6 +1830,18 @@ function nexusRelationships(id, type) {
   let edges = nexusSnapshot.relationships.filter((e) => e.sourceId === id || e.targetId === id);
   if (type) edges = edges.filter((e) => e.relation === type);
   return { nexusSnapshotVersion: nexusSnapshot.nexusSnapshotVersion, id, relationships: edges };
+}
+
+// The canonical company payload: snapshot node + tier-1/tier-3 edges + the cached live
+// tier-2 layer. Shared by /api/nexus/company and the deprecated /api/intel/supplychain
+// alias, so the alias returns real NEXUS data rather than the old abstaining stub.
+async function nexusCompanyPayload(env, ctx, id) {
+  const result = nexusCompanyDetail(id);
+  if (!result) return null;
+  const { data: tier2, fresh } = await getData(env, ctx,
+    `nexus:tier2:${AI_TASK_POLICY_SCHEMA_VERSION}:${nexusCore.NEXUS_SCHEMA_VERSION}:${id}`,
+    () => fetchNexusTier2Relationships(env, id), 900 * 1000);
+  return { ...result, tier2: { ...tier2, cached: !fresh } };
 }
 
 function nexusGraph(id, depth) {
@@ -3777,29 +3803,36 @@ async function handleApi(request, env, ctx, url) {
     try { const { data, fresh } = await getData(env, ctx, `company:${AI_TASK_POLICY_SCHEMA_VERSION}:${query.toLowerCase()}`, () => fetchCompany(env, query)); return json({ cached: !fresh, ...data }); }
     catch (err) { return json({ error: true, message: friendlyError(err) }, 500); }
   }
+  // Deprecated alias of /api/nexus/company (shared/api-contract.js DEPRECATED_ALIASES).
+  // Keeps the legacy ?q= free-text contract, resolves it through the same ranked
+  // registry search, and returns the same payload shape as /api/nexus/company.
   if (p === '/api/intel/supplychain') {
     const query = (qs.get('q') || '').trim().slice(0, 60);
     if (!query) return json({ error: true, message: 'Missing company name or ticker.' }, 400);
-    try { const { data, fresh } = await getData(env, ctx, `supplychain:${AI_TASK_POLICY_SCHEMA_VERSION}:${query.toLowerCase()}`, () => fetchSupplyChain(env, query)); return json({ cached: !fresh, ...data }); }
-    catch (err) { return json({ error: true, message: friendlyError(err) }, 500); }
+    const id = nexusResolveQuery(query, qs.get('market') || '');
+    if (!id) return json({ error: true, message: 'No NEXUS registry company matches that name or ticker.', query }, 404);
+    try {
+      const payload = await nexusCompanyPayload(env, ctx, id);
+      if (!payload) return json({ error: true, message: 'unknown company id', id }, 404);
+      return json({ deprecated: true, successor: '/api/nexus/company', query, ...payload },
+        200, { Deprecation: 'true', Link: '</api/nexus/company>; rel="successor-version"' });
+    } catch (err) { return json({ error: true, message: friendlyError(err) }, 500); }
   }
   if (p === '/api/nexus/registry') {
     try {
       const { data, fresh } = await getData(env, ctx,
-        nexusCore.nexusCacheKey('registry', qs.get('query') || '', qs.get('sector') || '', qs.get('market') || ''),
+        // 'r2' = ranked-search revision; bumping it retires cached unranked result pages.
+        nexusCore.nexusCacheKey('registry', 'r2', qs.get('query') || '', qs.get('sector') || '', qs.get('market') || ''),
         async () => nexusRegistrySearch(Object.fromEntries(qs.entries())), 86400 * 1000);
       return json({ ...data, fresh });
     } catch (err) { return json({ error: true, message: friendlyError(err) }, 500); }
   }
   if (p === '/api/nexus/company') {
     const id = (qs.get('id') || '').toUpperCase();
-    const result = nexusCompanyDetail(id);
-    if (!result) return json({ error: true, message: 'unknown company id', id }, 404);
     try {
-      const { data: tier2, fresh } = await getData(env, ctx,
-        `nexus:tier2:${AI_TASK_POLICY_SCHEMA_VERSION}:${nexusCore.NEXUS_SCHEMA_VERSION}:${id}`,
-        () => fetchNexusTier2Relationships(env, id), 900 * 1000);
-      return json({ ...result, tier2: { ...tier2, cached: !fresh } });
+      const payload = await nexusCompanyPayload(env, ctx, id);
+      if (!payload) return json({ error: true, message: 'unknown company id', id }, 404);
+      return json(payload);
     } catch (err) { return json({ error: true, message: friendlyError(err) }, 500); }
   }
   if (p === '/api/nexus/relationships') {
