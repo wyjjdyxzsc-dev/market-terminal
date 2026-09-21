@@ -980,6 +980,66 @@ a.mlp-meta-source:hover { color: var(--accent); text-decoration: underline; }
 .ai-chat-input { height: var(--ctl-h); font-size: var(--fs-data); }
 .ai-chat-send { flex-shrink: 0; }
 
+/* ── INTELLIGENCE · NEXUS (company registry + evidence-backed relationship graph) ──
+   Report-panel language borrowed from Deep Dive (.dd-*): one bordered card, a measured
+   head, evidence rows beneath every claim. Relationship strength uses the same semantic
+   confidence tokens the rest of the app uses for freshness/confidence. */
+.sc-body { margin-top: var(--gap); display: flex; flex-direction: column; gap: var(--s-3); }
+.sc-body:empty { display: none; }
+
+.nexus-report { background: var(--surface); border: 1px solid var(--separator); border-radius: var(--r-md); padding: var(--s-4) var(--s-5); max-width: 1000px; }
+.nexus-head { display: flex; align-items: baseline; gap: var(--s-3); flex-wrap: wrap; padding-bottom: var(--s-3); border-bottom: 1px solid var(--separator); }
+.nexus-name { font-size: var(--fs-title); font-weight: 600; color: var(--text-primary); flex: 1 1 240px; min-width: 0; }
+.nexus-id { font-size: var(--fs-caption); color: var(--text-secondary); letter-spacing: .3px; }
+.nexus-enrichment { font-size: 9.5px; letter-spacing: .7px; text-transform: uppercase; font-weight: 600; padding: 2px 7px; border: 1px solid currentColor; border-radius: var(--r-sm); color: var(--text-muted); white-space: nowrap; }
+.nexus-enrichment-geo-linked { color: var(--info); background: var(--info-tint); }
+.nexus-enrichment-node-only { color: var(--text-muted); }
+
+.nexus-atlas-link { margin-top: var(--s-3); align-self: flex-start; display: inline-flex; align-items: center; height: var(--ctl-h-sm); padding: 0 10px; font-family: var(--font-ui); font-size: var(--fs-caption); letter-spacing: .3px; color: var(--info); background: var(--info-tint); border: 1px solid var(--separator-strong); border-radius: var(--r-sm); cursor: pointer; transition: background var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease); }
+.nexus-atlas-link:hover { background: var(--surface-selected); border-color: var(--info); }
+.nexus-atlas-link:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+
+.nexus-relationships { display: flex; flex-direction: column; margin-top: var(--s-3); }
+.nexus-edge { padding: 9px 0 9px 10px; border-top: 1px solid var(--separator); border-left: 2px solid var(--separator-strong); }
+.nexus-edge:first-child { border-top: none; }
+.nexus-edge-confirmed { border-left-color: var(--positive); }
+.nexus-edge-reported { border-left-color: var(--warning); }
+.nexus-edge-inferred { border-left-color: var(--info); }
+.nexus-edge-main { display: flex; align-items: baseline; gap: var(--s-2); flex-wrap: wrap; }
+.nexus-edge-counterparty { font-size: var(--fs-data); font-weight: 600; color: var(--accent); cursor: pointer; }
+.nexus-edge-counterparty:hover { color: var(--accent-strong); text-decoration: underline; }
+.nexus-edge-counterparty:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.nexus-edge-cpname { font-size: var(--fs-data); color: var(--text-primary); }
+.nexus-edge-direction { font-size: var(--fs-data); color: var(--text-secondary); }
+.nexus-edge-strength { margin-left: auto; font-size: var(--fs-caption); letter-spacing: .4px; text-transform: uppercase; color: var(--text-muted); white-space: nowrap; }
+.nexus-edge-confirmed .nexus-edge-strength { color: var(--positive); }
+.nexus-edge-reported .nexus-edge-strength { color: var(--warning); }
+.nexus-edge-inferred .nexus-edge-strength { color: var(--info); }
+.nexus-edge-evidence { margin-top: 3px; font-size: var(--fs-caption); color: var(--text-muted); display: flex; align-items: baseline; gap: var(--s-2); flex-wrap: wrap; }
+.nexus-edge-evidence a { color: var(--info); text-decoration: none; overflow-wrap: anywhere; }
+.nexus-edge-evidence a:hover { text-decoration: underline; }
+.nexus-edge-tier { color: var(--text-muted); letter-spacing: .4px; white-space: nowrap; }
+.nexus-edge-origin-registry .nexus-edge-tier { color: var(--text-muted); }
+.nexus-edge-origin-ai .nexus-edge-tier { color: var(--warning); border: 1px solid var(--separator-strong); border-radius: var(--r-sm); padding: 0 5px; background: var(--warning-tint); }
+
+/* Interpretation register: AI-extracted status, same amber left rule as .interp/.dd-notice. */
+.nexus-tier2-status { margin-top: var(--s-3); padding: 9px 12px; border: 1px solid var(--separator); border-left: 2px solid var(--warning); border-radius: var(--r-sm); background: var(--surface-raised); font-size: var(--fs-caption); color: var(--text-secondary); line-height: 1.5; }
+.nexus-tier2-status.nexus-tier2-ok { border-left-color: var(--info); }
+.nexus-empty { padding: var(--s-5); text-align: center; border: 1px dashed var(--separator-strong); border-radius: var(--r-md); color: var(--text-secondary); font-size: var(--fs-data); }
+
+/* Graph. nexus.js also sets stroke/fill presentation attributes; these rules win over
+   them, so the tokens stay canonical while the inline paint is the safety net. */
+.nexus-graph-svg { display: block; width: 100%; max-width: 1000px; height: auto; margin-top: var(--gap); background: var(--surface); border: 1px solid var(--separator); border-radius: var(--r-md); }
+.nexus-graph-edge { stroke: var(--info); stroke-width: 1.4; stroke-opacity: .75; }
+.nexus-graph-edge-confirmed { stroke: var(--positive); }
+.nexus-graph-edge-reported { stroke: var(--warning); }
+.nexus-graph-edge-inferred { stroke: var(--info); }
+.nexus-graph-node circle { fill: var(--text-secondary); stroke: var(--text-secondary); }
+.nexus-graph-node text { fill: var(--text-primary); font-family: var(--font-data); font-size: 10px; }
+.nexus-graph-node-root circle { fill: var(--accent); stroke: var(--accent); }
+.nexus-graph-node-root text { fill: var(--accent); font-weight: 600; }
+.nexus-graph-legend text { fill: var(--text-muted); font-family: var(--font-ui); font-size: 9px; }
+
 /* ───────────────────────── 8 · STATES ───────────────────────── */
 /* .status is the shared JS status line: loading / ready / partial / degraded / unavailable / error / stale.
    Calm by default; errors are marked, not shouted. */
@@ -1037,6 +1097,8 @@ a.mlp-meta-source:hover { color: var(--accent); text-decoration: underline; }
   .ql-ind-grid { grid-template-columns: 1fr; }
   .dd-ratings, .dd-cases, .cols, .sit-domains, .gauges, .themes-wrap, .report-foot { grid-template-columns: 1fr; }
   .dd-card { padding: var(--s-3) var(--s-4); }
+  .nexus-report { padding: var(--s-3) var(--s-4); }
+  .nexus-edge-strength { margin-left: 0; }
   .dd-provenance { grid-template-columns: 1fr 1fr; }
   .dd-evidence-row { grid-template-columns: 1fr; gap: 3px; }
   .alert-cta { flex-direction: column; align-items: stretch; }
