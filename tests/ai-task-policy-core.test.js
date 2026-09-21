@@ -358,3 +358,13 @@ test('chat reads the active terminal symbol through the public context adapter',
   assert.match(intelSource, /marketsymbolchange/);
   assert.doesNotMatch(intelSource, /window\.state/);
 });
+
+test('intel.supply-chain policy accepts a real verifiedRelationships input shape', () => {
+  const supplyChainPolicy = policy.TASK_POLICIES['intel.supply-chain'];
+  assert.equal(supplyChainPolicy.riskClass, 'high');
+  assert.equal(supplyChainPolicy.requiresIndependentVerifier, true);
+  // The policy itself is unchanged by NEXUS — this test locks that contract so Task 5's
+  // caller-side change (real inputs instead of a hardcoded false) can't silently weaken it.
+  assert.equal(supplyChainPolicy.requireEvidenceIds, true);
+  assert.deepEqual([...supplyChainPolicy.requiredInputs], ['verifiedRelationships']);
+});

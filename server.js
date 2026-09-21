@@ -1800,6 +1800,126 @@ async function fetchSupplyChain(query) {
 
 // ── MT2-5 NEXUS — canonical company registry + evidence-backed relationships ──
 
+// MT2-5 Task 5: tier-2 (AI-extracted, live) relationships. Scoped to each
+// market's `tape` — the only disclosed, honest "core subset" of symbols this
+// codebase currently defines (MARKETS.*.indexSymbols is the *benchmark index
+// tickers themselves*, e.g. ^VIX/^GSPC — not an index-membership roster, so it
+// cannot be used for this scope check). Reuses the existing high-risk
+// `intel.supply-chain` policy unchanged: heavy provider tier, independent
+// verifier, required evidence ids. The AI call only ever proposes WHICH
+// relationships exist and WHERE the evidence is; confidence/strength are
+// always computed deterministically by nexusCore.createRelationshipEdge().
+const NEXUS_TIER2_SYSTEM = `You are a supply-chain research assistant. Given a company and its
+disclosed SEC-filing and news evidence (each tagged with an evidence id), identify supplier,
+customer, and competitor relationships for that company. For every relationship you output:
+- cite one or more of the provided evidence ids in an "evidenceIds" array
+- give the counterparty's company name as "counterpartyName"
+- give the counterparty's stock ticker as "counterpartyTicker" if the evidence identifies one, else null
+- classify "relation" as exactly one of "supplier", "customer", or "competitor"
+Never invent a relationship, a ticker, or a company that is not supported by the provided evidence.
+If you cannot support a relationship with the provided evidence, omit it entirely. Do not output a
+numeric confidence or strength score — that is computed separately, deterministically.
+Return JSON: { "relationships": [ { "relation": "...", "counterpartyName": "...",
+"counterpartyTicker": "..."|null, "evidenceIds": ["..."] } ], "evidenceIds": ["..."] }`;
+
+function inIndexMembershipScope(instrument) {
+  const mkt = marketCore.market(instrument.market);
+  const universe = mkt && Array.isArray(mkt.tape) ? mkt.tape : [];
+  return universe.includes(instrument.symbol);
+}
+
+// Turn a nexus-snapshot RelationshipEdge's evidence entries (tier-1/tier-3,
+// {source, sourceUrl, datasetId, observedAt, note}) into the headline shape
+// `policyEvidenceFor`/`normalizeEvidenceRecord` expect, so they flow through
+// the same evidence-trust/freshness/citation machinery as every other task.
+function structuralEvidenceHeadlines(companyId) {
+  return nexusSnapshot.relationships
+    .filter((e) => e.sourceId === companyId || e.targetId === companyId)
+    .flatMap((e) => (e.evidence || []).map((ev) => ({
+      title: `${e.relation} link: ${e.sourceId} → ${e.targetId}${ev.note ? ' — ' + ev.note : ''}`,
+      source: ev.source,
+      link: ev.sourceUrl || '',
+      published: ev.observedAt || '',
+      summary: ev.note || '',
+    })));
+}
+
+async function fetchNexusTier2Relationships(companyId) {
+  const instrument = marketCore.parseInstrument(companyId);
+  if (!instrument) return { abstained: true, reason: 'invalid company id', relationships: [] };
+  if (!inIndexMembershipScope(instrument)) {
+    const tape = (marketCore.market(instrument.market) || {}).tape || [];
+    return {
+      abstained: true,
+      reason: `AI-extracted tier-2 relationships are scoped to the index/tape subset for this checkpoint (${tape.join(', ')}).`,
+      relationships: [],
+    };
+  }
+
+  const evidenceItems = [
+    ...structuralEvidenceHeadlines(instrument.canonical),
+    ...await fetchCompanyHeadlines(instrument.symbol).catch(() => []),
+  ];
+  const preparation = prepareAiTask('intel.supply-chain', evidenceItems, {
+    inputs: { verifiedRelationships: evidenceItems.length > 0 },
+  });
+  const fallback = (reason) => policyAbstention(preparation, reason, { relationships: [] });
+  if (!preparation.canGenerate) return fallback('No verified company-primary or news evidence is available for this company yet.');
+
+  const userPrompt =
+    `Current time: ${new Date().toUTCString()}.\n\n` +
+    `Company: ${instrument.symbol} (${instrument.canonical}).\n` +
+    `Identify supplier, customer, and competitor relationships, citing evidence ids only. ` +
+    `Omit any relationship you cannot support with the provided evidence.\n\nProduce the JSON object now.`;
+  const validate = (d) => d && Array.isArray(d.relationships) && validateGroundedOutput(preparation, d);
+
+  let data;
+  try {
+    data = await raceProviders(preparation.policy.providerTier, withGrounding(NEXUS_TIER2_SYSTEM, preparation), userPrompt, validate, preparation);
+  } catch (error) {
+    return fallback(describeAiFailure(error, preparation.policy));
+  }
+
+  const policyResult = attachPolicy(preparation, data, {
+    unknowns: ['Relationship confidence and strength are computed deterministically from tier/source-count/recency, never taken from the model.'],
+  });
+  if (policyResult.abstained) return { ...policyResult, relationships: [] };
+
+  // Never trust a model-assigned score: rebuild every cited relationship
+  // through nexusCore, which is the only place confidence/strength is computed.
+  const evidenceById = new Map(preparation.evidence.map((record) => [record.id, record]));
+  const edges = [];
+  for (const rel of (policyResult.relationships || [])) {
+    if (!nexusCore.RELATION_TYPES.includes(rel && rel.relation)) continue;
+    const citedIds = Array.isArray(rel.evidenceIds) ? rel.evidenceIds.filter((id) => evidenceById.has(id)) : [];
+    if (!citedIds.length) continue;
+    const counterpartyTicker = String(rel.counterpartyTicker || '').trim().toUpperCase();
+    if (!counterpartyTicker) continue;
+    const target = marketCore.parseInstrument(counterpartyTicker, instrument.market);
+    if (!target || target.canonical === instrument.canonical) continue;
+    try {
+      const edge = nexusCore.createRelationshipEdge({
+        sourceId: instrument.canonical,
+        targetId: target.canonical,
+        relation: rel.relation,
+        tier: 2,
+        evidence: citedIds.map((id) => {
+          const record = evidenceById.get(id);
+          return { source: record.publisher, sourceUrl: record.sourceUrl, observedAt: record.publishedAt, note: record.title };
+        }),
+      });
+      edges.push({ ...edge, counterpartyName: String(rel.counterpartyName || '').trim() });
+    } catch {} // evidence didn't satisfy nexusCore's own validation (e.g. no https url) — drop, don't fabricate
+  }
+
+  return {
+    abstained: false,
+    relationships: edges,
+    evidenceIds: policyResult.evidenceIds || [],
+    policy: policyResult.policy,
+  };
+}
+
 function nexusRegistrySearch({ query = '', sector = '', market = '' }) {
   const q = String(query || '').trim().toLowerCase();
   let rows = nexusSnapshot.companies;
@@ -3808,11 +3928,20 @@ app.get('/api/nexus/registry', rateLimit, async (req, res) => {
   }
 });
 
-app.get('/api/nexus/company', rateLimit, (req, res) => {
-  const id = String(req.query.id || '').toUpperCase();
-  const result = nexusCompanyDetail(id);
-  if (!result) return res.status(404).json({ error: true, message: 'unknown company id', id });
-  res.json(result);
+app.get('/api/nexus/company', rateLimit, async (req, res) => {
+  try {
+    const id = String(req.query.id || '').toUpperCase();
+    const result = nexusCompanyDetail(id);
+    if (!result) return res.status(404).json({ error: true, message: 'unknown company id', id });
+    const { data: tier2, fresh } = await fetch_cached_data(
+      `nexus:tier2:${AI_TASK_POLICY_SCHEMA_VERSION}:${nexusCore.NEXUS_SCHEMA_VERSION}:${id}`,
+      () => fetchNexusTier2Relationships(id), TTL.NEWS
+    );
+    res.json({ ...result, tier2: { ...tier2, cached: !fresh } });
+  } catch (err) {
+    console.error('nexus company error:', err.message);
+    res.status(500).json({ error: true, message: friendlyError(err) });
+  }
 });
 
 app.get('/api/nexus/relationships', rateLimit, (req, res) => {
