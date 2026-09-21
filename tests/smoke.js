@@ -306,9 +306,6 @@ async function checkHtml(label, url) {
   await check('GET /api/macro/shock', `${BASE}/api/macro/shock`,
     { validate: d => Array.isArray(d.pipelines) });
 
-  // Supply chain — uses ?q= param
-  await check('GET /api/intel/supplychain?q=Apple', `${BASE}/api/intel/supplychain?q=Apple`,
-    { skipError: true, validate: d => hasPolicy(d, 'intel.supply-chain') && d.abstained === true && Array.isArray(d.suppliers) && d.suppliers.length === 0 && Array.isArray(d.customers) && d.customers.length === 0 });
 
   // ── MT2-5 NEXUS canonical company registry + evidence-backed relationships ──
   await check('GET /api/nexus/registry?query=apple returns a large registry with coverage', `${BASE}/api/nexus/registry?query=apple`,
@@ -327,17 +324,23 @@ async function checkHtml(label, url) {
   await check('GET /api/nexus/graph bounds the neighborhood size', `${BASE}/api/nexus/graph?id=US:NASDAQ:AAPL&depth=2`,
     { validate: d => Array.isArray(d.nodes) && d.nodes.length > 0 && d.nodes.length <= 75 });
 
-  // The legacy path is a deprecated alias only at the route-contract level
-  // (shared/api-contract.js resolves it to /api/nexus/company); the handler
-  // itself is untouched and still keys off ?q=, never ?id= — confirm both:
-  // the contract resolution, and that the live route still actually resolves.
-  await check('legacy /api/intel/supplychain still resolves and its route contract aliases to /api/nexus/company',
-    `${BASE}/api/intel/supplychain?q=Apple`, {
-      skipError: true,
+  // C3: an exact ticker match must outrank a substring name match, whatever the
+  // registry's insertion order. Before the fix, "RELIANCE" resolved to Reliance
+  // Communications and "F" to Microsoft.
+  await check('GET /api/nexus/registry ranks an exact ticker match first (IN:NSE:RELIANCE)',
+    `${BASE}/api/nexus/registry?query=RELIANCE&market=IN`,
+    { validate: d => Array.isArray(d.results) && d.results.length > 0 && d.results[0].id === 'IN:NSE:RELIANCE' });
+
+  // I7: the deprecated path now genuinely delegates to the NEXUS company lookup
+  // instead of the old permanently-abstaining supply-chain stub.
+  await check('legacy /api/intel/supplychain delegates to the NEXUS company lookup',
+    `${BASE}/api/intel/supplychain?q=AAPL`, {
       validate: (d) => {
         const aliased = apiContract.getRoute('/api/intel/supplychain') === apiContract.getRoute('/api/nexus/company');
-        return aliased && (hasPolicy(d, 'intel.supply-chain') || d.error);
+        return aliased && d.deprecated === true && d.successor === '/api/nexus/company' &&
+          d.company && d.company.id === 'US:NASDAQ:AAPL' && Array.isArray(d.relationships) && d.tier2;
       },
+      validateHeaders: headers => headers.get('deprecation') === 'true',
     });
 
   // Push (vapid key — always returns even without keys)
