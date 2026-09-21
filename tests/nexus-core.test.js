@@ -1,6 +1,8 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 const nexus = require('../shared/nexus-core.js');
 
 test('createCompanyNode accepts a valid canonical id and freezes the node', () => {
@@ -56,6 +58,57 @@ test('computeConfidence ranks tier 1 above tier 2, and more sources raise confid
   assert.ok(t2more.confidence > t2.confidence);
 });
 
+// MT2-5 Task 5 regression (fix round 1): tier-2 relationships come from an AI
+// provider's JSON output. server.js's/worker.js's fetchNexusTier2Relationships
+// post-processing loop must NEVER let a model-proposed confidence/strength reach
+// the stored edge — only nexusCore.computeConfidence (tier/sourceCount/recency)
+// may set those fields. This locks that invariant at the one function every
+// tier-2 edge is required to pass through, so a future refactor that starts
+// spreading the raw AI payload into createRelationshipEdge's input fails loudly.
+test('createRelationshipEdge ignores a caller/model-supplied confidence and strength and always recomputes them deterministically', () => {
+  // Shaped like the AI provider's raw JSON for one proposed relationship, the
+  // way fetchNexusTier2Relationships receives it — including a bogus injected
+  // rating a compromised or careless model output might carry.
+  const fakeModelProposedRelationship = {
+    relation: 'supplier',
+    counterpartyName: 'Fake Co',
+    counterpartyTicker: 'FAKE',
+    evidenceIds: ['ev_1'],
+    confidence: 0.99,       // bogus / model-injected — must never win
+    strength: 'confirmed',  // bogus / model-injected — must never win
+  };
+  const evidence = [{
+    source: 'Reuters', sourceUrl: 'https://www.reuters.com/example-tier2-evidence',
+    observedAt: '2020-01-01T00:00:00Z', note: 'old, single-source evidence',
+  }];
+
+  // This mirrors fetchNexusTier2Relationships's actual call shape: tier is
+  // hardcoded to 2 by the caller, evidence comes from resolved policy records,
+  // and — critically — the function still passes through the model's own
+  // confidence/strength fields to prove createRelationshipEdge refuses them
+  // even when a future refactor accidentally forwards them.
+  const edge = nexus.createRelationshipEdge({
+    sourceId: 'US:NASDAQ:AAPL',
+    targetId: 'US:NASDAQ:FAKE',
+    relation: fakeModelProposedRelationship.relation,
+    tier: 2,
+    evidence,
+    confidence: fakeModelProposedRelationship.confidence,
+    strength: fakeModelProposedRelationship.strength,
+  });
+
+  const expected = nexus.computeConfidence({
+    tier: 2,
+    sourceCount: evidence.length,
+    recency: evidence[0].observedAt,
+  });
+
+  assert.notEqual(edge.confidence, fakeModelProposedRelationship.confidence);
+  assert.notEqual(edge.strength, fakeModelProposedRelationship.strength);
+  assert.equal(edge.confidence, expected.confidence);
+  assert.equal(edge.strength, expected.strength);
+});
+
 test('registryCoverage reports per-market enrichment split', () => {
   const companies = [
     nexus.createCompanyNode({ id: 'US:NASDAQ:AAPL', name: 'Apple', market: 'US', exchange: 'NASDAQ', enrichment: 'geo-linked', sourceEvidence: [{ source: 'SEC', sourceUrl: 'https://sec.gov/x' }] }),
@@ -95,5 +148,33 @@ test('nexus-snapshot.js relationships all carry evidence and valid tiers', () =>
     assert.ok(edge.evidence.length > 0, `edge ${edge.sourceId}->${edge.targetId} has no evidence`);
     assert.ok([1, 2, 3].includes(edge.tier));
     if (edge.relation === 'ownership') assert.equal(edge.tier, 3);
+  }
+});
+
+// MT2-5 Task 5 regression (fix round 1), targeted at the actual post-processing
+// code rather than createRelationshipEdge in isolation: fetchNexusTier2Relationships
+// in server.js/worker.js must build each edge's createRelationshipEdge() call from
+// individually-named fields (relation/tier/evidence) resolved against the policy's
+// own evidence records — never by spreading the AI provider's raw proposed-relationship
+// object (which could carry `confidence`/`strength`) into that call. A future
+// refactor that starts doing `nexusCore.createRelationshipEdge({ ...rel, ... })`
+// would reopen exactly the hole the functional test above guards against at the
+// nexus-core level, so this catches it at the call site too.
+test('fetchNexusTier2Relationships never spreads the raw AI relationship into createRelationshipEdge, in either runtime', () => {
+  for (const file of ['server.js', 'worker.js']) {
+    const source = fs.readFileSync(path.join(__dirname, '..', file), 'utf8');
+    const start = source.indexOf('async function fetchNexusTier2Relationships');
+    assert.ok(start !== -1, `fetchNexusTier2Relationships not found in ${file}`);
+    const end = source.indexOf('\n}', source.indexOf('createRelationshipEdge', start));
+    const fn = source.slice(start, end + 2);
+
+    assert.match(fn, /nexusCore\.createRelationshipEdge\(\{/, `${file}: expected a createRelationshipEdge call in fetchNexusTier2Relationships`);
+    // The call must not spread the model's relationship object into createRelationshipEdge...
+    assert.doesNotMatch(fn, /createRelationshipEdge\(\{\s*\.\.\.rel/, `${file}: createRelationshipEdge must not spread the raw AI relationship object`);
+    // ...and must never read a confidence/strength field off the model's output.
+    assert.doesNotMatch(fn, /rel\.confidence/, `${file}: must never read a model-supplied confidence`);
+    assert.doesNotMatch(fn, /rel\.strength/, `${file}: must never read a model-supplied strength`);
+    // tier must be the deterministic literal 2, not something taken from the model.
+    assert.match(fn, /tier:\s*2\b/, `${file}: tier must be hardcoded to 2 for AI-extracted relationships`);
   }
 });
