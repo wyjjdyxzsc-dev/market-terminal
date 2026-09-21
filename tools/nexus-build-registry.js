@@ -245,13 +245,43 @@ function normalizeCompanyName(name) {
     .trim();
 }
 
+// Fix (review round 2): buildNameIndex was a plain Map<normalizedName, id> —
+// when two distinct real companies across different markets share a bare name
+// after suffix-stripping (e.g. "Pfizer Inc" (US) and "Pfizer Limited" (India)
+// both normalize to "pfizer"), the second one inserted silently overwrote the
+// first for every future lookup. Confirmed live: a tier-3 edge attributed
+// IN:NSE:PFIZER as the parent of US:NYSE:COTY — almost certainly a real
+// Wikidata fact about the US Pfizer Inc. (Coty's actual historical parent)
+// misattributed to the unrelated India-listed Pfizer Limited purely because
+// of insertion order. Fixed by indexing an ARRAY of {id, market} candidates
+// per normalized name, and disambiguating by market at lookup time
+// (matchCompanyByName's marketHint) rather than by whichever happened to be
+// inserted last.
 function buildNameIndex(companies) {
   const index = new Map();
   for (const c of companies) {
     const key = normalizeCompanyName(c.name);
-    if (key) index.set(key, c.id);
+    if (!key) continue;
+    if (!index.has(key)) index.set(key, []);
+    index.get(key).push({ id: c.id, market: c.market });
   }
   return index;
+}
+
+// Picks a single unambiguous id from a list of same-normalized-name candidates.
+// A market hint resolves a cross-market name collision (the common case); with
+// no hint, or a collision that survives the hint (two candidates in the same
+// market), there is no confident way to pick one — return null (drop the
+// match) rather than guess by insertion order or list position.
+function pickCandidate(candidates, marketHint) {
+  if (!candidates || !candidates.length) return null;
+  if (marketHint) {
+    const sameMarket = candidates.filter((c) => c.market === marketHint);
+    if (sameMarket.length === 1) return sameMarket[0].id;
+    if (sameMarket.length > 1) return null; // still ambiguous even within the hinted market
+    // no same-market candidate — fall through and only trust a single global candidate
+  }
+  return candidates.length === 1 ? candidates[0].id : null;
 }
 
 function tokenizeName(normalized) {
@@ -293,12 +323,17 @@ const MIN_MATCH_LEN = 4; // normalized strings of this length or shorter are nev
 const MIN_WORD_COVERAGE = 0.6;
 const MIN_SIGNIFICANT_WORDS = 2; // a single shared word is never sufficient for a fuzzy match
 
-function matchCompanyByName(rawLabel, nameIndex) {
+// marketHint (optional 'US'|'IN'), when the caller knows it, disambiguates a
+// cross-market name collision via pickCandidate. An exact normalized-name hit
+// never falls through to the fuzzy loop below, even when pickCandidate returns
+// null for it (ambiguous/no market match) — falling through risks a *worse*,
+// less-related fuzzy match under a different indexed name entirely.
+function matchCompanyByName(rawLabel, nameIndex, marketHint) {
   const key = normalizeCompanyName(rawLabel);
   if (!key || key.length <= MIN_MATCH_LEN) return null;
-  if (nameIndex.has(key)) return nameIndex.get(key);
+  if (nameIndex.has(key)) return pickCandidate(nameIndex.get(key), marketHint);
   const keyTokens = tokenizeName(key);
-  for (const [indexed, id] of nameIndex) {
+  for (const [indexed, candidates] of nameIndex) {
     if (!indexed || indexed.length <= MIN_MATCH_LEN) continue;
     const indexedTokens = tokenizeName(indexed);
     const shorterTokens = keyTokens.length <= indexedTokens.length ? keyTokens : indexedTokens;
@@ -308,7 +343,8 @@ function matchCompanyByName(rawLabel, nameIndex) {
     const longerSet = new Set(longerTokens);
     if (!significant.every((t) => longerSet.has(t))) continue;
     if (shorterTokens.length / longerTokens.length < MIN_WORD_COVERAGE) continue;
-    return id;
+    const picked = pickCandidate(candidates, marketHint);
+    if (picked) return picked; // else keep scanning other indexed names rather than giving up on the whole label
   }
   return null;
 }
@@ -431,7 +467,11 @@ async function fetchConcentrationEdges(usCompanies, nameIndex) {
       const facts = extractConcentrationFacts(xml, contextMap);
       for (const fact of facts) {
         const words = camelToWords(fact.member);
-        const targetId = matchCompanyByName(words, nameIndex);
+        // marketHint 'US': every company in usCompanies (and hence every id this
+        // loop can legitimately target) is a US SEC filer, so a same-name
+        // candidate in another market (e.g. an India-listed company sharing a
+        // bare name after suffix-stripping) is never the right match here.
+        const targetId = matchCompanyByName(words, nameIndex, 'US');
         if (!targetId || targetId === company.id) continue; // no match (anonymized "Customer A", foreign counterparty, etc.) — dropped, never guessed
         edges.push(nexusCore.createRelationshipEdge({
           sourceId: targetId,
@@ -493,7 +533,12 @@ async function fetchOwnershipEdges(companies, nameIndex, validIds) {
           if (!inst || !inst.market || !inst.exchange || !inst.symbol) continue; // many Wikidata records lack a known ticker
           const childId = `${inst.market}:${inst.exchange}:${String(inst.symbol).toUpperCase()}`;
           if (!validIds.has(childId)) continue; // atlas-snapshot's Wikidata instruments can list an exchange (e.g. BSE) that this run's own registry fetch didn't capture as a node — never emit an edge whose endpoint has no node
-          const parentId = matchCompanyByName(parentLabel, nameIndex);
+          // marketHint = the child's own market: a parent-organization name that
+          // collides across markets (e.g. "Pfizer" -> both US Pfizer Inc. and
+          // India's Pfizer Limited) is resolved to the candidate in the SAME
+          // market as the child first, rather than picking whichever candidate
+          // happened to be inserted into the registry last.
+          const parentId = matchCompanyByName(parentLabel, nameIndex, inst.market);
           if (!parentId || parentId === childId || !validIds.has(parentId)) continue;
           edges.push(nexusCore.createRelationshipEdge({
             sourceId: parentId,
