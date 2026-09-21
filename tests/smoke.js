@@ -98,8 +98,8 @@ async function checkHtml(label, url) {
   const t = await res.text();
   if (!t.includes('chartCanvas')) { console.error(`  ✗ ${label} — missing #chartCanvas`); fail++; return; }
   const versions = [...t.matchAll(/\?v=([0-9]{8}[a-z])/g)].map((match) => match[1]);
-  if (versions.length !== 10 || new Set(versions).size !== 1) {
-    console.error(`  ✗ ${label} — expected ten synchronized asset versions (MT2-4 adds atlas.js)`);
+  if (versions.length !== 11 || new Set(versions).size !== 1) {
+    console.error(`  ✗ ${label} — expected eleven synchronized asset versions (MT2-5 adds nexus.js)`);
     fail++; return;
   }
   // MT2-2 QUARTZ shell contract: primary nav mount, every workspace view, and the

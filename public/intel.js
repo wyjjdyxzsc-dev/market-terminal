@@ -630,35 +630,8 @@ function formatAiRuntimeSummary(policy) {
   // Expose addToWatchlist so the terminal view's tickers could hook in later.
   window.MarketIntel = { addToWatchlist };
 
-  // ---------- Supply chain (SPLC) ----------
+  // ---------- NEXUS (company relationship graph) ----------
   let scLoadedFor = null;
-  const money = (n) => '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-  function quoteHtml(q) {
-    if (!q) return '<span class="sc-priv">private / non-US</span>';
-    const cls = q.percent > 0 ? 'up' : q.percent < 0 ? 'down' : '';
-    const pct = (q.percent > 0 ? '+' : '') + Number(q.percent).toFixed(2) + '%';
-    return `<span class="sc-q ${cls}">${money(q.price)} <span class="sc-pct">${pct}</span></span>`;
-  }
-
-  function scCard(e) {
-    const t = e.ticker || '';
-    return `
-      <div class="sc-card ${t ? 'has-ticker' : ''} tier-${esc(e.tier || 'major')}" ${t ? `data-ticker="${esc(t)}" title="Open ${esc(t)} in the terminal"` : ''}>
-        <div class="sc-card-top">
-          <span class="sc-ticker">${t ? esc(t) : '—'}</span>
-          <span class="sc-name">${esc(e.name || t)}</span>
-        </div>
-        <div class="sc-rel">${esc(e.relationship || '')}</div>
-        <div class="sc-card-q">${quoteHtml(e.quote)}</div>
-      </div>`;
-  }
-
-  function peerChip(p) {
-    const q = p.quote;
-    const cls = q ? (q.percent > 0 ? 'up' : q.percent < 0 ? 'down' : '') : '';
-    return `<span class="sc-peer ${p.ticker ? 'has-ticker' : ''} ${cls}" ${p.ticker ? `data-ticker="${esc(p.ticker)}" title="Open ${esc(p.ticker)} in the terminal"` : ''}>${esc(p.ticker)}${q ? ` <b>${money(q.price)}</b>` : ''}</span>`;
-  }
 
   // Clicking any ticker drills into the TERMINAL view for that symbol (uses
   // app.js globals showView + loadSymbol).
@@ -670,164 +643,51 @@ function formatAiRuntimeSummary(policy) {
     container.querySelectorAll('[data-ticker]').forEach((el) => el.addEventListener('click', () => drillTo(el.dataset.ticker)));
   }
 
-  let scData = null;
-  let scMode = 'graph';
-  const trunc = (s, n) => { s = String(s == null ? '' : s); return s.length > n ? s.slice(0, n - 1) + '…' : s; };
-
-  function renderFocal(d) {
-    const focal = $('#scFocal');
-    focal.classList.remove('hidden');
-    focal.innerHTML = `
-      <div class="sc-focal-main">
-        <span class="sc-focal-ticker">${esc(d.ticker || '—')}</span>
-        <div class="sc-focal-id">
-          <div class="sc-focal-name">${esc(d.company || '')}</div>
-          <div class="sc-focal-sum">${esc(d.summary || '')}</div>
-        </div>
-      </div>
-      <div class="sc-focal-q">${quoteHtml(d.focalQuote)}</div>`;
+  // Resolve free-text ticker/company input to a canonical NEXUS registry id
+  // (MARKET:EXCHANGE:SYMBOL) via the registry search endpoint. Returns null
+  // when the company isn't in the NEXUS snapshot yet.
+  async function resolveNexusId(query) {
+    const marketId = (window.MarketTerminal?.getMarketContext?.() || {}).id || 'US';
+    const data = await fetchJSON('/api/nexus/registry?query=' + encodeURIComponent(query) + '&market=' + encodeURIComponent(marketId));
+    if (data.error) throw new Error(data.message || 'registry lookup failed');
+    const hit = (data.results || [])[0];
+    return hit ? hit.id : null;
   }
-
-  function renderList(d) {
-    const col = (label, cls, list) => `
-      <div class="sc-col">
-        <div class="sc-col-head ${cls}">${label} <span class="sc-count">${list.length}</span></div>
-        <div class="sc-list">${list.length ? list.map(scCard).join('') : '<div class="sc-empty">None identified.</div>'}</div>
-      </div>`;
-    const grid = $('#scGrid');
-    grid.innerHTML = col('▲ SUPPLIERS', 'sc-suppliers', d.suppliers || []) + col('▼ CUSTOMERS', 'sc-customers', d.customers || []);
-    wireDrills(grid);
-    const peersEl = $('#scPeers');
-    const peers = d.peers || [];
-    peersEl.innerHTML = peers.length
-      ? `<div class="sc-peers-head">◆ PEERS / COMPETITORS</div><div class="sc-peers-list">${peers.map(peerChip).join('')}</div>`
-      : '';
-    wireDrills(peersEl);
-  }
-
-  // ----- Network graph (Bloomberg SPLC style), hand-drawn in SVG -----
-  function edgePath(a, b, cls) {
-    const dx = Math.max(40, Math.abs(b.x - a.x) * 0.45);
-    const c1x = a.x + (b.x >= a.x ? dx : -dx);
-    const c2x = b.x + (a.x >= b.x ? dx : -dx);
-    return `<path class="edge ${cls}" d="M${a.x.toFixed(1)},${a.y.toFixed(1)} C${c1x.toFixed(1)},${a.y.toFixed(1)} ${c2x.toFixed(1)},${b.y.toFixed(1)} ${b.x.toFixed(1)},${b.y.toFixed(1)}"/>`;
-  }
-
-  function gnode(e, x, y, w, h, cls, small) {
-    const t = e.ticker || '';
-    const q = e.quote;
-    const qcls = q ? (q.percent > 0 ? 'up' : q.percent < 0 ? 'down' : '') : '';
-    let inner;
-    if (small) {
-      inner = `<text class="n-tick" x="${x + 8}" y="${y + h / 2 + 4}">${esc(t || '—')}</text>` +
-        (q ? `<text class="n-price ${qcls}" x="${x + w - 8}" y="${y + h / 2 + 4}" text-anchor="end">${money(q.price)}</text>` : '');
-    } else {
-      inner = `<text class="n-tick" x="${x + 8}" y="${y + 18}">${esc(t || '—')}</text>` +
-        (q ? `<text class="n-price ${qcls}" x="${x + w - 8}" y="${y + 18}" text-anchor="end">${money(q.price)}</text>`
-           : `<text class="n-priv" x="${x + w - 8}" y="${y + 18}" text-anchor="end">n/a</text>`) +
-        `<text class="n-name" x="${x + 8}" y="${y + 34}">${esc(trunc(e.name || t, 24))}</text>`;
-    }
-    return `<g class="node ${cls} ${t ? 'clickable' : ''}" ${t ? `data-ticker="${esc(t)}"` : ''}>` +
-      `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="2"/>${inner}</g>`;
-  }
-
-  function supplyGraphSVG(d) {
-    const W = 1060;
-    const NW = 170, NH = 46, FW = 200, FH = 84, PW = 150, PH = 34;
-    const suppliers = d.suppliers || [];
-    const customers = d.customers || [];
-    const peers = (d.peers || []).slice(0, 6);
-    const maxCol = Math.max(suppliers.length, customers.length, 1);
-    const H = Math.max(720, maxCol * (NH + 14) + 200);
-    const cx = W / 2, cy = (H - 110) / 2 + 12;
-
-    const topPad = 30, bandBot = H - 150;
-    const colY = (i, n) => (n <= 1 ? cy - NH / 2 : topPad + (bandBot - topPad - NH) * (i / (n - 1)));
-    const Lx = 16, Rx = W - 16 - NW;
-
-    let edges = '', nodes = '';
-    const fL = { x: cx - FW / 2, y: cy }, fR = { x: cx + FW / 2, y: cy }, fB = { x: cx, y: cy + FH / 2 };
-
-    suppliers.forEach((e, i) => { const y = colY(i, suppliers.length); edges += edgePath({ x: Lx + NW, y: y + NH / 2 }, fL, 'sup'); nodes += gnode(e, Lx, y, NW, NH, 'sup'); });
-    customers.forEach((e, i) => { const y = colY(i, customers.length); edges += edgePath(fR, { x: Rx, y: y + NH / 2 }, 'cust'); nodes += gnode(e, Rx, y, NW, NH, 'cust'); });
-    const pY = H - 64, n = peers.length;
-    const gap = n > 1 ? (W - 80 - n * PW) / (n - 1) : 0;
-    peers.forEach((e, i) => { const x = n === 1 ? (W - PW) / 2 : 40 + i * (PW + gap); edges += edgePath(fB, { x: x + PW / 2, y: pY }, 'peer'); nodes += gnode(e, x, pY, PW, PH, 'peer', true); });
-
-    const fx = cx - FW / 2, fy = cy - FH / 2, fq = d.focalQuote;
-    const focal = `<g class="node focal"><rect x="${fx}" y="${fy}" width="${FW}" height="${FH}" rx="3"/>` +
-      `<text class="f-tick" x="${cx}" y="${fy + 30}" text-anchor="middle">${esc(d.ticker || '')}</text>` +
-      `<text class="f-name" x="${cx}" y="${fy + 50}" text-anchor="middle">${esc(trunc(d.company || '', 28))}</text>` +
-      (fq ? `<text class="f-price ${fq.percent >= 0 ? 'up' : 'down'}" x="${cx}" y="${fy + 70}" text-anchor="middle">${money(fq.price)}  ${(fq.percent > 0 ? '+' : '') + Number(fq.percent).toFixed(2)}%</text>` : '') +
-      `</g>`;
-
-    const labels = `<text class="cl-label sup" x="${Lx}" y="16">▲ SUPPLIERS · ${suppliers.length}</text>` +
-      `<text class="cl-label cust" x="${W - 16}" y="16" text-anchor="end">CUSTOMERS · ${customers.length} ▼</text>` +
-      (peers.length ? `<text class="cl-label peer" x="${cx}" y="${H - 86}" text-anchor="middle">◆ PEERS / COMPETITORS</text>` : '');
-
-    return `<svg viewBox="0 0 ${W} ${H}" class="scg" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Supply chain network for ${esc(d.ticker || '')}">` +
-      `<g class="edges">${edges}</g>${labels}${nodes}${focal}</svg>`;
-  }
-
-  function renderGraph(d) {
-    const el = $('#scGraph');
-    el.innerHTML = supplyGraphSVG(d);
-    el.querySelectorAll('.node.clickable').forEach((g) => g.addEventListener('click', () => drillTo(g.getAttribute('data-ticker'))));
-  }
-
-  function renderActiveMode() {
-    if (!scData) return;
-    const graph = scMode === 'graph';
-    $('#scGraph').style.display = graph ? '' : 'none';
-    $('#scGrid').style.display = graph ? 'none' : '';
-    $('#scPeers').style.display = graph ? 'none' : '';
-    if (graph) renderGraph(scData); else renderList(scData);
-  }
-
-  function renderSupplyChain(d) {
-    scData = d;
-    $('#scToggle').hidden = false;
-    renderFocal(d);
-    renderActiveMode();
-  }
-
-  document.querySelectorAll('.sc-mode-btn').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      scMode = btn.dataset.mode;
-      document.querySelectorAll('.sc-mode-btn').forEach((b) => b.classList.toggle('active', b === btn));
-      renderActiveMode();
-    });
-  });
 
   async function loadSupplyChain(query) {
     const q = String(query || '').trim();
     if (!q) return;
     scLoadedFor = q.toUpperCase();
     $('#scInput').value = q.toUpperCase();
-    $('#scStatus').className = 'status';
-    $('#scStatus').innerHTML = '<span class="spinner"></span>Mapping supply chain for ' + esc(q.toUpperCase()) + '… (identifying suppliers & customers, fetching live prices)';
-    $('#scFocal').classList.add('hidden');
-    $('#scToggle').hidden = true;
-    $('#scGraph').innerHTML = '';
-    $('#scGrid').innerHTML = '';
-    $('#scPeers').innerHTML = '';
+    const statusEl = $('#scStatus');
+    const bodyEl = $('#scBody');
+    statusEl.className = 'status';
+    statusEl.innerHTML = '<span class="spinner"></span>Loading company graph for ' + esc(q.toUpperCase()) + '…';
+    bodyEl.innerHTML = '';
     try {
-      const data = await fetchJSON('/api/intel/supplychain?q=' + encodeURIComponent(q));
-      if (data.error) throw new Error(data.message);
-      if (data.abstained) {
-        $('#scStatus').className = 'status policy-status';
-        $('#scStatus').textContent = data.policy?.reason || data.summary || 'Verified relationship data is unavailable.';
+      const canonicalId = await resolveNexusId(q);
+      if (!canonicalId) {
+        statusEl.className = 'status policy-status';
+        statusEl.textContent = esc(q.toUpperCase()) + ' is not yet covered by the NEXUS registry.';
         return;
       }
-      $('#scStatus').textContent = '';
-      renderSupplyChain(data);
+      const [companyRes, graphRes] = await Promise.all([
+        fetchJSON('/api/nexus/company?id=' + encodeURIComponent(canonicalId)),
+        fetchJSON('/api/nexus/graph?id=' + encodeURIComponent(canonicalId) + '&depth=1'),
+      ]);
+      if (companyRes.error) throw new Error(companyRes.message || 'company lookup failed');
+      bodyEl.innerHTML = window.MarketTerminalNexusRender.renderNexusCompany(companyRes) +
+        (graphRes && !graphRes.error ? window.MarketTerminalNexusRender.renderNexusGraphSvg(graphRes, canonicalId) : '');
+      statusEl.textContent = '';
     } catch (err) {
-      $('#scStatus').className = 'status error';
-      $('#scStatus').textContent = 'Could not map supply chain: ' + err.message;
+      statusEl.className = 'status error';
+      statusEl.textContent = 'Could not load company graph: ' + err.message;
     }
   }
 
   $('#scForm').addEventListener('submit', (e) => { e.preventDefault(); loadSupplyChain($('#scInput').value); });
+  // Drill-through from ATLAS map markers (app.js openSecurity, view='nexus').
+  document.addEventListener('mt:nexus', (e) => { if (e.detail && e.detail.symbol) loadSupplyChain(e.detail.symbol); });
 
   // ---------- Deep Dive (full AI analyst report) ----------
   // The report body is built by public/deepdive.js (MarketTerminalDeepDiveRender), a pure
@@ -1722,9 +1582,7 @@ function formatAiRuntimeSummary(policy) {
       if (!scLoadedFor) {
         const sym = (typeof state !== 'undefined' && state.symbol) ? state.symbol : 'AAPL';
         loadSupplyChain(sym);
-      } else {
-        renderActiveMode(); // keep the displayed mode consistent on re-open
-      }
+      } // else: last render is still in #scBody — nothing to refresh on re-open.
       if (autoRefreshTimer) clearInterval(autoRefreshTimer);
     }
     else if (view === 'analyze') {

@@ -74,6 +74,9 @@ window.MarketTerminal.openSecurity = (target, view = 'terminal') => {
   if (view === 'deepdive') {
     navigateTo('research/analyze');
     document.dispatchEvent(new CustomEvent('mt:deepdive', { detail: { symbol, market } }));
+  } else if (view === 'nexus') {
+    navigateTo('intelligence/supply');
+    document.dispatchEvent(new CustomEvent('mt:nexus', { detail: { symbol, market } }));
   } else {
     navigateTo('terminal');
     loadSymbol(symbol);
