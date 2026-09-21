@@ -14,7 +14,11 @@
     { path: '/api/intel/news', methods: ['GET'], category: 'intel', frontend: true },
     { path: '/api/intel/analysis', methods: ['GET'], category: 'intel', frontend: true },
     { path: '/api/intel/company', methods: ['GET'], category: 'intel', frontend: true },
-    { path: '/api/intel/supplychain', methods: ['GET'], category: 'intel', frontend: true },
+    { path: '/api/intel/supplychain', methods: ['GET'], category: 'intel', frontend: true }, // deprecated, see DEPRECATED_ALIASES
+    { path: '/api/nexus/registry', methods: ['GET'], category: 'nexus', frontend: true },
+    { path: '/api/nexus/company', methods: ['GET'], category: 'nexus', frontend: true },
+    { path: '/api/nexus/relationships', methods: ['GET'], category: 'nexus', frontend: true },
+    { path: '/api/nexus/graph', methods: ['GET'], category: 'nexus', frontend: true },
     { path: '/api/intel/deepdive', methods: ['GET'], category: 'intel', frontend: true },
     { path: '/api/intel/chat', methods: ['POST'], category: 'intel', frontend: true },
     { path: '/api/intel/report', methods: ['GET'], category: 'intel', frontend: true },
@@ -54,6 +58,7 @@
   const DEPRECATED_ALIASES = {
     '/api/intel/candle': '/api/intel/candles',
     '/api/sentiment/twitter': '/api/sentiment/market',
+    '/api/intel/supplychain': '/api/nexus/company',
   };
 
   const routeMap = new Map(ROUTES.map((route) => [route.path, route]));

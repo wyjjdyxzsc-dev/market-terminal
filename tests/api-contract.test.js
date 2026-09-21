@@ -43,3 +43,11 @@ test('builds structured API errors', () => {
     }
   );
 });
+
+test('nexus routes are registered and the legacy supplychain path aliases to /api/nexus/company', () => {
+  assert.ok(contract.isKnownApiPath('/api/nexus/registry'));
+  assert.ok(contract.isKnownApiPath('/api/nexus/company'));
+  assert.ok(contract.isKnownApiPath('/api/nexus/relationships'));
+  assert.ok(contract.isKnownApiPath('/api/nexus/graph'));
+  assert.equal(contract.getRoute('/api/intel/supplychain'), contract.getRoute('/api/nexus/company'));
+});

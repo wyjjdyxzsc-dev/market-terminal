@@ -42,6 +42,8 @@ const aiTaskPolicyCore = require('./shared/ai-task-policy-core.js');
 const marketCore = require('./shared/market-core.js');
 const atlasCore = require('./shared/atlas-core.js');
 const atlasSnapshot = require('./shared/atlas-snapshot.js');
+const nexusCore = require('./shared/nexus-core.js');
+const nexusSnapshot = require('./shared/nexus-snapshot.js');
 
 // Optional WebSocket for Finnhub live feed.  npm i ws  to enable.
 let WS;
@@ -1794,6 +1796,42 @@ async function fetchSupplyChain(query) {
       focalQuote: null,
     }
   );
+}
+
+// ── MT2-5 NEXUS — canonical company registry + evidence-backed relationships ──
+
+function nexusRegistrySearch({ query = '', sector = '', market = '' }) {
+  const q = String(query || '').trim().toLowerCase();
+  let rows = nexusSnapshot.companies;
+  if (market) rows = rows.filter((c) => c.market === String(market).toUpperCase());
+  if (sector) rows = rows.filter((c) => c.sector.toLowerCase() === String(sector).toLowerCase());
+  if (q) rows = rows.filter((c) => c.name.toLowerCase().includes(q) || c.symbol.toLowerCase() === q);
+  return {
+    nexusSnapshotVersion: nexusSnapshot.nexusSnapshotVersion,
+    coverage: nexusCore.registryCoverage(nexusSnapshot.companies),
+    results: rows.slice(0, 200),
+    truncated: rows.length > 200,
+  };
+}
+
+function nexusCompanyDetail(id) {
+  const company = nexusSnapshot.companies.find((c) => c.id === id);
+  if (!company) return null;
+  const relationships = nexusSnapshot.relationships.filter((e) => e.sourceId === id || e.targetId === id);
+  return { nexusSnapshotVersion: nexusSnapshot.nexusSnapshotVersion, company, relationships, relationshipCount: relationships.length };
+}
+
+function nexusRelationships(id, type) {
+  let edges = nexusSnapshot.relationships.filter((e) => e.sourceId === id || e.targetId === id);
+  if (type) edges = edges.filter((e) => e.relation === type);
+  return { nexusSnapshotVersion: nexusSnapshot.nexusSnapshotVersion, id, relationships: edges };
+}
+
+function nexusGraph(id, depth) {
+  const result = nexusCore.filterGraph(nexusSnapshot.companies, nexusSnapshot.relationships, {
+    rootId: id, depth: Math.min(3, Math.max(1, Number(depth) || 1)), maxNodes: 75,
+  });
+  return { nexusSnapshotVersion: nexusSnapshot.nexusSnapshotVersion, id, ...result };
 }
 
 async function fetchDeepDive(query, marketId = 'US') {
@@ -3755,6 +3793,36 @@ app.get('/api/intel/supplychain', rateLimit, async (req, res) => {
     console.error('supplychain error:', err.message);
     res.status(500).json({ error: true, message: friendlyError(err) });
   }
+});
+
+app.get('/api/nexus/registry', rateLimit, async (req, res) => {
+  try {
+    const { data, fresh } = await fetch_cached_data(
+      nexusCore.nexusCacheKey('registry', req.query.query || '', req.query.sector || '', req.query.market || ''),
+      async () => nexusRegistrySearch(req.query), TTL.MAP
+    );
+    res.json({ ...data, fresh });
+  } catch (err) {
+    console.error('nexus registry error:', err.message);
+    res.status(500).json({ error: true, message: friendlyError(err) });
+  }
+});
+
+app.get('/api/nexus/company', rateLimit, (req, res) => {
+  const id = String(req.query.id || '').toUpperCase();
+  const result = nexusCompanyDetail(id);
+  if (!result) return res.status(404).json({ error: true, message: 'unknown company id', id });
+  res.json(result);
+});
+
+app.get('/api/nexus/relationships', rateLimit, (req, res) => {
+  const id = String(req.query.id || '').toUpperCase();
+  res.json(nexusRelationships(id, req.query.type));
+});
+
+app.get('/api/nexus/graph', rateLimit, (req, res) => {
+  const id = String(req.query.id || '').toUpperCase();
+  res.json(nexusGraph(id, req.query.depth));
 });
 
 app.get('/api/intel/deepdive', rateLimit, async (req, res) => {
