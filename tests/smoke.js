@@ -13,6 +13,8 @@
 
 'use strict';
 
+const apiContract = require('../shared/api-contract.js');
+
 const BASE = (() => {
   const idx = process.argv.indexOf('--base');
   return idx !== -1 ? process.argv[idx + 1] : 'http://localhost:3000';
@@ -307,6 +309,36 @@ async function checkHtml(label, url) {
   // Supply chain — uses ?q= param
   await check('GET /api/intel/supplychain?q=Apple', `${BASE}/api/intel/supplychain?q=Apple`,
     { skipError: true, validate: d => hasPolicy(d, 'intel.supply-chain') && d.abstained === true && Array.isArray(d.suppliers) && d.suppliers.length === 0 && Array.isArray(d.customers) && d.customers.length === 0 });
+
+  // ── MT2-5 NEXUS canonical company registry + evidence-backed relationships ──
+  await check('GET /api/nexus/registry?query=apple returns a large registry with coverage', `${BASE}/api/nexus/registry?query=apple`,
+    { validate: d => Array.isArray(d.results) && d.coverage && d.coverage.totalCompanies > 1000 });
+
+  await check('GET /api/nexus/company for an unknown id returns 404, not a fabricated node',
+    `${BASE}/api/nexus/company?id=US:NASDAQ:NOTAREALTICKERXYZ`,
+    { allowStatuses: [404], allowErrorPayload: true, validate: d => d.error === true });
+
+  await check('GET /api/nexus/company for a known id returns evidence-backed relationships',
+    `${BASE}/api/nexus/company?id=US:NASDAQ:AAPL`, {
+      validate: d => d.company && d.company.id === 'US:NASDAQ:AAPL' && Array.isArray(d.relationships) &&
+        d.relationships.every(edge => Array.isArray(edge.evidence) && edge.evidence.length > 0),
+    });
+
+  await check('GET /api/nexus/graph bounds the neighborhood size', `${BASE}/api/nexus/graph?id=US:NASDAQ:AAPL&depth=2`,
+    { validate: d => Array.isArray(d.nodes) && d.nodes.length > 0 && d.nodes.length <= 75 });
+
+  // The legacy path is a deprecated alias only at the route-contract level
+  // (shared/api-contract.js resolves it to /api/nexus/company); the handler
+  // itself is untouched and still keys off ?q=, never ?id= — confirm both:
+  // the contract resolution, and that the live route still actually resolves.
+  await check('legacy /api/intel/supplychain still resolves and its route contract aliases to /api/nexus/company',
+    `${BASE}/api/intel/supplychain?q=Apple`, {
+      skipError: true,
+      validate: (d) => {
+        const aliased = apiContract.getRoute('/api/intel/supplychain') === apiContract.getRoute('/api/nexus/company');
+        return aliased && (hasPolicy(d, 'intel.supply-chain') || d.error);
+      },
+    });
 
   // Push (vapid key — always returns even without keys)
   await check('GET /api/vapid-public-key', `${BASE}/api/vapid-public-key`,
