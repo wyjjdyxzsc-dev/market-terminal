@@ -352,7 +352,7 @@ FROM: CODEX
 TO: OWNER
 CHECKPOINT: MT2-6A PADLOCK
 MESSAGE TYPE: CHECKPOINT CLOSURE — PASS
-SUMMARY: Source commit 7b1fd07 deployed via GitHub main as 20260923d assets. Production returned 58 India IPOs with direct SEBI evidence, 33 US IPOs, and 91 combined; 72/72 production smoke passed. Desktop and 375x812 / 430x932 / landscape browser checks passed without horizontal overflow or console warnings. Closure record bumps all assets to 20260923e. Listing dates and offer terms unsupported by the SEBI listing metadata remain UNKNOWN; no unlicensed exchange bulk feed was added.
+SUMMARY: Source commit 7b1fd07 deployed via GitHub main as 20260923d assets. Production returned 58 India IPOs with direct SEBI evidence, 33 US IPOs, and 91 combined; 72/72 production smoke passed. Desktop and 375x812 / 430x932 / landscape browser checks passed without horizontal overflow or console warnings. Closure record bumps all assets to 20260923f. Listing dates and offer terms unsupported by the SEBI listing metadata remain UNKNOWN; no unlicensed exchange bulk feed was added.
 DECISION / REQUEST: none. MT2-7 WORLDWIRE is NOT AUTHORIZED.
 EVIDENCE POINTER: EVIDENCE.md MT2-6A production closure; D-013; B-037.
 ---
