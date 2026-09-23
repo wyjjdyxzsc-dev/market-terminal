@@ -1210,6 +1210,7 @@ a.mlp-meta-source:hover { color: var(--accent); text-decoration: underline; }
 }
 /* MT2-6 LAUNCHPAD */
 .launchpad-layout{display:grid;grid-template-columns:minmax(260px,340px) minmax(0,1fr);gap:var(--s-4);align-items:start;margin-top:var(--s-4)}
+.launchpad-controls{display:flex;flex-wrap:wrap;gap:var(--s-3);margin:var(--s-3) 0}.launchpad-controls label{display:grid;gap:4px;color:var(--text-secondary);font-size:12px}.launchpad-controls select,.launchpad-controls input{min-width:150px;max-width:100%;padding:8px;background:var(--surface-raised);color:var(--text-primary);border:1px solid var(--separator);border-radius:var(--r-sm)}.launchpad-timeline{display:grid;gap:var(--s-2);padding-left:20px}.launchpad-timeline li{overflow-wrap:anywhere}.launchpad-evidence{display:grid;gap:var(--s-2)}
 .launchpad-list{max-height:720px;overflow:auto;display:grid;gap:var(--s-2)}
 .launchpad-event{display:grid;text-align:left;gap:4px;width:100%;padding:var(--s-3);background:var(--surface-raised);border:1px solid var(--separator);border-radius:var(--r-md);color:var(--text-primary);cursor:pointer}
 .launchpad-event:hover,.launchpad-event.active{border-color:var(--accent);background:var(--surface-selected)}

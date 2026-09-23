@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-09-23 — MT2-6A PADLOCK (local implementation; production pending)
+
+- Added validated SEBI public-issue listing ingestion and an atomic combined US+India LAUNCHPAD snapshot. India filings deduplicate across DRHP, amendments, RHP and final documents, retaining source-linked timeline history and balanced row accounting.
+- Enabled India and All market views with searchable India IPO details, INR and explicit UNKNOWN states for unsupported offer, date, NEXUS and ATLAS fields. Added parser failure protection and India-specific negative tests. Existing live US calendar remains unchanged.
+
+
 ## 2026-09-23 — MT2-6 LAUNCHPAD (production verified)
 
 - Added a sourced US IPO calendar with date, venue, status, price range, shares, reported deal value, retrieval timestamp, and explicit missing-data states. India reports `UNAVAILABLE` until a verified calendar source is configured.

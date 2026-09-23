@@ -334,3 +334,14 @@ SUMMARY: Source commit 190e754 deployed via main. Production served 20260923b as
 DECISION / REQUEST: none. MT2-7 requires a separate authorization.
 EVIDENCE POINTER: EVIDENCE.md MT2-6 production closure; DECISIONS D-012; BACKLOG B-037.
 ---
+
+---
+TIMESTAMP: 2026-09-23
+FROM: CODEX
+TO: OWNER
+CHECKPOINT: MT2-6A PADLOCK
+MESSAGE TYPE: IMPLEMENTATION UPDATE
+SUMMARY: SEBI draft, red herring and final-offer listing metadata has been ingested into the shared LAUNCHPAD snapshot with direct regulatory links, strict parser guards, row accounting, and historical timeline deduplication. Local reconciliation is 100 fetched / 57 accepted / 18 duplicate / 25 excluded / 0 unresolved / 0 errors; 58 India registry objects include one preserved earlier filing. US live route remains unchanged. Production verification is pending.
+DECISION / REQUEST: none. MT2-7 WORLDWIRE is not authorized.
+EVIDENCE POINTER: D-013; EVIDENCE.md MT2-6A; B-037.
+---

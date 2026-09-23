@@ -311,11 +311,14 @@ async function checkHtml(label, url) {
   // ── MT2-5 NEXUS canonical company registry + evidence-backed relationships ──
   await check('GET /api/launchpad/ipos US calendar contract', `${BASE}/api/launchpad/ipos?market=US`, {
     skipError: true,
-    validate: d => d.schemaVersion === '2026-09-23a' && d.market === 'US' && Array.isArray(d.events) &&
+    validate: d => d.schemaVersion === '2026-09-23b' && d.market === 'US' && Array.isArray(d.events) &&
       (d.unavailable === true || (Array.isArray(d.graph.nodes) && Array.isArray(d.graph.edges) && d.events.every(e => e.source && e.truth === 'SNAPSHOT'))),
   });
-  await check('GET /api/launchpad/ipos India explicitly unavailable', `${BASE}/api/launchpad/ipos?market=IN`, {
-    validate: d => d.unavailable === true && d.market === 'IN' && d.truth === 'UNAVAILABLE' && d.events.length === 0,
+  await check('GET /api/launchpad/ipos India SEBI registry', `${BASE}/api/launchpad/ipos?market=IN`, {
+    validate: d => d.market === 'IN' && d.truth === 'SNAPSHOT' && d.events.length > 10 && d.accounting.fetched >= d.events.length && d.events.every(e => e.market === 'IN' && e.currency === 'INR' && e.timeline.length && e.evidence.every(x => x.url.startsWith('https://www.sebi.gov.in/filings/public-issues/'))),
+  });
+  await check('GET /api/launchpad/ipos ALL combines US and India', `${BASE}/api/launchpad/ipos?market=ALL`, {
+    validate: d => d.market === 'ALL' && d.events.some(e => e.market === 'US') && d.events.some(e => e.market === 'IN'),
   });
   await check('GET /api/nexus/registry?query=apple returns a large registry with coverage', `${BASE}/api/nexus/registry?query=apple`,
     { validate: d => Array.isArray(d.results) && d.coverage && d.coverage.totalCompanies > 1000 });

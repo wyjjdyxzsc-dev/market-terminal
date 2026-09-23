@@ -45,6 +45,7 @@ const atlasSnapshot = require('./shared/atlas-snapshot.js');
 const nexusCore = require('./shared/nexus-core.js');
 const nexusSnapshot = require('./shared/nexus-snapshot.js');
 const launchpadCore = require('./shared/launchpad-core.js');
+const launchpadSnapshot = require('./shared/launchpad-snapshot.js');
 
 // Optional WebSocket for Finnhub live feed.  npm i ws  to enable.
 let WS;
@@ -4016,8 +4017,8 @@ app.get('/api/nexus/graph', rateLimit, (req, res) => {
 });
 
 app.get('/api/launchpad/ipos', rateLimit, async (req, res) => {
-  const market = marketCore.resolveMarketId(req.query.market);
-  if (market === 'IN') return res.json({ schemaVersion: launchpadCore.SCHEMA_VERSION, market, unavailable: true, truth: 'UNAVAILABLE', reason: 'A verified India IPO calendar is not configured.', events: [], graph: { nodes: [], edges: [] } });
+  const market = String(req.query.market || '').toUpperCase() === 'ALL' ? 'ALL' : marketCore.resolveMarketId(req.query.market);
+  if (market === 'IN' || market === 'ALL') return res.json(launchpadCore.indiaResponse(launchpadSnapshot, { market, query: req.query.q, id: req.query.id, usEvents: market === 'ALL' ? launchpadSnapshot.markets.US.records : [], registry: nexusSnapshot.companies, relationships: nexusSnapshot.relationships }));
   if (!FINNHUB_KEYS.length) return res.json({ schemaVersion: launchpadCore.SCHEMA_VERSION, market, unavailable: true, truth: 'UNAVAILABLE', reason: 'Finnhub IPO calendar is not configured.', events: [], graph: { nodes: [], edges: [] } });
   try {
     const from = new Date(Date.now() - 14 * 86400000).toISOString().slice(0, 10);

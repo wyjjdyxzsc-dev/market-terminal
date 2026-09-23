@@ -87,6 +87,11 @@ IN PROGRESS / PASS / PARTIAL / BLOCKED.
 - OBJECTIVE: sourced IPO intelligence calendar and market impact graph grounded in observed co-scheduling and existing NEXUS evidence.
 - OUT OF SCOPE: MT2-7 WORLDWIRE; investment recommendations; inferred price impact; unlicensed or unverified India IPO scraping.
 
+## MT2-6A — PADLOCK — India IPO feed completion
+- STATUS: IMPLEMENTED LOCALLY; production verification pending (2026-09-23). MT2-6 LAUNCHPAD remains PASS.
+- OBJECTIVE: validated SEBI public-issue metadata under the canonical LAUNCHPAD registry, without US redesign. See D-013 and EVIDENCE.md.
+- OUT OF SCOPE: MT2-7 WORLDWIRE and later checkpoints; exchange bulk-data ingestion without a source-usage decision.
+
 ## MT2-7 — WORLDWIRE — News (large-scale geopolitical event collection into GeoEvent)
 - STATUS: NOT STARTED · ENTRY: explicit authorization.
 
