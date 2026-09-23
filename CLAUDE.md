@@ -279,3 +279,8 @@ Check `wrangler.toml` for KV binding (`MT_KV`), AI binding, asset serving.
 ## Latest external-agent handoff
 
 - `/Users/krishivjain/Desktop/claude projects/market-terminal/docs/CODEX_HANDOFF_TO_CLAUDE_2026-07-13.md`
+
+**MT2-6 LAUNCHPAD (2026-09-23; production verification pending)**:
+- `shared/launchpad-core.js` normalizes Finnhub IPO calendar records and creates bounded, deterministic graph edges only for observed same-venue/seven-day overlap and cited NEXUS relationships behind a provisional ticker/venue match. No predicted price impact.
+- `/api/launchpad/ipos?market=US|IN` is in both runtimes. US uses the configured Finnhub key and 15-minute cache; India explicitly returns `UNAVAILABLE` until a verified feed is configured (D-012/B-037).
+- `public/launchpad.js` mounts Research → IPOs, source/field disclosures and the graph. Local unit 154/154, smoke 66/66, AI fixtures, Wrangler dry-run, desktop/mobile browser checks passed. Assets `20260923b`; production verification pending.

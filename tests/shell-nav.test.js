@@ -8,7 +8,7 @@ const path = require('node:path');
 const shell = require('../public/shell.js');
 
 const LEGACY_VIEWS = ['terminal', 'news', 'sectors', 'analyze', 'supply', 'watchlist', 'alerts'];
-const NEW_VIEWS = ['markets', 'quant'];
+const NEW_VIEWS = ['markets', 'quant', 'launchpad'];
 
 test('shell contract version is pinned', () => {
   assert.equal(shell.SHELL_CONTRACT_VERSION, '2026-09-20a');
@@ -68,6 +68,7 @@ test('research and intelligence group the existing surfaces without dropping any
   assert.deepEqual(shell.resolve('research/sectors').view, 'sectors');
   const intel = shell.workspace('intelligence').items.map((it) => `${it.view}:${it.sub || ''}`);
   assert.deepEqual(intel, ['news:briefing', 'news:situation', 'news:report', 'supply:', 'news:map']);
+  assert.equal(shell.resolve('research/launchpad').view, 'launchpad');
 });
 
 test('locate() is the inverse of resolve() for every enabled target', () => {

@@ -300,3 +300,6 @@ Do not pre-decide future architecture; add records only when a real decision is 
   exposed via `/api/nexus/registry`, sibling listings exposed via `/api/nexus/company`'s new
   `companyIdentity` field and rendered in `public/nexus.js` ("Also listed as …").
 - STATUS: ACCEPTED
+
+## D-012 · MT2-6 LAUNCHPAD source and impact authority (2026-09-23)
+US IPO events come from the Finnhub IPO calendar through the existing configured key, cached for 15 minutes and labelled as source snapshots. India has no verified calendar adapter; the API returns explicit `UNAVAILABLE`. The impact graph records only same-venue events within seven calendar days and NEXUS edges with source URLs for provisionally ticker/venue-matched securities. These edges are observations, not forecasts or causal price-impact claims. No MT2-7 event collection is included.

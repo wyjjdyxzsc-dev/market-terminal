@@ -1560,6 +1560,7 @@ function formatAiRuntimeSummary(policy) {
     else if (currentView === 'supply') { if (scLoadedFor) loadSupplyChain(scLoadedFor); }
     else if (currentView === 'analyze') { if (ddLoadedFor) loadDeepDive(ddLoadedFor); }
     else if (currentView === 'quant') ensureQuantLab(true);
+    else if (currentView === 'launchpad') document.dispatchEvent(new Event('mt:launchpad-refresh'));
   }
 
   // Auto-refresh intelligence views while they're open.

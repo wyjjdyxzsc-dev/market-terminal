@@ -33,8 +33,10 @@ import './shared/atlas-core.js';
 import './shared/atlas-snapshot.js';
 import './shared/nexus-core.js';
 import './shared/nexus-snapshot.js';
+import './shared/launchpad-core.js';
 
 const FINNHUB_BASE = 'https://finnhub.io/api/v1';
+const launchpadCore = globalThis.MarketTerminalLaunchpad;
 const CACHE_MS = 15 * 60 * 1000; // news refreshes every 15 min
 const BROWSER_UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 ' +
@@ -3172,7 +3174,7 @@ async function atlasEntityDetail(env, ctx, id) {
     layer: atlasCore.layerById(entity.layer),
     nearbyEvents,
     nearbyEventsState,
-    extensions: { supplyChain: 'reserved:MT2-5 NEXUS', ipo: 'reserved:MT2-6 LAUNCHPAD', worldwire: 'reserved:MT2-7 WORLDWIRE', oracle: 'reserved:MT2-8 ORACLE', portfolio: 'reserved:MT2-9 LEDGER', watchlist: 'reserved:MT2-11 WATCHTOWER', sentinel: 'reserved:MT2-12 SENTINEL' },
+    extensions: { supplyChain: 'reserved:MT2-5 NEXUS', ipo: '/api/launchpad/ipos', worldwire: 'reserved:MT2-7 WORLDWIRE', oracle: 'reserved:MT2-8 ORACLE', portfolio: 'reserved:MT2-9 LEDGER', watchlist: 'reserved:MT2-11 WATCHTOWER', sentinel: 'reserved:MT2-12 SENTINEL' },
   };
 }
 
@@ -3870,6 +3872,26 @@ async function handleApi(request, env, ctx, url) {
   if (p === '/api/nexus/graph') {
     const id = (qs.get('id') || '').toUpperCase();
     return json(nexusGraph(id, qs.get('depth')));
+  }
+  if (p === '/api/launchpad/ipos') {
+    const market = marketCore.resolveMarketId(qs.get('market'));
+    if (market === 'IN') return json({ schemaVersion: launchpadCore.SCHEMA_VERSION, market, unavailable: true, truth: 'UNAVAILABLE', reason: 'A verified India IPO calendar is not configured.', events: [], graph: { nodes: [], edges: [] } });
+    if (!env.FINNHUB_API_KEY) return json({ schemaVersion: launchpadCore.SCHEMA_VERSION, market, unavailable: true, truth: 'UNAVAILABLE', reason: 'Finnhub IPO calendar is not configured.', events: [], graph: { nodes: [], edges: [] } });
+    try {
+      const from = new Date(Date.now() - 14 * 86400000).toISOString().slice(0, 10);
+      const to = new Date(Date.now() + 45 * 86400000).toISOString().slice(0, 10);
+      const { data, fresh } = await getData(env, ctx, `launchpad:${launchpadCore.SCHEMA_VERSION}:${market}:${from}:${to}`, async () => {
+        const endpoint = `${FINNHUB_BASE}/calendar/ipo?from=${from}&to=${to}&token=${encodeURIComponent(env.FINNHUB_API_KEY)}`;
+        const response = await fetch(endpoint, { signal: AbortSignal.timeout(9000) });
+        if (!response.ok) throw new Error(`Finnhub IPO calendar ${response.status}`);
+        const raw = await response.json();
+        if (!Array.isArray(raw.ipoCalendar)) throw new Error('Finnhub IPO calendar returned an invalid payload');
+        return launchpadCore.normalizeCalendar(raw, { market, asOf: new Date().toISOString() });
+      }, 900000);
+      const selected = data.find(e => e.id === qs.get('id')) || data[0] || null;
+      return json({ schemaVersion: launchpadCore.SCHEMA_VERSION, market, truth: fresh ? 'SNAPSHOT' : 'CACHED', from, to, events: data, selectedId: selected && selected.id,
+        graph: launchpadCore.buildImpactGraph(data, selected && selected.id, nexusSnapshot.companies, nexusSnapshot.relationships), fresh });
+    } catch (err) { console.error('launchpad error:', err.message); return json(buildError(502, 'upstream_unavailable', 'IPO calendar unavailable for this refresh.'), 502); }
   }
   if (p === '/api/intel/deepdive') {
     const query = (qs.get('q') || '').trim().slice(0, 60);

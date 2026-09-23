@@ -100,18 +100,19 @@ async function checkHtml(label, url) {
   const t = await res.text();
   if (!t.includes('chartCanvas')) { console.error(`  ✗ ${label} — missing #chartCanvas`); fail++; return; }
   const versions = [...t.matchAll(/\?v=([0-9]{8}[a-z])/g)].map((match) => match[1]);
-  if (versions.length !== 11 || new Set(versions).size !== 1) {
-    console.error(`  ✗ ${label} — expected eleven synchronized asset versions (MT2-5 adds nexus.js)`);
+  if (versions.length !== 12 || new Set(versions).size !== 1) {
+    console.error(`  ✗ ${label} — expected twelve synchronized asset versions (MT2-6 adds launchpad.js)`);
     fail++; return;
   }
   // MT2-2 QUARTZ shell contract: primary nav mount, every workspace view, and the
   // reserved (disabled) surfaces must exist in the served shell.
   const shellIds = ['primaryNav', 'subNav', 'marketMode', 'view-markets', 'view-terminal', 'view-news', 'view-sectors',
-    'view-analyze', 'view-supply', 'view-watchlist', 'view-quant', 'view-alerts', 'quantLabMount', 'symbolInput'];
+    'view-analyze', 'view-launchpad', 'view-supply', 'view-watchlist', 'view-quant', 'view-alerts', 'quantLabMount', 'symbolInput'];
   const missing = shellIds.filter((id) => !t.includes(`id="${id}"`));
   if (missing.length) { console.error(`  ✗ ${label} — shell missing ${missing.join(', ')}`); fail++; return; }
   if (!t.includes('shell.js?v=')) { console.error(`  ✗ ${label} — shell.js is not loaded`); fail++; return; }
   if (!t.includes('atlas.js?v=')) { console.error(`  ✗ ${label} — atlas.js is not loaded`); fail++; return; }
+  if (!t.includes('launchpad.js?v=')) { console.error(`  ✗ ${label} — launchpad.js is not loaded`); fail++; return; }
   if (t.includes('id="worldMapContainer"')) { console.error(`  ✗ ${label} — retired Infrastructure canvas still in the shell`); fail++; return; }
   console.log(`  ✓ ${label}`);
   pass++;
@@ -308,6 +309,14 @@ async function checkHtml(label, url) {
 
 
   // ── MT2-5 NEXUS canonical company registry + evidence-backed relationships ──
+  await check('GET /api/launchpad/ipos US calendar contract', `${BASE}/api/launchpad/ipos?market=US`, {
+    skipError: true,
+    validate: d => d.schemaVersion === '2026-09-23a' && d.market === 'US' && Array.isArray(d.events) &&
+      (d.unavailable === true || (Array.isArray(d.graph.nodes) && Array.isArray(d.graph.edges) && d.events.every(e => e.source && e.truth === 'SNAPSHOT'))),
+  });
+  await check('GET /api/launchpad/ipos India explicitly unavailable', `${BASE}/api/launchpad/ipos?market=IN`, {
+    validate: d => d.unavailable === true && d.market === 'IN' && d.truth === 'UNAVAILABLE' && d.events.length === 0,
+  });
   await check('GET /api/nexus/registry?query=apple returns a large registry with coverage', `${BASE}/api/nexus/registry?query=apple`,
     { validate: d => Array.isArray(d.results) && d.coverage && d.coverage.totalCompanies > 1000 });
 

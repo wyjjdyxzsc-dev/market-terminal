@@ -870,3 +870,10 @@ carried forward broken.
   errors. Level: REAL BROWSER TESTED (production).
 - Not claimed: OWNER acceptance; a fuller relationship-coverage expansion (explicitly out of
   scope per the CENSUS brief).
+
+## MT2-6 LAUNCHPAD — 2026-09-23 (local, before production push)
+- Baseline: `main` and `origin/main` both `5d7f9a8`; three unrelated untracked files preserved.
+- Live local source probe: Finnhub `/calendar/ipo` returned HTTP 200 and 33 calendar events for 2026-09-09…2026-11-07; source fields include date, venue, name, status, shares, price and deal value where reported. API key was not printed.
+- Tests: 154/154 unit; 66/66 local smoke (optional external-provider skips reported by harness); AI offline fixtures thresholds passed. Wrangler 4.136.3 dry-run bundled 16,383 KiB / gzip 1,416 KiB.
+- Browser: in-app browser on local port 3100 rendered 33 US event cards, selected OURA then PTT, showed source link and three observed same-venue/window connections; India mode showed explicit unavailable text. Desktop and 375×812 viewport inspected; browser warning/error log empty.
+- Evidence level: REAL BROWSER TESTED locally. Production level pending push and deployed-runtime pass.

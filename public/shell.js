@@ -32,6 +32,7 @@
     { id: 'research',     label: 'Research',     items: [
       { id: 'analyze', label: 'Deep Dive', view: 'analyze' },
       { id: 'sectors', label: 'Sectors',   view: 'sectors' },
+      { id: 'launchpad', label: 'IPOs', view: 'launchpad' },
     ] },
     { id: 'intelligence', label: 'Intelligence', items: [
       { id: 'briefing',  label: 'Briefing',          view: 'news',   sub: 'briefing' },

@@ -266,7 +266,7 @@
       `<div class="atlas-d-label">CURRENT EVENTS (≤250 km, active)</div>` +
       (d.nearbyEvents && d.nearbyEvents.length ? `<ul class="atlas-events">${d.nearbyEvents.map((ev) => `<li><span class="atlas-ev-type" style="--sw:${EVENT_COLOR[ev.type] || EVENT_COLOR.OTHER}">${esc(ev.type)}</span> ${esc(ev.title)} <small>${ev.distanceKm} km</small></li>`).join('')}</ul>` : d.nearbyEventsState === 'pending' ? '<p class="atlas-ev-note">Event feed still loading — reopen in a moment.</p>' : d.nearbyEventsState === 'unavailable' ? '<p class="atlas-ev-note">Event feed unavailable.</p>' : '<p class="atlas-ev-note">No active sourced event within 250 km.</p>') +
       `<div class="atlas-d-label">EVIDENCE / SOURCE</div><ul class="atlas-evidence">${evidenceHtml(e.sourceEvidence)}</ul>` +
-      `<div class="atlas-d-ext">Supply chain · IPO · Portfolio · Watchlist · WORLDWIRE · ORACLE · SENTINEL — reserved for later checkpoints; nothing is inferred here.</div>`;
+      `<div class="atlas-d-ext">IPOs are available in Research → IPOs. Portfolio · Watchlist · WORLDWIRE · ORACLE · SENTINEL are reserved for later checkpoints; nothing is inferred here.</div>`;
     wireClose();
     drawer.querySelectorAll('button[data-open]').forEach((b) => b.addEventListener('click', () => {
       if (window.MarketTerminal && window.MarketTerminal.openSecurity) window.MarketTerminal.openSecurity(b.dataset.open, b.dataset.view);

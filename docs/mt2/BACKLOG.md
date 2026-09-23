@@ -281,3 +281,8 @@ accessibility/degraded-state defect · P3 minor.
   itself does not classify this issuer's venue", not a bug; SEC's file carries no better field.
 - SUGGESTED: no action expected; note only so a future audit does not re-flag these 219 as a
   regression of the OTC/CBOE fix in D-011.
+
+## B-037 · P2 · LAUNCHPAD · Verified India IPO calendar adapter unavailable
+- OBSERVATION: the active Finnhub IPO calendar yielded US exchange events; no verified, licence-compatible machine-readable India IPO feed is configured. NSE publishes IPO pages but its data-sharing policy requires a source/usage decision before ingestion.
+- CURRENT BEHAVIOUR: `?market=IN` returns `200` with `truth: UNAVAILABLE`, zero events and an explicit reason. US events are never relabelled India.
+- SUGGESTED: assess an official NSE/BSE licensed feed or approved API, then add a separate market-scoped adapter and source contract.

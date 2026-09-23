@@ -1208,3 +1208,24 @@ a.mlp-meta-source:hover { color: var(--accent); text-decoration: underline; }
   .atlas-drawer { top: auto; left: 8px; right: 8px; bottom: 8px; width: auto; max-width: none; max-height: 58%; }
   .ship-map, .globe-map { height: 70vh; min-height: 420px; }
 }
+/* MT2-6 LAUNCHPAD */
+.launchpad-layout{display:grid;grid-template-columns:minmax(260px,340px) minmax(0,1fr);gap:var(--s-4);align-items:start;margin-top:var(--s-4)}
+.launchpad-list{max-height:720px;overflow:auto;display:grid;gap:var(--s-2)}
+.launchpad-event{display:grid;text-align:left;gap:4px;width:100%;padding:var(--s-3);background:var(--surface-raised);border:1px solid var(--separator);border-radius:var(--r-md);color:var(--text-primary);cursor:pointer}
+.launchpad-event:hover,.launchpad-event.active{border-color:var(--accent);background:var(--surface-selected)}
+.launchpad-event-date,.launchpad-event-meta{font-size:12px;color:var(--text-secondary)}
+.launchpad-event-name{font-weight:650}
+.launchpad-detail{min-width:0;background:var(--surface-raised);border:1px solid var(--separator);border-radius:var(--r-lg);padding:var(--s-4)}
+.launchpad-detail-head h3{margin:var(--s-2) 0;font-size:22px}
+.launchpad-facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--s-3);margin:var(--s-4) 0}
+.launchpad-facts>div{display:grid;gap:4px;padding:var(--s-3);background:var(--surface);border-radius:var(--r-sm)}
+.launchpad-facts small,.launchpad-root small{color:var(--text-secondary)}
+.launchpad-facts strong{overflow-wrap:anywhere}
+.launchpad-source{display:block;font-size:12px;margin:var(--s-3) 0}
+.launchpad-graph{display:grid;gap:var(--s-2);border-left:2px solid var(--accent);padding:var(--s-3) 0 var(--s-3) var(--s-4);margin-left:var(--s-2)}
+.launchpad-root{font-weight:700;color:var(--accent);display:grid}
+.launchpad-connection{display:flex;align-items:center;gap:var(--s-3);flex-wrap:wrap}
+.launchpad-connector{color:var(--text-secondary);font-size:12px}
+.launchpad-node{border:1px solid var(--separator);border-radius:var(--r-sm);padding:var(--s-2);background:var(--surface)}
+.launchpad-limits{color:var(--text-secondary);font-size:12px;line-height:1.5}
+@media(max-width:760px){.launchpad-layout{grid-template-columns:1fr}.launchpad-list{max-height:310px}.launchpad-detail{padding:var(--s-3)}}

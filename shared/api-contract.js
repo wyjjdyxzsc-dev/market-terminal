@@ -19,6 +19,7 @@
     { path: '/api/nexus/company', methods: ['GET'], category: 'nexus', frontend: true },
     { path: '/api/nexus/relationships', methods: ['GET'], category: 'nexus', frontend: true },
     { path: '/api/nexus/graph', methods: ['GET'], category: 'nexus', frontend: true },
+    { path: '/api/launchpad/ipos', methods: ['GET'], category: 'launchpad', frontend: true },
     { path: '/api/intel/deepdive', methods: ['GET'], category: 'intel', frontend: true },
     { path: '/api/intel/chat', methods: ['POST'], category: 'intel', frontend: true },
     { path: '/api/intel/report', methods: ['GET'], category: 'intel', frontend: true },

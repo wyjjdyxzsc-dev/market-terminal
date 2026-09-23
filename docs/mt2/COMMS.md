@@ -312,3 +312,14 @@ DECISION / REQUEST: none. MT2-6 LAUNCHPAD is NOT authorized by this report.
 EVIDENCE POINTER: EVIDENCE.md "MT2-5A CENSUS" + "Production acceptance"; DECISIONS D-011;
   BACKLOG B-034…B-036; ROADMAP corrected (NEXUS retroactively PASS, CENSUS inserted as MT2-5A).
 ACTION REQUIRED: OWNER — record acceptance when convenient.
+
+---
+TIMESTAMP: 2026-09-23
+FROM: CODEX
+TO: OWNER
+CHECKPOINT: MT2-6 LAUNCHPAD
+MESSAGE TYPE: IMPLEMENTATION PROGRESS — LOCAL PASS
+SUMMARY: US Finnhub IPO calendar and bounded observed-connection graph implemented in both runtimes; Research → IPOs UI added. India correctly reports unavailable pending a verified feed. Unit 154/154, local smoke 66/66, AI fixtures and Wrangler dry-run pass; desktop/mobile browser pass with no warnings/errors. Production deployment/verification is next.
+DECISION / REQUEST: none; owner authorized deploy in the execution order. MT2-7 remains out of scope.
+EVIDENCE POINTER: EVIDENCE.md MT2-6 LAUNCHPAD.
+---
