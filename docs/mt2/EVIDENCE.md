@@ -877,3 +877,9 @@ carried forward broken.
 - Tests: 154/154 unit; 66/66 local smoke (optional external-provider skips reported by harness); AI offline fixtures thresholds passed. Wrangler 4.136.3 dry-run bundled 16,383 KiB / gzip 1,416 KiB.
 - Browser: in-app browser on local port 3100 rendered 33 US event cards, selected OURA then PTT, showed source link and three observed same-venue/window connections; India mode showed explicit unavailable text. Desktop and 375×812 viewport inspected; browser warning/error log empty.
 - Evidence level: REAL BROWSER TESTED locally. Production level pending push and deployed-runtime pass.
+
+### MT2-6 production closure — 2026-09-23
+- Source commit `190e754` pushed to `main` through GitHub; deployed shell served all twelve `20260923b` cache-busted assets. No manual Wrangler deploy.
+- Deployed `/api/launchpad/ipos?market=US`: HTTP 200, schema `2026-09-23a`, 33 records, selected `US:2026-09-30:OURA`, three same-venue/window edges, `SNAPSHOT` truth, Finnhub calendar attribution. India route: HTTP 200, `UNAVAILABLE`, empty events.
+- `npm run test:prod`: 71/71 passed. Production in-app browser rendered Research → IPOs with 33 cards, source link, observed connections and missing-data states. India switch produced the explicit unavailable state. 375×812 mobile viewport remained usable. Browser warning/error log empty.
+- Evidence level: LIVE TESTED and REAL BROWSER TESTED. OWNER acceptance not claimed.

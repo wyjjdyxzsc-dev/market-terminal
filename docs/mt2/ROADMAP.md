@@ -83,7 +83,7 @@ IN PROGRESS / PASS / PARTIAL / BLOCKED.
 - OUT OF SCOPE: expanding relationship coverage (UNKNOWN stays UNKNOWN); LAUNCHPAD.
 
 ## MT2-6 — LAUNCHPAD — IPOs
-- STATUS: IN PROGRESS (authorized 2026-09-23; source implemented, production verification pending).
+- STATUS: PASS (closed 2026-09-23; source commit `190e754`, production browser and 71/71 smoke verified).
 - OBJECTIVE: sourced IPO intelligence calendar and market impact graph grounded in observed co-scheduling and existing NEXUS evidence.
 - OUT OF SCOPE: MT2-7 WORLDWIRE; investment recommendations; inferred price impact; unlicensed or unverified India IPO scraping.
 

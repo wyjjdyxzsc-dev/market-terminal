@@ -1,10 +1,10 @@
 # Changelog
 
-## 2026-09-23 — MT2-6 LAUNCHPAD (production verification pending)
+## 2026-09-23 — MT2-6 LAUNCHPAD (production verified)
 
 - Added a sourced US IPO calendar with date, venue, status, price range, shares, reported deal value, retrieval timestamp, and explicit missing-data states. India reports `UNAVAILABLE` until a verified calendar source is configured.
 - Added a bounded market impact graph showing measured same-venue calendar overlap and cited NEXUS relationships where a provisional ticker/venue match exists. The UI explicitly avoids causal price-impact claims.
-- Added Research → IPOs, shared Express/Worker route `/api/launchpad/ipos`, normalization tests, smoke contracts, and asset version `20260923b`.
+- Added Research → IPOs, shared Express/Worker route `/api/launchpad/ipos`, normalization tests and smoke contracts. Source commit `190e754` served assets `20260923b` and passed 71/71 production contracts plus a desktop/mobile browser pass; closure assets are `20260923c`.
 
 ## 2026-09-21 — MT2-4 ATLAS
 

@@ -2,16 +2,16 @@
 
 PROJECT: Market Terminal 2.0 — Project Meridian
 CHECKPOINT: MT2-6 LAUNCHPAD — IPO Intelligence + Market Impact Graph
-STATUS: IN PROGRESS — authorized 2026-09-23. Local implementation and verification complete;
-  production push and verification pending. OWNER acceptance not yet recorded.
+STATUS: PASS — CLOSED 2026-09-23. Source commit 190e754 deployed; 71/71 production smoke;
+  production desktop/mobile browser pass with clean console. OWNER acceptance not yet recorded.
 CURRENT: main @5d7f9a8 baseline = origin/main. Untracked owner prompt copies and CPU profile preserved.
   Source changes: shared launchpad normalization and bounded evidence graph; parity API route;
-  Research → IPOs view; asset marker 20260923b. US Finnhub calendar returns 33 events;
+  Research → IPOs view; source assets 20260923b, closure assets 20260923c. US Finnhub calendar returns 33 events;
   India returns explicit UNAVAILABLE because a verified provider is not configured.
-  Local unit 154/154, smoke 66/66, AI fixtures pass, Wrangler dry-run pass; browser
+  Local unit 154/154, smoke 68/68, AI fixtures pass, Wrangler dry-run pass; browser
   desktop/mobile navigation, selection, India limitation, clean console verified.
-NEXT EXACT ACTION: commit scoped LAUNCHPAD changes, push main via GitHub integration, verify
-  deployed asset marker/API/smoke/browser; then close docs and STOP. No MT2-7 work.
+NEXT EXACT ACTION: none. MT2-6 is closed. MT2-7 WORLDWIRE requires separate explicit OWNER
+  authorization. B-037 records the India IPO calendar provider gap.
 PREVIOUS: MT2-5 NEXUS — PASS (source commit `59a7bba`, closure commit `173a979`; production-
   verified per CLAUDE.md — this file's own STATE/COMMS/DECISIONS entries for NEXUS were never
   written at the time, only CLAUDE.md was updated; ROADMAP.md corrected retroactively this

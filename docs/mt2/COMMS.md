@@ -323,3 +323,14 @@ SUMMARY: US Finnhub IPO calendar and bounded observed-connection graph implement
 DECISION / REQUEST: none; owner authorized deploy in the execution order. MT2-7 remains out of scope.
 EVIDENCE POINTER: EVIDENCE.md MT2-6 LAUNCHPAD.
 ---
+
+---
+TIMESTAMP: 2026-09-23
+FROM: CODEX
+TO: OWNER
+CHECKPOINT: MT2-6 LAUNCHPAD
+MESSAGE TYPE: CHECKPOINT CLOSURE — PASS
+SUMMARY: Source commit 190e754 deployed via main. Production served 20260923b assets, returned 33 US IPO events and explicit India UNAVAILABLE, passed 71/71 smoke contracts, and rendered correctly in desktop/mobile browser with a clean console. Closure record bumps assets to 20260923c. India provider gap B-037 remains bounded; no fabricated price impact or MT2-7 work.
+DECISION / REQUEST: none. MT2-7 requires a separate authorization.
+EVIDENCE POINTER: EVIDENCE.md MT2-6 production closure; DECISIONS D-012; BACKLOG B-037.
+---
