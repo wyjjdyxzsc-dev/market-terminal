@@ -67,7 +67,7 @@ test('research and intelligence group the existing surfaces without dropping any
   assert.deepEqual(shell.resolve('research').view, 'analyze');
   assert.deepEqual(shell.resolve('research/sectors').view, 'sectors');
   const intel = shell.workspace('intelligence').items.map((it) => `${it.view}:${it.sub || ''}`);
-  assert.deepEqual(intel, ['news:briefing', 'news:situation', 'news:report', 'supply:', 'news:map']);
+  assert.deepEqual(intel, ['news:worldwire', 'news:briefing', 'news:situation', 'news:report', 'supply:', 'news:map']);
   assert.equal(shell.resolve('research/launchpad').view, 'launchpad');
 });
 

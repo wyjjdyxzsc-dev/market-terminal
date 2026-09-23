@@ -128,3 +128,9 @@
 - `/api/nexus/company` and `/api/nexus/registry` expose the new Company identity and full
   accounting; `public/nexus.js` shows cross-listed siblings ("Also listed as …") with a working
   click-through in both directions.
+# 2026-09-23 — MT2-7 WORLDWIRE (implementation; production acceptance pending)
+
+- Added canonical SourceSignal and WorldEvent models, deterministic clustering/deduplication, source-independent corroboration, explicit uncertainty, materiality and urgency, bounded retention and entity linking.
+- Added GDELT, USGS, NASA EONET and US-only NWS adapters with source health, backoff, response validation and isolated failure; ACLED remains disabled.
+- Reused hourly Cloudflare Cron and KV for batched background ingest; added eight bounded, shared-runtime WORLDWIRE API routes and responsive Global Intelligence event stream/detail with ATLAS/NEXUS/LAUNCHPAD seams.
+- Removed the existing unauthenticated ACLED map fallback; retained source provenance and no full article text.

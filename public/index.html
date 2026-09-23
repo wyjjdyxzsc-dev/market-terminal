@@ -14,7 +14,7 @@
   <meta name="apple-mobile-web-app-title" content="MktTerminal" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
     integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-  <link rel="stylesheet" href="style.css?v=20260923f" />
+  <link rel="stylesheet" href="style.css?v=20260923i" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' rx='3' fill='%230b0c0f'/><path d='M3 12V4l2.5 4L8 4l2.5 4L13 4v8' fill='none' stroke='%23e8b25c' stroke-width='1.6' stroke-linejoin='round'/></svg>" />
 </head>
 <body>
@@ -286,8 +286,26 @@
         </div>
       </header>
 
+      <!-- ── WORLDWIRE: canonical event graph ── -->
+      <div id="gi-worldwire" class="gi-panel active" role="tabpanel">
+        <div class="ww-controls">
+          <label>Scope <select id="wwMarket"><option value="GLOBAL">Global</option><option value="US">US relevance</option><option value="IN">India relevance</option></select></label>
+          <label>Search <input id="wwSearch" type="search" placeholder="Event, place, entity, commodity" /></label>
+          <label>Category <select id="wwCategory"><option value="">All categories</option></select></label>
+          <label>Country <input id="wwCountry" type="text" maxlength="3" placeholder="US, IN…" /></label>
+          <label>Materiality <select id="wwMateriality"><option value="">All levels</option><option>CRITICAL</option><option>HIGH</option><option>MODERATE</option><option>LOW</option><option>UNKNOWN</option></select></label>
+          <label>Urgency <select id="wwUrgency"><option value="">All urgency</option><option>HIGH</option><option>MODERATE</option><option>LOW</option></select></label>
+          <label>Time <select id="wwTime"><option value="">Recent retained</option><option value="24h">24 hours</option><option value="7d">7 days</option><option value="30d">30 days</option></select></label>
+          <button type="button" class="btn" id="wwRefresh">Refresh</button>
+        </div>
+        <div id="wwCoverage" class="caption"></div>
+        <div id="wwStatus" class="status">Loading WORLDWIRE events…</div>
+        <div class="ww-layout"><div id="wwStream" class="ww-stream"></div><aside id="wwDetail" class="ww-detail" aria-live="polite"><p>Select an event for evidence and connections.</p></aside></div>
+        <button type="button" class="btn" id="wwMore" hidden>Load more</button>
+      </div>
+
       <!-- ── BRIEFING: live world-events feed ── -->
-      <div id="gi-briefing" class="gi-panel active" role="tabpanel">
+      <div id="gi-briefing" class="gi-panel" role="tabpanel">
         <section id="breaking" class="breaking hidden">
           <h3 class="section-label breaking-label">Breaking</h3>
           <div id="breakingList" class="card-list"></div>
@@ -509,17 +527,18 @@
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
     integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-  <script src="shell.js?v=20260923f"></script>
-  <script src="quant.js?v=20260923f"></script>
-  <script src="app.js?v=20260923f"></script>
-  <script src="deepdive.js?v=20260923f"></script>
-  <script src="nexus.js?v=20260923f"></script>
-  <script src="launchpad.js?v=20260923f"></script>
-  <script src="intel.js?v=20260923f"></script>
-  <script src="mapintel.js?v=20260923f"></script>
-  <script src="atlas.js?v=20260923f"></script>
-  <script src="ships.js?v=20260923f"></script>
+  <script src="shell.js?v=20260923i"></script>
+  <script src="quant.js?v=20260923i"></script>
+  <script src="app.js?v=20260923i"></script>
+  <script src="deepdive.js?v=20260923i"></script>
+  <script src="nexus.js?v=20260923i"></script>
+  <script src="launchpad.js?v=20260923i"></script>
+  <script src="worldwire.js?v=20260923i"></script>
+  <script src="intel.js?v=20260923i"></script>
+  <script src="mapintel.js?v=20260923i"></script>
+  <script src="atlas.js?v=20260923i"></script>
+  <script src="ships.js?v=20260923i"></script>
   <script src="https://unpkg.com/globe.gl@2.34.0/dist/globe.gl.min.js" integrity="sha384-mGWIMpfF9wMIV/OPDBkP9zd5uJ0D5XOls3hZGSdPlyIKzoTw7ETT4f/Uc0Bu0/T3" crossorigin="anonymous"></script>
-  <script src="globe.js?v=20260923f"></script>
+  <script src="globe.js?v=20260923i"></script>
 </body>
 </html>

@@ -61,8 +61,7 @@
     conflictZones: definition('Conflict Zones', 'hybrid', 900, [
       CURATED,
       source('GDELT', 'https://www.gdeltproject.org', 'public'),
-      source('ACLED', 'https://acleddata.com', 'public'),
-    ], 'Curated context plus public event feeds. Geographic mentions and events are not independently verified intelligence.'),
+    ], 'Curated context plus GDELT discovery. Geographic mentions are not independently verified incidents; ACLED disabled pending owner licensing.'),
     sanctions: curated('Sanctioned States', 'Reference locations curated in this project. It is not a legal sanctions-screening service.'),
     diseaseOutbreaks: definition('Disease Outbreaks', 'hybrid', 900, [
       CURATED,

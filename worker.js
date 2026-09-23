@@ -35,10 +35,18 @@ import './shared/nexus-core.js';
 import './shared/nexus-snapshot.js';
 import './shared/launchpad-core.js';
 import './shared/launchpad-snapshot.js';
+import './shared/worldwire-core.js';
+import './shared/worldwire-runtime.js';
 
 const FINNHUB_BASE = 'https://finnhub.io/api/v1';
 const launchpadCore = globalThis.MarketTerminalLaunchpad;
 const launchpadSnapshot = globalThis.MarketTerminalLaunchpadSnapshot;
+const worldwire = globalThis.MarketTerminalWorldwireRuntime;
+let worldwireRefs;
+const worldwireStorage = (env) => ({
+  get: async (key) => { try { return await env.MT_KV.get(key, 'json'); } catch { return null; } },
+  put: (key, value) => env.MT_KV.put(key, JSON.stringify(value), { expirationTtl: 90 * 86400 }),
+});
 const CACHE_MS = 15 * 60 * 1000; // news refreshes every 15 min
 const BROWSER_UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 ' +
@@ -2960,10 +2968,9 @@ async function fetchGpsJamming() {
   return { type: 'FeatureCollection', features: [], fallback: true };
 }
 
-// Live map data: Active Conflicts (GDELT GKG + ACLED)
+// Live map data: GDELT discovery only. ACLED requires owner licensing.
 async function fetchConflictZones() {
   const GDELT_URL = 'https://api.gdeltproject.org/api/v2/geo/geo?query=conflict%20OR%20attack%20OR%20war%20OR%20battle&mode=pointdata&startdatetime=now-24h&lang=English&maxrecords=100&format=GeoJSON';
-  const ACLED_URL = 'https://acleddata.com/api/acled/read?key=public&email=public@acleddata.com&event_type=Battles:Violence+against+civilians:Explosions%2FRemote+violence&limit=50&fields=event_date,event_type,country,latitude,longitude,fatalities,notes&format=json';
   const features = [];
   try {
     const res = await fetchWithTimeout(GDELT_URL, { headers: { 'User-Agent': BROWSER_UA, Accept: 'application/json' } }, 12000);
@@ -2974,18 +2981,7 @@ async function fetchConflictZones() {
         features.push({ type: 'Feature', geometry: f.geometry, properties: { layer: 'conflict', title: p.name || p.title || 'Conflict event', tone: p.tone, source: 'GDELT' } });
       }
     }
-  } catch { /* fallback to ACLED */ }
-  try {
-    const res = await fetchWithTimeout(ACLED_URL, { headers: { 'User-Agent': BROWSER_UA, Accept: 'application/json' } }, 12000);
-    if (res.ok) {
-      const j = await res.json();
-      for (const ev of (j.data || [])) {
-        const lat = parseFloat(ev.latitude), lon = parseFloat(ev.longitude);
-        if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
-        features.push({ type: 'Feature', geometry: { type: 'Point', coordinates: [lon, lat] }, properties: { layer: 'conflict', title: `${ev.event_type} — ${ev.country}`, fatalities: ev.fatalities, date: ev.event_date, notes: (ev.notes || '').slice(0, 160), source: 'ACLED' } });
-      }
-    }
-  } catch { /* degrade gracefully */ }
+  } catch { /* retain curated map context on GDELT failure */ }
   return { type: 'FeatureCollection', features };
 }
 
@@ -3139,10 +3135,12 @@ async function fetchGeoEvents() {
 
 async function atlasGeoEvents(env, ctx, query) {
   const { data, fresh } = await getData(env, ctx, atlasCore.atlasCacheKey('events', {}), fetchGeoEvents, 900 * 1000);
+  const wwStore=await worldwireStorage(env).get(worldwire.KEY);
+  const combined=worldwire.mergeGeoEvents(data,worldwire.geoEvents(wwStore,atlasCore));
   const bbox = atlasCore.parseBbox(query.bbox);
   const category = String(query.category || '').toUpperCase();
   const now = Date.now();
-  const events = data
+  const events = combined
     .map((e) => ({ ...e, status: atlasCore.classifyEventStatus(e, now) }))
     .filter((e) => (!bbox || atlasCore.inBbox(e.location, bbox)) && (!category || e.categories.includes(category)));
   return { atlasSchemaVersion: atlasCore.ATLAS_SCHEMA_VERSION, cached: !fresh, total: events.length, categories: atlasCore.EVENT_CATEGORIES, events: events.slice(0, 600), truncated: events.length > 600, generatedAt: new Date(now).toISOString() };
@@ -3176,7 +3174,7 @@ async function atlasEntityDetail(env, ctx, id) {
     layer: atlasCore.layerById(entity.layer),
     nearbyEvents,
     nearbyEventsState,
-    extensions: { supplyChain: 'reserved:MT2-5 NEXUS', ipo: '/api/launchpad/ipos', worldwire: 'reserved:MT2-7 WORLDWIRE', oracle: 'reserved:MT2-8 ORACLE', portfolio: 'reserved:MT2-9 LEDGER', watchlist: 'reserved:MT2-11 WATCHTOWER', sentinel: 'reserved:MT2-12 SENTINEL' },
+    extensions: { supplyChain: 'reserved:MT2-5 NEXUS', ipo: '/api/launchpad/ipos', worldwire: '/api/worldwire/events', oracle: 'reserved:MT2-8 ORACLE', portfolio: 'reserved:MT2-9 LEDGER', watchlist: 'reserved:MT2-11 WATCHTOWER', sentinel: 'reserved:MT2-12 SENTINEL' },
   };
 }
 
@@ -3553,6 +3551,13 @@ async function handleApi(request, env, ctx, url) {
   }
 
   // --- GLOBAL MAP layers (free public feeds, normalized + cached) ---
+
+  if (p.startsWith('/api/worldwire/')) {
+    const store = await worldwireStorage(env).get(worldwire.KEY);
+    const out = worldwire.respond(p, store, Object.fromEntries(qs.entries()));
+    if (p === '/api/worldwire/event' && !out.event) return json({ error: true, code: 'not_found', message: 'Unknown WORLDWIRE event id.' }, 404);
+    return json(out);
+  }
 
   if (p === '/api/map/atlas') return json(atlasCatalog());
   if (p === '/api/map/entities') {
@@ -4760,6 +4765,10 @@ export default {
   // Hourly cron: refresh the news cache and push any new breaking alerts.
   async scheduled(event, env, ctx) {
     ctx.waitUntil((async () => {
+      try {
+        worldwireRefs ||= worldwire.makeRefs(atlasCore, atlasSnapshot, nexusSnapshot, launchpadSnapshot);
+        await worldwire.run(worldwireStorage(env), worldwireRefs);
+      } catch (e) { console.error('[worldwire] scheduled ingest failed', e); }
       try {
         const items = await fetchIntelNews(env);
         await env.MT_KV.put(`cache:news:${NEWS_ENRICHMENT_SCHEMA_VERSION}`, JSON.stringify({ data: items, freshUntil: Date.now() + CACHE_MS })).catch(() => {});

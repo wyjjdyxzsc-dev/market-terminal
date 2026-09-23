@@ -93,7 +93,8 @@ IN PROGRESS / PASS / PARTIAL / BLOCKED.
 - OUT OF SCOPE: MT2-7 WORLDWIRE and later checkpoints; exchange bulk-data ingestion without a source-usage decision.
 
 ## MT2-7 — WORLDWIRE — News (large-scale geopolitical event collection into GeoEvent)
-- STATUS: NOT AUTHORIZED · NOT STARTED · ENTRY: explicit authorization.
+- STATUS: AUTHORIZED · IN PROGRESS (OWNER execution order 2026-09-23; production acceptance pending).
+- OBJECTIVE: deterministic, evidence-bound, continuously scheduled global event collection and a bounded WORLDWIRE API/UI. See D-014 and EVIDENCE.md.
 
 ## MT2-8 — ORACLE — Research
 - STATUS: NOT STARTED · ENTRY: explicit authorization.

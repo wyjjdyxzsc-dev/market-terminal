@@ -286,3 +286,10 @@ accessibility/degraded-state defect · P3 minor.
 - OBSERVATION: before PADLOCK, the active Finnhub IPO calendar yielded only US exchange events. PADLOCK now ingests validated SEBI public-issue filing metadata. NSE/BSE exchange bulk data still requires a source/usage decision before ingestion.
 - CURRENT BEHAVIOUR: PADLOCK uses validated SEBI filing metadata and direct links; India records appear under `?market=IN`. Missing dates, offer terms and listing identity remain UNKNOWN. US events are never relabelled India.
 - SUGGESTED: assess official NSE/BSE listing-data usage rights and an approved adapter for issue terms, dates, ISIN and listing transition. Do not infer these from filing-list metadata.
+
+## B-038 · P1 · WORLDWIRE · GDELT live availability and breadth
+- Local GDELT DOC API returned 429 once and then timed out; the runtime preserves prior events and reports DEGRADED/TIMEOUT with backoff. Verify from the deployed Worker after an actual Cron cycle. Until successful, broad news discovery and geopolitical/technology/maritime coverage cannot be claimed live.
+- GDELT is only article discovery; its source country is not asserted as event location. Additional sources require an explicit owner/terms/attribution record before enablement.
+
+## B-039 · P2 · WORLDWIRE · Global entity and language depth
+- Initial multilingual normalization covers selected event words; non-English source titles are retained unchanged. Country, organization and sector resolution is conservative. Expand tested language/geo vocabularies and licensed authoritative sources before claiming comprehensive global coverage.

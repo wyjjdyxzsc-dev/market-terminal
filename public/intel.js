@@ -1519,7 +1519,7 @@ function formatAiRuntimeSummary(policy) {
   }
 
   // ---------- GLOBAL INTEL: sub-navigation (Briefing / Situation / Report / Map) ----------
-  let giSub = 'briefing';
+  let giSub = 'worldwire';
   function showGiSub(sub) {
     giSub = sub;
     document.querySelectorAll('.gi-subtab').forEach((b) => b.classList.toggle('active', b.dataset.sub === sub));

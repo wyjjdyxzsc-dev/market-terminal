@@ -299,7 +299,8 @@
       `<div class="atlas-d-head"><div><div class="atlas-d-kicker">${esc(ev.type)} · <span class="fresh" data-fresh="${ev.status === 'active' ? 'live' : ev.status === 'stale' ? 'snapshot' : 'eod'}">${esc(ev.status)}</span></div><strong>${esc(ev.title)}</strong></div><button type="button" class="atlas-close" aria-label="Close">×</button></div>` +
       `<dl class="atlas-d-rows"><div><dt>Location</dt><dd>${ev.location.lat.toFixed(3)}, ${ev.location.lon.toFixed(3)}${ev.location.name ? ' · ' + esc(ev.location.name) : ''}</dd></div><div><dt>Severity</dt><dd>${esc(ev.severity)}</dd></div><div><dt>Started</dt><dd>${esc(fmtDate(ev.startedAt))}</dd></div><div><dt>Updated</dt><dd>${esc(fmtDate(ev.updatedAt))}</dd></div><div><dt>Evidence</dt><dd>${esc(ev.confidence)}</dd></div></dl>` +
       `<div class="atlas-d-label">EVIDENCE / SOURCE</div><ul class="atlas-evidence">${evidenceHtml(ev.sourceEvidence)}</ul>` +
-      `<div class="atlas-d-ext">Affected entities and materiality arrive with WORLDWIRE / SENTINEL; none are inferred here.</div>`;
+      (ev.attributes?.worldwireId ? `<div class="atlas-d-ext"><button type="button" class="atlas-worldwire" data-id="${esc(ev.attributes.worldwireId)}">Open in WORLDWIRE</button></div>` : `<div class="atlas-d-ext">Materiality is UNKNOWN for this map-only event.</div>`);
+    drawer.querySelector('.atlas-worldwire')?.addEventListener('click', b=>window.MarketTerminalWorldwire?.openEvent(b.currentTarget.dataset.id));
     wireClose();
   }
   function wireClose() { const b = drawerEl.querySelector('.atlas-close'); if (b) b.addEventListener('click', closeDrawer); }

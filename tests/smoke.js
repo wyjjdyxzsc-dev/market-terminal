@@ -100,8 +100,8 @@ async function checkHtml(label, url) {
   const t = await res.text();
   if (!t.includes('chartCanvas')) { console.error(`  ✗ ${label} — missing #chartCanvas`); fail++; return; }
   const versions = [...t.matchAll(/\?v=([0-9]{8}[a-z])/g)].map((match) => match[1]);
-  if (versions.length !== 12 || new Set(versions).size !== 1) {
-    console.error(`  ✗ ${label} — expected twelve synchronized asset versions (MT2-6 adds launchpad.js)`);
+  if (versions.length !== 13 || new Set(versions).size !== 1) {
+    console.error(`  ✗ ${label} — expected thirteen synchronized asset versions (MT2-7 adds worldwire.js)`);
     fail++; return;
   }
   // MT2-2 QUARTZ shell contract: primary nav mount, every workspace view, and the
@@ -113,6 +113,7 @@ async function checkHtml(label, url) {
   if (!t.includes('shell.js?v=')) { console.error(`  ✗ ${label} — shell.js is not loaded`); fail++; return; }
   if (!t.includes('atlas.js?v=')) { console.error(`  ✗ ${label} — atlas.js is not loaded`); fail++; return; }
   if (!t.includes('launchpad.js?v=')) { console.error(`  ✗ ${label} — launchpad.js is not loaded`); fail++; return; }
+  if (!t.includes('worldwire.js?v=') || !t.includes('id="gi-worldwire"')) { console.error(`  ✗ ${label} — WORLDWIRE shell is not loaded`); fail++; return; }
   if (t.includes('id="worldMapContainer"')) { console.error(`  ✗ ${label} — retired Infrastructure canvas still in the shell`); fail++; return; }
   console.log(`  ✓ ${label}`);
   pass++;
@@ -320,6 +321,13 @@ async function checkHtml(label, url) {
   await check('GET /api/launchpad/ipos ALL combines US and India', `${BASE}/api/launchpad/ipos?market=ALL`, {
     validate: d => d.market === 'ALL' && d.events.some(e => e.market === 'US') && d.events.some(e => e.market === 'IN'),
   });
+  await check('GET /api/worldwire/sources licensing and ACLED gate', `${BASE}/api/worldwire/sources`, {validate:d=>d.sources?.USGS?.enabled===true&&d.sources?.ACLED?.enabled===false&&d.sources?.ACLED?.reason==='REQUIRES_OWNER_LICENSE_AUTHORIZATION'});
+  await check('GET /api/worldwire/categories taxonomy', `${BASE}/api/worldwire/categories`, {validate:d=>d.categories?.includes('MARITIME')&&d.categories?.includes('HOSPITALITY_TRAVEL')});
+  await check('GET /api/worldwire/events bounded event graph', `${BASE}/api/worldwire/events?limit=999`, {validate:d=>Array.isArray(d.events)&&d.events.length<=50&&typeof d.schemaVersion==='string'&&d.events.every(e=>e.id&&Array.isArray(e.sourceSignals)&&e.materiality)});
+  await check('GET /api/worldwire/search bounded', `${BASE}/api/worldwire/search?q=earthquake&limit=999`, {validate:d=>Array.isArray(d.events)&&d.events.length<=50});
+  await check('GET /api/worldwire/coverage computed', `${BASE}/api/worldwire/coverage`, {validate:d=>d.coverage==='MAXIMUM PRACTICAL CONNECTED-SOURCE COVERAGE'&&typeof d.sourceCount==='number'&&typeof d.events24h==='number'});
+  await check('GET /api/worldwire/health isolated sources', `${BASE}/api/worldwire/health`, {validate:d=>typeof d.health==='object'});
+  await check('GET /api/worldwire/changes bounded', `${BASE}/api/worldwire/changes?limit=999`, {validate:d=>Array.isArray(d.changes)&&d.changes.length<=50});
   await check('GET /api/nexus/registry?query=apple returns a large registry with coverage', `${BASE}/api/nexus/registry?query=apple`,
     { validate: d => Array.isArray(d.results) && d.coverage && d.coverage.totalCompanies > 1000 });
 

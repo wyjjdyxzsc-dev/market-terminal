@@ -1475,7 +1475,7 @@ function setupOscButtons() {
 // shell only decides which view (+ Global Intel sub-panel) a destination shows.
 // Showing a view dispatches a `tabshown` event so intel.js can lazy-load its data.
 const Shell = window.MarketTerminalShell;
-let currentGiSub = 'briefing';
+let currentGiSub = 'worldwire';
 
 function showView(name) {
   const views = document.querySelectorAll('.view');

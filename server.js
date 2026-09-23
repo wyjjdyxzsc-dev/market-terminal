@@ -46,6 +46,23 @@ const nexusCore = require('./shared/nexus-core.js');
 const nexusSnapshot = require('./shared/nexus-snapshot.js');
 const launchpadCore = require('./shared/launchpad-core.js');
 const launchpadSnapshot = require('./shared/launchpad-snapshot.js');
+const worldwire = require('./shared/worldwire-runtime.js');
+const WORLDWIRE_FILE = path.join(__dirname, '.worldwire-local.json');
+const worldwireStorage = {
+  get: async () => { try { return JSON.parse(await fs.promises.readFile(WORLDWIRE_FILE, 'utf8')); } catch { return null; } },
+  put: async (_key, value) => { await fs.promises.writeFile(WORLDWIRE_FILE + '.tmp', JSON.stringify(value)); await fs.promises.rename(WORLDWIRE_FILE + '.tmp', WORLDWIRE_FILE); },
+};
+let worldwireRefs;
+let worldwireRunning = false;
+async function ingestWorldwireLocal() {
+  if (worldwireRunning) return;
+  worldwireRunning = true;
+  try {
+    worldwireRefs ||= worldwire.makeRefs(atlasCore, atlasSnapshot, nexusSnapshot, launchpadSnapshot);
+    await worldwire.run(worldwireStorage, worldwireRefs);
+  } catch (e) { console.error('[worldwire] local ingest failed:', e); }
+  finally { worldwireRunning = false; }
+}
 
 // Optional WebSocket for Finnhub live feed.  npm i ws  to enable.
 let WS;
@@ -3477,16 +3494,13 @@ async function fetchGpsJamming() {
   return { type: 'FeatureCollection', features: [], fallback: true };
 }
 
-// ── Live map data: Active Conflicts (GDELT GKG + ACLED keyless endpoint) ─
+// ── Live map data: GDELT discovery only. ACLED requires owner licensing. ─
 
 async function fetchConflictZones() {
   // GDELT v2 Events API — filter for CAM (Cameo action material) conflict codes
   // Returns top-30 most intense conflict events in the last 15 minutes
   const GDELT_URL =
     'https://api.gdeltproject.org/api/v2/geo/geo?query=conflict%20OR%20attack%20OR%20war%20OR%20battle&mode=pointdata&startdatetime=now-24h&lang=English&maxrecords=100&format=GeoJSON';
-
-  const ACLED_URL =
-    'https://acleddata.com/api/acled/read?key=public&email=public@acleddata.com&event_type=Battles:Violence+against+civilians:Explosions%2FRemote+violence&limit=50&fields=event_date,event_type,country,latitude,longitude,fatalities,notes&format=json';
 
   const features = [];
 
@@ -3511,33 +3525,7 @@ async function fetchConflictZones() {
         });
       }
     }
-  } catch { /* fallback to ACLED */ }
-
-  // 2. ACLED public API (no key required for limited queries)
-  try {
-    const res = await fetchWithTimeout(ACLED_URL, {
-      headers: { 'User-Agent': BROWSER_UA, Accept: 'application/json' },
-    }, 12000);
-    if (res.ok) {
-      const j = await res.json();
-      for (const ev of (j.data || [])) {
-        const lat = parseFloat(ev.latitude), lon = parseFloat(ev.longitude);
-        if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
-        features.push({
-          type: 'Feature',
-          geometry: { type: 'Point', coordinates: [lon, lat] },
-          properties: {
-            layer: 'conflict',
-            title: `${ev.event_type} — ${ev.country}`,
-            fatalities: ev.fatalities,
-            date: ev.event_date,
-            notes: (ev.notes || '').slice(0, 160),
-            source: 'ACLED',
-          },
-        });
-      }
-    }
-  } catch { /* degrade gracefully */ }
+  } catch { /* retain the curated map context on GDELT failure */ }
 
   return { type: 'FeatureCollection', features };
 }
@@ -4393,10 +4381,12 @@ async function fetchGeoEvents() {
 
 async function atlasGeoEvents(query) {
   const { data, fresh } = await fetch_cached_data(atlasCore.atlasCacheKey('events', {}), fetchGeoEvents, TTL.NEWS);
+  const wwStore=await worldwireStorage.get(worldwire.KEY);
+  const combined=worldwire.mergeGeoEvents(data,worldwire.geoEvents(wwStore,atlasCore));
   const bbox = atlasCore.parseBbox(query.bbox);
   const category = String(query.category || '').toUpperCase();
   const now = Date.now();
-  const events = data
+  const events = combined
     .map((e) => ({ ...e, status: atlasCore.classifyEventStatus(e, now) }))
     .filter((e) => (!bbox || atlasCore.inBbox(e.location, bbox)) && (!category || e.categories.includes(category)));
   return { atlasSchemaVersion: atlasCore.ATLAS_SCHEMA_VERSION, cached: !fresh, total: events.length, categories: atlasCore.EVENT_CATEGORIES, events: events.slice(0, 600), truncated: events.length > 600, generatedAt: new Date(now).toISOString() };
@@ -4430,11 +4420,19 @@ async function atlasEntityDetail(id) {
     layer: atlasCore.layerById(entity.layer),
     nearbyEvents,
     nearbyEventsState,
-    extensions: { supplyChain: 'reserved:MT2-5 NEXUS', ipo: '/api/launchpad/ipos', worldwire: 'reserved:MT2-7 WORLDWIRE', oracle: 'reserved:MT2-8 ORACLE', portfolio: 'reserved:MT2-9 LEDGER', watchlist: 'reserved:MT2-11 WATCHTOWER', sentinel: 'reserved:MT2-12 SENTINEL' },
+    extensions: { supplyChain: 'reserved:MT2-5 NEXUS', ipo: '/api/launchpad/ipos', worldwire: '/api/worldwire/events', oracle: 'reserved:MT2-8 ORACLE', portfolio: 'reserved:MT2-9 LEDGER', watchlist: 'reserved:MT2-11 WATCHTOWER', sentinel: 'reserved:MT2-12 SENTINEL' },
   };
 }
 
 app.get('/api/map/atlas', publicRateLimit, route(async (req, res) => { res.json(atlasCatalog()); }));
+for (const name of ['events','event','search','categories','sources','coverage','health','changes']) {
+  app.get(`/api/worldwire/${name}`, publicRateLimit, route(async (req,res) => {
+    const store=await worldwireStorage.get(worldwire.KEY);
+    const out=worldwire.respond(`/api/worldwire/${name}`,store,req.query);
+    if (name==='event'&&!out.event) return res.status(404).json({error:true,code:'not_found',message:'Unknown WORLDWIRE event id.'});
+    res.json(out);
+  }));
+}
 app.get('/api/map/entities', publicRateLimit, route(async (req, res) => {
   const out = atlasEntities(req.query);
   if (out.error) return res.status(400).json({ error: true, message: out.error, layers: out.layers });
@@ -4799,6 +4797,8 @@ if (WS && WS.WebSocketServer) {
 }
 
 httpServer.listen(PORT, () => {
+  setTimeout(() => ingestWorldwireLocal().catch(() => {}), 1000);
+  setInterval(() => ingestWorldwireLocal().catch(() => {}), 3600000);
   const speedAvail = SPEED_PROVIDERS.filter(p => process.env[p.envKey]).map(p => p.name);
   const heavyAvail = HEAVY_PROVIDERS.filter(p => process.env[p.envKey]).map(p => p.name);
 

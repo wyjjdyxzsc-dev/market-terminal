@@ -35,6 +35,7 @@
       { id: 'launchpad', label: 'IPOs', view: 'launchpad' },
     ] },
     { id: 'intelligence', label: 'Intelligence', items: [
+      { id: 'worldwire', label: 'Worldwire', view: 'news', sub: 'worldwire' },
       { id: 'briefing',  label: 'Briefing',          view: 'news',   sub: 'briefing' },
       { id: 'situation', label: 'Situation Room',    view: 'news',   sub: 'situation' },
       { id: 'report',    label: 'Investment Report', view: 'news',   sub: 'report' },
@@ -133,6 +134,7 @@
     const t = String(tab || '').trim();
     if (!t) return null;
     if (t === 'analysis') return 'research/sectors';
+    if (t === 'news') return 'intelligence/briefing';
     const found = locate(t, null);
     if (!found || (found.workspace === DEFAULT_WORKSPACE && t !== 'terminal')) return null;
     return found.item ? `${found.workspace}/${found.item}` : found.workspace;

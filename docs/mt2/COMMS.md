@@ -6,6 +6,16 @@ session resume correctly. Not a command diary.
 Actors: OWNER · CLAUDE · CODEX · HUMAN ACCEPTANCE
 
 ---
+TIMESTAMP: 2026-09-23T16:30Z
+FROM: CODEX
+TO: OWNER
+CHECKPOINT: MT2-7 WORLDWIRE
+MESSAGE TYPE: IMPLEMENTATION / LOCAL ACCEPTANCE IN PROGRESS
+SUMMARY: Start HEAD 5f0e14b matched origin/main and PADLOCK facts. WORLDWIRE now shares deterministic event and source models, isolated GDELT/USGS/EONET/NWS adapters, the existing hourly Cron and one-key KV state, bounded event APIs, and a responsive Intelligence surface. ACLED is disabled. Local official adapters succeeded; GDELT timed out and is health-labelled DEGRADED. Full production acceptance and an actual scheduled cycle are pending. Three owner untracked files remain untouched.
+DECISION / REQUEST: none. Continue the authorized checkpoint; MT2-8 ORACLE remains unauthorized.
+EVIDENCE POINTER: D-014; EVIDENCE.md MT2-7.
+ACTION REQUIRED: CODEX — complete local gates, GitHub deployment, production gates and truthful closure.
+---
 TIMESTAMP: 2026-09-20T03:40Z
 FROM: CLAUDE
 TO: OWNER

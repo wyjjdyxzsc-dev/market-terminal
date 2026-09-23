@@ -1,5 +1,9 @@
 # Project Meridian — STATE (recovery capsule)
 
+## Current checkpoint — MT2-7 WORLDWIRE (2026-09-23)
+STATUS: IN PROGRESS. OWNER authorized this checkpoint only. Start HEAD `5f0e14be86715f600e6576141ff8bd9514184300` = `origin/main`, PADLOCK PASS and assets `20260923f` verified. Shared event/signal core, four source adapters, hourly existing Cron + batched KV state, bounded APIs, WORLDWIRE Intelligence UI and ATLAS/NEXUS/LAUNCHPAD seams are implemented locally. GDELT live local health is DEGRADED after a timeout; USGS/EONET/NWS succeeded. Unit and production checks are still in progress. The three unrelated owner untracked files are untouched. MT2-8 ORACLE is NOT AUTHORIZED.
+
+
 PROJECT: Market Terminal 2.0 — Project Meridian
 CHECKPOINT: MT2-6A PADLOCK — India IPO Feed Completion
 STATUS: PASS — CLOSED 2026-09-23. MT2-6 LAUNCHPAD remains PASS. Source commit 7b1fd07 deployed; 72/72 production smoke and desktop/mobile browser pass with clean console. Closure assets 20260923f.
