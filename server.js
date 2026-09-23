@@ -4238,7 +4238,7 @@ app.get('/api/map/gpsjam', route(async (req, res) => {
 
 app.get('/api/map/conflict', route(async (req, res) => {
   // 15-min TTL — GDELT updates every 15 min; ACLED updates daily
-  const { data, fresh } = await fetch_cached_data('map:conflict', fetchConflictZones, TTL.NEWS);
+  const { data, fresh } = await fetch_cached_data('map:conflict:gdelt-only', fetchConflictZones, TTL.NEWS);
   res.json(annotateMapPayload(data, 'conflictZones', { cached: !fresh }));
 }));
 

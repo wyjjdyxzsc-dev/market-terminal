@@ -97,7 +97,7 @@ test('ATLAS projection requires source coordinates and shares WORLDWIRE id',()=>
 });
 test('server and Worker route and ATLAS projection call the same shared runtime',()=>{
   const server=fs.readFileSync(require.resolve('../server.js'),'utf8'),worker=fs.readFileSync(require.resolve('../worker.js'),'utf8');
-  for(const s of [server,worker]) { assert.match(s,/worldwire\.respond\(/); assert.match(s,/worldwire\.mergeGeoEvents\(/); assert.match(s,/worldwire\.run\(/); }
+  for(const s of [server,worker]) { assert.match(s,/worldwire\.respond\(/); assert.match(s,/worldwire\.mergeGeoEvents\(/); assert.match(s,/worldwire\.run\(/); assert.match(s,/map:conflict:gdelt-only/); assert.doesNotMatch(s,/acleddata\.com\/api\/acled/); }
 });
 test('retention bounds hot events and keeps material overflow as warm metadata',()=>{
   const sample=core.ingest(null,[{provider:'USGS',officialId:'mine',sourceUrl:'https://earthquake.usgs.gov/mine',title:'M5 earthquake Taiwan',publishedAt:NOW,geo:{lat:23,lon:121},magnitude:5}],{},NOW).events[0];

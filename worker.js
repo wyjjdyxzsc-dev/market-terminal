@@ -3584,7 +3584,7 @@ async function handleApi(request, env, ctx, url) {
     catch (err) { return json({ error: true, message: friendlyError(err) }, 502); }
   }
   if (p === '/api/map/conflict') {
-    try { const { data, fresh } = await getData(env, ctx, 'map:conflict', fetchConflictZones, 900 * 1000); return json(annotateMapPayload({ cached: !fresh, ...data }, 'conflictZones', { cached: !fresh })); }
+    try { const { data, fresh } = await getData(env, ctx, 'map:conflict:gdelt-only', fetchConflictZones, 900 * 1000); return json(annotateMapPayload({ cached: !fresh, ...data }, 'conflictZones', { cached: !fresh })); }
     catch (err) { return json({ error: true, message: friendlyError(err) }, 502); }
   }
   if (p === '/api/map/disease') {
