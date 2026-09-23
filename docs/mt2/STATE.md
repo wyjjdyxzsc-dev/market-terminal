@@ -2,9 +2,9 @@
 
 PROJECT: Market Terminal 2.0 — Project Meridian
 CHECKPOINT: MT2-5A CENSUS — Listed-Company Universe Completeness Lock
-STATUS: IMPLEMENTED + UNIT/LOCAL TESTED (151/151 unit, 66/66 local smoke); deploying for
-  production acceptance (2026-09-23). PASS/PARTIAL decided after test:prod + production browser
-  check.
+STATUS: PASS — CLOSED 2026-09-23. Deployed 13b4cd3 (assets 20260923a); test:prod 69/69;
+  production browser pass (India-mode RELIANCE NSE+BSE cross-listing, clean console). OWNER
+  acceptance not yet recorded.
 PREVIOUS: MT2-5 NEXUS — PASS (source commit `59a7bba`, closure commit `173a979`; production-
   verified per CLAUDE.md — this file's own STATE/COMMS/DECISIONS entries for NEXUS were never
   written at the time, only CLAUDE.md was updated; ROADMAP.md corrected retroactively this
@@ -38,7 +38,7 @@ OPEN: B-001/B-023 (owner: iCloud copy), B-002, B-004, B-016…B-019, B-021, B-02
   new B-034 (pre-existing search-ranking ambiguity without market scope — not a CENSUS
   regression), B-035 (snapshot size growth to watch), B-036 (219 genuinely SEC-unclassified
   issuers — documented as expected, not a regression).
-NEXT EXACT ACTION: git commit; git push origin main; wait for eleven `20260923a` refs; npm run
-  test:prod; production browser check (India-mode cross-listing, US-mode OTC/CBOE resolve);
-  EVIDENCE "Production acceptance"; COMMS closure; STATE → PASS/PARTIAL; STOP. LAUNCHPAD is not
-  authorized.
+NEXT EXACT ACTION: none. MT2-5A is closed. MT2-6 LAUNCHPAD requires explicit OWNER
+  authorization (entry: MT2-5A closed — satisfied). Owner-side: archive the frozen iCloud copy
+  (B-001/B-023); optional review of B-034 (search-ranking market disambiguation, pre-existing,
+  not a CENSUS regression).

@@ -858,3 +858,15 @@ carried forward broken.
   existing (pre-CENSUS, unchanged) name-ranking behavior — logged as B-034, not a CENSUS
   regression (the India-scoped path, which is what the UI actually uses, is correct). Console:
   only expected local keyless-route 502s, matching the smoke suite's own skip list.
+
+### Production acceptance — 2026-09-23 — deployed `13b4cd3` (assets 20260923a)
+- Production served eleven `20260923a` refs. `npm run test:prod` → **69/69** (all CENSUS
+  contracts: accounting reconciled for SEC/NSE/BSE, `companiesTotal`/`crossListedCompanies`
+  positive, `IN:NSE:RELIANCE` companyIdentity cross-listed with a BSE sibling, `US:OTC:ASMLF`
+  resolves as exchange `OTC`). Level: LIVE TESTED.
+- Production browser pass: India market mode, Supply Chain search "RELIANCE" →
+  `IN:NSE:RELIANCE`, "Also listed as BSE:500325" chip rendered with the real tier-3 Wikidata
+  ownership relationship (Network18) intact; identical to the local pass. Console: clean, zero
+  errors. Level: REAL BROWSER TESTED (production).
+- Not claimed: OWNER acceptance; a fuller relationship-coverage expansion (explicitly out of
+  scope per the CENSUS brief).

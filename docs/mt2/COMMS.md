@@ -297,3 +297,18 @@ SUMMARY: Ground truth confirmed (HEAD = origin/main = 173a979; all NEXUS commits
 DECISION / REQUEST: none pending. Pushing main per policy.
 EVIDENCE POINTER: EVIDENCE.md "MT2-5A CENSUS"; DECISIONS D-011; BACKLOG B-034…B-036.
 ACTION REQUIRED: OWNER — none for this checkpoint.
+---
+TIMESTAMP: 2026-09-23T10:40Z
+FROM: CLAUDE
+TO: OWNER
+CHECKPOINT: MT2-5A CENSUS
+MESSAGE TYPE: CHECKPOINT CLOSURE — PASS
+SUMMARY: Deployed 13b4cd3 (assets 20260923a). Production test:prod 69/69; production browser
+  pass confirms the India-mode RELIANCE search resolves to IN:NSE:RELIANCE with its BSE
+  500325 cross-listing shown and clickable, real tier-3 relationship intact, clean console.
+  18,087 securities / 13,219 companies / 3,903 cross-listed / 0 uncovered / 0 silent drops.
+  No relationship coverage was expanded; UNKNOWN relationships remain UNKNOWN.
+DECISION / REQUEST: none. MT2-6 LAUNCHPAD is NOT authorized by this report.
+EVIDENCE POINTER: EVIDENCE.md "MT2-5A CENSUS" + "Production acceptance"; DECISIONS D-011;
+  BACKLOG B-034…B-036; ROADMAP corrected (NEXUS retroactively PASS, CENSUS inserted as MT2-5A).
+ACTION REQUIRED: OWNER — record acceptance when convenient.
