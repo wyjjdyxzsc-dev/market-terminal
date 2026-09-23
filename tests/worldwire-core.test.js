@@ -15,7 +15,7 @@ test('negative control: headline changes and translations do not create extra ev
   const a=article('Earthquake strikes Taiwan','https://reuters.com/quake');
   const b=article('Powerful quake hits Taiwan','https://bbc.com/quake');
   const c=article('Terremoto golpea Taiwan','https://local.tw/quake',{language:'Spanish',translatedTitle:'Earthquake strikes Taiwan'});
-  const out=core.ingest(null,[a,b,c],{},NOW); assert.equal(out.events.length,1); assert.equal(out.events[0].sourceCount,3); assert.equal(out.events[0].independentSourceCount,3);
+  const out=core.ingest(null,[a,b,c],{},NOW); assert.equal(out.events.length,1); assert.equal(out.events[0].sourceCount,3); assert.equal(out.events[0].independentSourceCount,2);
 });
 test('negative control: unrelated same-day events and distinct official quake IDs stay apart',()=>{
   const a=article('Earthquake strikes Taiwan Hualien','https://a.example/1');
@@ -28,6 +28,14 @@ test('negative control: syndication and source mirrors do not inflate independen
   const a=article('Earthquake strikes Taiwan','https://mirror-one.example/a',{sourceName:'Reuters'});
   const b=article('Earthquake strikes Taiwan','https://mirror-two.example/b',{sourceName:'Reuters mirror'});
   const e=core.ingest(null,[a,b],{},NOW).events[0]; assert.equal(e.sourceCount,2); assert.equal(e.independentSourceCount,1); assert.equal(e.status,'DEVELOPING');
+  const c=article('Earthquake strikes Taiwan','https://mirror-three.example/c',{sourceName:'Mirror Three'});
+  assert.equal(core.ingest(null,[a,c],{},NOW).events[0].independentSourceCount,1);
+});
+test('extended categories classify explicit event terms without inventing impact',()=>{
+  const cases={SPACE_AEROSPACE:'Satellite launch delayed',HEALTHCARE_BIOTECH:'Drug approval announced',FX_SOVEREIGN_DEBT:'Sovereign bond auction',BANKING_CREDIT:'Bank failure reported',COMMODITIES:'Copper mine shutdown',AGRICULTURE_FOOD:'Wheat crop failure',SUPPLY_CHAINS:'Supplier disruption at factory',REGULATION:'Regulatory ban proposed',DEFENSE:'Defense contract awarded',AUTOMOTIVE:'Electric vehicle production halted',CONSUMER_RETAIL:'Retail sales fall',REAL_ESTATE_CONSTRUCTION:'Housing starts decline',MEDIA_ENTERTAINMENT:'Film studio merger',MA:'Takeover bid announced',EARNINGS_CORPORATE:'Quarterly results released',LABOR:'Labor strike called',INFRASTRUCTURE:'Bridge collapse reported',CRITICAL_MINERALS:'Lithium mine closed',WATER:'Water shortage declared',NUCLEAR:'Nuclear reactor offline',DIGITAL_ASSETS:'Stablecoin rule proposed',EMERGING_MARKETS:'Emerging market debt sale'};
+  for(const [category,title] of Object.entries(cases)) assert.ok(core.normalizeSignal(article(title,'https://example.org/'+category),NOW).categories.includes(category),category);
+  const e=core.ingest(null,[article('Copper mine shutdown','https://example.org/scale')],{},NOW).events[0];
+  assert.equal(e.materialityDimensions.economicScale,'UNKNOWN');
 });
 test('negative control: duplicate official signal yields one event and correction updates it',()=>{
   const q={provider:'USGS',officialId:'abc',sourceUrl:'https://earthquake.usgs.gov/earthquakes/eventpage/abc',title:'M6 earthquake Taiwan',publishedAt:NOW,updatedAt:NOW,geo:{lat:23,lon:121}};
@@ -57,6 +65,7 @@ test('source policy disables ACLED, parser error pages fail, official adapters v
   assert.equal(core.SOURCES.ACLED.enabled,false); assert.equal(core.normalizeSignal({provider:'ACLED',sourceUrl:'https://acleddata.com/a',title:'test'},NOW),null);
   assert.throws(()=>runtime.gdelt({html:'error'}),/schema/); assert.throws(()=>runtime.usgs({features:[]}),/schema/); assert.throws(()=>runtime.eonet({events:null}),/schema/); assert.throws(()=>runtime.nws({features:[]}),/schema/);
   assert.equal(runtime.usgs({type:'FeatureCollection',features:[{id:'abc',geometry:{type:'Point',coordinates:[121,23]},properties:{url:'https://earthquake.usgs.gov/a',mag:5,place:'Taiwan',time:Date.parse(NOW)}}]})[0].officialId,'abc');
+  assert.equal(runtime.usgs({type:'FeatureCollection',features:[{id:'ar',geometry:{type:'Point',coordinates:[-66,-28]},properties:{url:'https://earthquake.usgs.gov/ar',mag:5,place:'51 km WSW of Arauco, Argentina',time:Date.parse(NOW)}}]})[0].country,'AR');
   assert.equal(runtime.eonet({events:[{id:'x',title:'Wildfire',link:'https://eonet.gsfc.nasa.gov/x',geometry:[{type:'Point',coordinates:[2,1],date:NOW}]}]})[0].geo.lat,1);
   assert.equal(runtime.nws({type:'FeatureCollection',features:[{id:'x',properties:{headline:'Storm warning',id:'https://api.weather.gov/a',sent:NOW},geometry:null}]} )[0].country,'US');
   assert.equal(runtime.nws({type:'FeatureCollection',features:[{id:'t',properties:{event:'Test Message',headline:'Test Message',id:'https://api.weather.gov/test',sent:NOW}}]}).length,0);

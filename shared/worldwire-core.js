@@ -31,6 +31,29 @@
     ['IPO_CAPITAL_RAISING',/\b(ipo|initial public offering|public issue|prospectus)\b/i],
     ['TRADE',/\b(tariff|export control|import restriction|trade dispute)\b/i],
     ['CYBER',/\b(cyberattack|ransomware|data breach)\b/i],
+    ['SPACE_AEROSPACE',/\b(satellite launch|rocket launch|spacecraft|space station|aerospace|aircraft manufacturer)\b/i],
+    ['HEALTHCARE_BIOTECH',/\b(biotech|drug approval|clinical trial|vaccine|medical device|pharmaceutical)\b/i],
+    ['FX_SOVEREIGN_DEBT',/\b(exchange rate|currency devaluation|sovereign bond|sovereign debt|foreign exchange reserve)\b/i],
+    ['BANKING_CREDIT',/\b(bank failure|banking crisis|credit rating downgrade|loan default|bank capital)\b/i],
+    ['COMMODITIES',/\b(commodity supply|copper mine|gold mine|uranium mine|iron ore|rare earths|lithium mine)\b/i],
+    ['AGRICULTURE_FOOD',/\b(crop failure|harvest|food shortage|grain export|wheat crop|corn crop|soybean crop)\b/i],
+    ['SUPPLY_CHAINS',/\b(supply chain|supplier disruption|factory shutdown|component shortage|logistics bottleneck)\b/i],
+    ['REGULATION',/\b(regulator|regulatory approval|regulatory ban|new regulation|compliance rule)\b/i],
+    ['DEFENSE',/\b(defense contract|defence contract|weapons system|arms export|fighter jet)\b/i],
+    ['AUTOMOTIVE',/\b(automaker|electric vehicle|ev battery|autonomous vehicle|car production)\b/i],
+    ['CONSUMER_RETAIL',/\b(retail sales|consumer spending|store closure|consumer goods)\b/i],
+    ['REAL_ESTATE_CONSTRUCTION',/\b(real estate|housing starts|property developer|construction project)\b/i],
+    ['MEDIA_ENTERTAINMENT',/\b(streaming service|film studio|media merger|entertainment company)\b/i],
+    ['MA',/\b(merger|acquisition|takeover bid|buyout offer)\b/i],
+    ['EARNINGS_CORPORATE',/\b(earnings report|quarterly results|profit warning|revenue guidance)\b/i],
+    ['LABOR',/\b(labor strike|labour strike|workers strike|labor shortage|layoffs)\b/i],
+    ['INFRASTRUCTURE',/\b(bridge collapse|rail disruption|power grid|infrastructure project|port closure)\b/i],
+    ['CRITICAL_MINERALS',/\b(critical mineral|rare earths|lithium mine|cobalt mine|nickel mine)\b/i],
+    ['WATER',/\b(water shortage|water supply|reservoir|desalination|water treatment)\b/i],
+    ['NUCLEAR',/\b(nuclear reactor|nuclear power|uranium enrichment|nuclear plant)\b/i],
+    ['DIGITAL_ASSETS',/\b(bitcoin|cryptocurrency|crypto exchange|stablecoin|digital asset)\b/i],
+    ['EMERGING_MARKETS',/\b(emerging markets|emerging market debt)\b/i],
+    ['SECOND_ORDER_EFFECTS',/\b(second.order effect|knock.on effect|downstream disruption)\b/i],
     ['CLIMATE_NATURAL_DISASTERS',/\b(earthquake|quake|storm|hurricane|typhoon|cyclone|flood|wildfire|volcano|drought)\b/i]
   ];
   const COMMODITIES = { BRENT:/\bbrent\b/i, WTI:/\bwti\b/i, NATURAL_GAS:/\b(natural gas|lng)\b/i, GOLD:/\bgold\b/i, SILVER:/\bsilver\b/i, COPPER:/\bcopper\b/i, URANIUM:/\buranium\b/i, LITHIUM:/\blithium\b/i, NICKEL:/\bnickel\b/i, COBALT:/\bcobalt\b/i, IRON_ORE:/\biron ore\b/i, ALUMINIUM:/\b(aluminium|aluminum)\b/i, RARE_EARTHS:/\brare earths?\b/i, WHEAT:/\bwheat\b/i, CORN:/\bcorn\b/i, SOY:/\bsoy(bean)?s?\b/i };
@@ -81,7 +104,7 @@
   function score(event,now) {
     const representatives=[];
     for (const s of event.sourceSignals) {
-      const copy=representatives.some(r=>independenceKey(r)===independenceKey(s));
+      const copy=representatives.some(r=>independenceKey(r)===independenceKey(s)||(Math.abs(Date.parse(r.publishedAt||r.observedAt)-Date.parse(s.publishedAt||s.observedAt))<7200000&&tokens(r.title).join('|')===tokens(s.title).join('|')));
       if (!copy) representatives.push(s);
     }
     event.sourceCount=event.sourceSignals.length; event.independentSourceCount=representatives.length;
@@ -91,7 +114,7 @@
     const age=(Date.parse(now)-Date.parse(event.updatedAt||event.occurredAt||event.firstObservedAt))/3600000;
     event.freshness=age<2?'RECENT':age<24?'TODAY':age<72?'AGING':'STALE';
     if (event.disputedClaims.length) event.status='DISPUTED'; else if (age>=72) event.status='STALE'; else if (official) event.status='CONFIRMED'; else event.status='DEVELOPING';
-    const dimensions={ geographicScale:event.countries.length>1?'MULTI_COUNTRY':event.countries.length?'COUNTRY':'UNKNOWN', companyConnectivity:event.companies.length?'LINKED':'UNKNOWN', commodityConnectivity:event.commodities.length?'LINKED':'UNKNOWN', infrastructureCriticality:event.atlasEntityIds.length?'LINKED':'UNKNOWN', sourceConfidence:official?'OFFICIAL':representatives.length>=2?'CORROBORATED':'LIMITED' };
+    const dimensions={ geographicScale:event.countries.length>1?'MULTI_COUNTRY':event.countries.length?'COUNTRY':'UNKNOWN', economicScale:'UNKNOWN', marketConnectivity:event.companies.length||event.commodities.length?'LINKED':'UNKNOWN', companyConnectivity:event.companies.length?'LINKED':'UNKNOWN', commodityConnectivity:event.commodities.length?'LINKED':'UNKNOWN', infrastructureCriticality:event.atlasEntityIds.length?'LINKED':'UNKNOWN', sourceConfidence:official?'OFFICIAL':representatives.length>=2?'CORROBORATED':'LIMITED' };
     event.materialityDimensions=dimensions;
     const mag=event.sourceSignals.find(s=>s.provider==='USGS')?.magnitude;
     const severity=event.sourceSignals.find(s=>s.provider==='NWS')?.severity;

@@ -38,9 +38,11 @@
     if (!Array.isArray(j.articles)) throw Object.assign(new Error('GDELT article schema changed'),{kind:'SCHEMA_CHANGE'});
     return j.articles.slice(0,250).map(a=>({provider:'GDELT',sourceName:a.domain||'GDELT article',sourceUrl:a.url,title:a.title,publishedAt:gdeltDate(a.seendate),language:a.language,sourceCountry:a.sourcecountry,rawCategories:[]}));
   }
+  const USGS_COUNTRIES={Argentina:'AR',Australia:'AU',Brazil:'BR',Canada:'CA',Chile:'CL',China:'CN',Colombia:'CO',Greece:'GR',India:'IN',Indonesia:'ID',Iran:'IR',Italy:'IT',Japan:'JP',Mexico:'MX',Nepal:'NP','New Zealand':'NZ',Pakistan:'PK',Peru:'PE',Philippines:'PH',Russia:'RU',Taiwan:'TW',Tonga:'TO',Turkey:'TR',Ukraine:'UA','United States':'US'};
+  function usgsCountry(place) { return USGS_COUNTRIES[String(place||'').split(',').at(-1)?.trim()]||null; }
   function usgs(j) {
     if (j.type!=='FeatureCollection'||!Array.isArray(j.features)) throw Object.assign(new Error('USGS schema changed'),{kind:'SCHEMA_CHANGE'});
-    return j.features.filter(f=>Number(f.properties?.mag)>=3).slice(0,300).map(f=>({provider:'USGS',officialId:f.id,sourceName:'USGS Earthquake Hazards Program',sourceUrl:f.properties?.url,title:`M${Number(f.properties.mag).toFixed(1)} earthquake — ${f.properties?.place||'location unreported'}`,publishedAt:f.properties?.time,updatedAt:f.properties?.updated,region:f.properties?.place,magnitude:f.properties?.mag,geo:f.geometry?.type==='Point'?{lat:f.geometry.coordinates[1],lon:f.geometry.coordinates[0]}:null,rawCategories:['CLIMATE_NATURAL_DISASTERS']}));
+    return j.features.filter(f=>Number(f.properties?.mag)>=3).slice(0,300).map(f=>({provider:'USGS',officialId:f.id,sourceName:'USGS Earthquake Hazards Program',sourceUrl:f.properties?.url,title:`M${Number(f.properties.mag).toFixed(1)} earthquake — ${f.properties?.place||'location unreported'}`,publishedAt:f.properties?.time,updatedAt:f.properties?.updated,country:usgsCountry(f.properties?.place),region:f.properties?.place,magnitude:f.properties?.mag,geo:f.geometry?.type==='Point'?{lat:f.geometry.coordinates[1],lon:f.geometry.coordinates[0]}:null,rawCategories:['CLIMATE_NATURAL_DISASTERS']}));
   }
   function eonet(j) {
     if (!Array.isArray(j.events)) throw Object.assign(new Error('EONET schema changed'),{kind:'SCHEMA_CHANGE'});
