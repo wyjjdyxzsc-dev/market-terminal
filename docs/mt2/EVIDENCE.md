@@ -746,3 +746,115 @@ RESTART VERIFIED · HUMAN ACCEPTED
   the same responsive page and tap/pinch are native Leaflet — B-033); facility-level datasets
   (fabs, refineries, mines, LNG, pipelines, cables — registry-only, B-029); complete company
   coverage (B-031); OWNER acceptance.
+
+---
+
+## MT2-5A CENSUS — 2026-09-23 — start HEAD `173a979` (canonical path `~/Developer/market-terminal`)
+
+### Ground truth (before any work)
+- `git rev-parse HEAD` = `origin/main` = `173a979` (MT2-5 NEXUS closure commit). No rollback
+  performed; all NEXUS commits (`d0ad4ea` … `173a979`) preserved. `docs/mt2/STATE.md`,
+  `COMMS.md`, `DECISIONS.md`, `ROADMAP.md` had NOT been updated for NEXUS's closure — only
+  `CLAUDE.md` carried the production-verified record — brought current in this checkpoint's seam
+  update (see STATE.md).
+- Pre-CENSUS registry measured: 13,016 securities (US 10,438 / IN 2,578 NSE-only, BSE = 0),
+  10,629 "companies" (1:1 with securities — no Company/ListedSecurity separation existed), 78
+  relationships. Confirmed by direct inspection of `shared/nexus-snapshot.js`.
+
+### Investigation (LIVE TESTED, before writing any fix)
+- SEC `company_tickers_exchange.json` raw `exchange` field: `{Nasdaq: 4360, NYSE: 3301, OTC:
+  2535, CBOE: 44, null: 219}` of 10,459 rows — the generator's exchange map only recognized
+  Nasdaq/NYSE, silently folding OTC+CBOE+null (2,798 rows) into `market-core.js`'s
+  `defaultExchange` fallback marker.
+- BSE API direct test: `https://api.bseindia.com/BseIndiaAPI/api/ListofScripData/w?...` →
+  **200**, 5,045 active equity scrips, with the SEC-mandated identifying User-Agent already
+  used everywhere else in the generator → **403**; a plain browser UA → 200. Response fields are
+  `SCRIP_CD`/`Issuer_Name`/`ISIN_NUMBER` — the generator read `scrip_cd`/`scrip_name` (wrong
+  case), so even a successful fetch would have produced zero nodes. Confirms the prior
+  checkpoint's "BSE 403'd" record was an incomplete diagnosis — the real, sole blocker was the
+  field-casing bug; the UA-403 was a second latent bug that a corrected field-mapping would still
+  have hit.
+- NSE EQUITY_L.csv raw header: `SYMBOL,NAME OF COMPANY, SERIES, ..., ISIN NUMBER, FACE VALUE` —
+  the generator read `r.ISIN` (does not exist); confirmed live for RELIANCE:
+  `RELIANCE,Reliance Industries Limited,EQ,29-NOV-1995,10,1,INE002A01018,10` — the ISIN
+  (`INE002A01018`) was always present in the source and always silently dropped.
+- BSE numeric `SCRIP_CD` (not the `scrip_id` mnemonic) confirmed as the canonical `.BO` symbol
+  already established live in production since ATLAS/TWINCORE (`shared/atlas-snapshot.js`
+  Wikidata BSE instruments use the numeric code, e.g. `IN:BSE:500325` for Reliance) — used for
+  consistency rather than introducing a second BSE symbol convention.
+
+### Implementation
+- `shared/market-core.js`: `MARKETS.US.exchanges` extended `['NYSE','NASDAQ']` →
+  `['NYSE','NASDAQ','OTC','CBOE']` (additive; verified no test asserts the old exact array).
+- `shared/nexus-core.js` (schema `2026-09-23a`): `companyIdentityKey()` / `buildCompanyIndex()`
+  (CIK for US, ISIN for India, self-fallback otherwise — always resolvable) and
+  `reconcileAccounting()` (fetched = accepted + duplicate + rejected, or fail). `createCompanyNode`
+  gained an optional `companyId` field (backward compatible — no existing caller passes or
+  requires it).
+- `tools/nexus-build-registry.js`: BSE field-casing fix + browser UA + `insecureHTTPParser: true`
+  (only for BSE's one call — a malformed/intermittent response header trips Node's strict parser,
+  `HPE_INVALID_HEADER_TOKEN`; TLS validation unaffected); NSE `ISIN NUMBER` fix; per-source
+  accounting via `ingestSource()`; builds the Company layer via `buildCompanyIndex()`; re-validates
+  every pre-existing relationship edge against the rebuilt id set and drops (with a logged count)
+  any orphaned by the exchange reclassification.
+- server.js / worker.js (byte-identical, verified): `nexusCompanyDetail()` gained a
+  `companyIdentity` block (sibling securities for a cross-listed Company); `nexusRegistrySearch()`
+  response gained `accounting`, `companiesTotal`, `crossListedCompanies` from the stored snapshot
+  coverage. No new routes; no breaking response-shape changes.
+- `public/nexus.js` / `public/style.css`: "Also listed as …" row with clickable sibling-security
+  chips, shown only when `companyIdentity.crossListed` is true.
+
+### Rebuild result (network job, ~15 s total — SEC/NSE/BSE are fast, not Wikidata-SPARQL-slow)
+```
+US (SEC): fetched 10459, accepted 10459, duplicate 0, rejected 0 — reconciled ✓
+US: 219 of 10459 had no SEC exchange classification (fell back to US)
+NSE: fetched 2583, accepted 2583, duplicate 0, rejected 0 — reconciled ✓
+BSE: fetched 5045, accepted 5045, duplicate 0, rejected 0 — reconciled ✓
+built 18087 listed-security nodes  US:{total:10459} IN:{total:7628}
+company identities: 13219 (3903 cross-listed, e.g. NSE+BSE)
+CENSUS reconciliation: PASS — 18087 securities, 13219 companies, 0 uncovered, 0 relationships dropped
+```
+(An intermediate run before the NSE-ISIN fix showed only 1,448 cross-listed — entirely US
+CIK dual-class pairs, confirming zero real NSE+BSE dedup was possible before the fix; after the
+fix, 3,903.) A separate first attempt lost 2 of 78 prior relationships to the exchange-
+reclassification orphan check — both re-verified as genuinely stale (their endpoint id's
+exchange changed from the fallback marker to OTC/CBOE) and correctly dropped, not silently
+carried forward broken.
+- Company-identity coverage: `uncoveredSecurities === 0` (every one of 18,087 securities has a
+  non-empty `companyId`) — asserted by the build script itself (throws otherwise), and reasserted
+  by the committed-snapshot test.
+- Spot-verified: `IN:NSE:RELIANCE` (isin `INE002A01018`) and `IN:BSE:500325` (same isin) → one
+  Company `company:in:isin:INE002A01018`, `crossListed: true`. `US:NASDAQ:GOOGL`/`GOOG`/`GOOGM`/
+  `GOOGN` (all CIK `0001652044`) → one Company. `US:OTC:ASMLF` resolves as exchange `OTC` (not the
+  `US` fallback). A same-named-but-unrelated pair (US Pfizer Inc. vs India's Pfizer Limited, no
+  shared CIK/ISIN) does NOT merge — confirmed by a dedicated negative-control test.
+
+### Tests (UNIT TESTED)
+- `tests/nexus-core.test.js` +8 tests: CIK dual-class grouping, ISIN cross-listing merge
+  (NSE-preferred display fields), NEGATIVE CONTROL (name-only similarity never merges), 100%
+  company-identity coverage (incl. neither-CIK-nor-ISIN fallback), no security dropped/duplicated,
+  reconciliation negative controls (under/over-count both fail), OTC/CBOE real-exchange check.
+- `tests/nexus-render.test.js` +2 tests: cross-listed sibling row renders (and excludes the
+  security itself); single-listing Company renders no cross-listed row.
+- A new integrity test loads the **committed** `shared/nexus-snapshot.js` and asserts: zero rows
+  rejected by `buildFromSnapshot`-equivalent validation, every company link canonical, RELIANCE's
+  NSE+BSE merge present, coverage counts sane, `companiesTotal`/`crossListedCompanies` positive.
+- Full unit suite: **151/151**. ai-eval thresholds pass.
+
+### Local verification
+- Local server (canonical path, no iCloud): smoke **66/66** (5 expected keyless/network skips:
+  IN chart — local Yahoo throttle, fires, webcams — all pre-existing, unrelated to CENSUS).
+  New contracts: accounting present with all three sources `ok:true` and BSE `accepted > 1000`;
+  `companiesTotal`/`crossListedCompanies` positive; IN registry search returns real NSE rows;
+  `IN:NSE:RELIANCE` company detail carries `companyIdentity.crossListed === true` with a BSE
+  sibling; `US:OTC:ASMLF` resolves with `exchange === 'OTC'`.
+- Wrangler dry-run: bundle 16.4 MB uncompressed / **1.41 MB gzip** (up from ATLAS-era 385 KB —
+  see B-035; within Cloudflare's published limits, no dry-run error/warning).
+- Browser pass (built-in browser, localhost): Supply Chain workspace, India market mode,
+  search "RELIANCE" → `IN:NSE:RELIANCE` card shows **"Also listed as BSE:500325"** as a clickable
+  chip alongside a real tier-3 Wikidata ownership relationship (Network18); clicking it opens
+  `IN:BSE:500325`, which shows the reciprocal **"Also listed as NSE:RELIANCE"**. US-mode search
+  for "RELIANCE" (no India context) resolves to the unrelated US:NYSE:RS "Reliance, Inc." by
+  existing (pre-CENSUS, unchanged) name-ranking behavior — logged as B-034, not a CENSUS
+  regression (the India-scoped path, which is what the UI actually uses, is correct). Console:
+  only expected local keyless-route 502s, matching the smoke suite's own skip list.

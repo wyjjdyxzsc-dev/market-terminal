@@ -251,3 +251,33 @@ accessibility/degraded-state defect · P3 minor.
   pane at 375×812 / 812×375. Leaflet touch (pinch/pan/tap) is native and the page is the same,
   but the WKWebView pass is not claimed.
 - SUGGESTED: reinstall POCKET (profile expires weekly) and run the map checklist on the phone.
+
+## B-034 · P2 · NEXUS · Free-text company search has no market disambiguation when no market is supplied
+- OBSERVATION: `/api/nexus/registry?query=RELIANCE` (no `market=`) resolves to `US:NYSE:RS`
+  ("Reliance, Inc.") over `IN:NSE:RELIANCE` ("Reliance Industries Limited") purely because the
+  shorter name wins `nexusMatchRank`'s tie-break — observed live in the built-in browser while
+  verifying MT2-5A. The Supply Chain UI already passes the active market context and resolves
+  correctly (confirmed: India mode → RELIANCE → IN:NSE:RELIANCE with its BSE cross-listing); this
+  only affects a caller that omits `market=` entirely, e.g. a future integration or a raw API
+  call. Pre-existing behavior, not introduced or worsened by CENSUS's identity/accounting changes.
+- SUGGESTED: when no market is supplied and multiple candidates tie, prefer an exact-name match
+  over a shorter-name substring match, or return both and let the caller disambiguate. Out of
+  CENSUS scope (search ranking, not identity/accounting completeness).
+
+## B-035 · P3 · BUILD · nexus-snapshot.js grew to ~13 MB after CENSUS (18,087 securities + 13,219 companies)
+- OBSERVATION: `shared/nexus-snapshot.js` went from ~8k to 18,087 ListedSecurity rows (BSE
+  onboarded, US OTC/CBOE properly classified) plus a new 13,219-row `companyIdentities` array.
+  Wrangler dry-run: Worker bundle 16.4 MB uncompressed / 1.41 MB gzip (up from ATLAS-era ~2.2 MB
+  / 385 KB) — well within Cloudflare Workers' published compressed-size limits, but worth
+  watching if NEXUS/ATLAS snapshots keep growing together.
+- SUGGESTED: if a future dataset addition pushes the gzip size close to the platform limit,
+  consider trimming `companyIdentities.sourceEvidence` (currently a full per-Company evidence
+  union) or splitting the snapshot by market/exchange and lazy-loading in the Worker.
+
+## B-036 · P3 · NEXUS · SEC company_tickers_exchange.json leaves 219 US issuers exchange-unclassified
+- OBSERVATION: 219 of 10,459 SEC-registered issuers have a null `exchange` field in SEC's own
+  source data (not OTC, not CBOE — genuinely blank) and fall back to `market-core.js`'s
+  consolidated-tape marker (`US:US:<ticker>`), same as before CENSUS. This is an honest "SEC
+  itself does not classify this issuer's venue", not a bug; SEC's file carries no better field.
+- SUGGESTED: no action expected; note only so a future audit does not re-flag these 219 as a
+  regression of the OTC/CBOE fix in D-011.

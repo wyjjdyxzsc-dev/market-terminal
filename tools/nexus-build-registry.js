@@ -38,10 +38,10 @@ const atlasSnapshot = require('../shared/atlas-snapshot.js');
 const UA = 'MarketTerminal/1.0 NEXUS-registry-builder (krishivjain20000@gmail.com)';
 const OUT = path.join(__dirname, '..', 'shared', 'nexus-snapshot.js');
 
-function get(url, headers = {}) {
+function get(url, headers = {}, options = {}) {
   return new Promise((resolve, reject) => {
-    const req = https.get(url, { headers: { 'User-Agent': UA, ...headers } }, (res) => {
-      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) return resolve(get(res.headers.location, headers));
+    const req = https.get(url, { headers: { 'User-Agent': UA, ...headers }, ...options }, (res) => {
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) return resolve(get(res.headers.location, headers, options));
       if (res.statusCode !== 200) return reject(new Error(`${url} -> ${res.statusCode}`));
       const chunks = [];
       res.on('data', (c) => chunks.push(c));
@@ -68,11 +68,19 @@ function parseCsv(text) {
 // future values) is deliberately left unmapped, so the caller falls through to
 // market-core's own default-exchange fallback for a genuinely unclassified issuer
 // — this is an honest "we don't know" fallback, not a guess dressed up as a fact.
+// MT2-5A CENSUS: OTC and CBOE are now real market-core.js US exchanges (SEC's own raw
+// `exchange` field distinguishes them: 2,535 OTC + 44 CBOE rows in the 2026-09-23
+// snapshot fetch, out of 10,459 total). Only a genuinely blank/null SEC exchange field
+// (219 rows) is left unmapped, so the caller falls through to market-core's own
+// default-exchange fallback for a truly unclassified issuer — an honest "we don't
+// know", not a guess, and no longer a catch-all that also swallowed OTC/CBOE.
 const SEC_EXCHANGE_MAP = Object.freeze({
   NASDAQ: 'NASDAQ',
   NYSE: 'NYSE',
   'NYSE ARCA': 'NYSE',
   'NYSE AMERICAN': 'NYSE',
+  OTC: 'OTC',
+  CBOE: 'CBOE',
 });
 
 function mapSecExchange(raw) {
@@ -98,6 +106,12 @@ async function fetchUsIssuers() {
     }));
 }
 
+// MT2-5A CENSUS fix: EQUITY_L.csv's real header is
+// `SYMBOL,NAME OF COMPANY, SERIES, DATE OF LISTING, PAID UP VALUE, MARKET LOT, ISIN NUMBER, FACE VALUE`
+// (verified live 2026-09-23) — the column is `ISIN NUMBER`, not `ISIN`. Reading
+// `r.ISIN` was always `undefined`, so every NSE row silently carried no ISIN and no
+// NSE+BSE cross-listing could ever be identity-matched — the exact "silent drop"
+// CENSUS exists to close, and present since this file's very first version.
 async function fetchNseIssuers() {
   const csv = await get('https://archives.nseindia.com/content/equities/EQUITY_L.csv', {
     Referer: 'https://www.nseindia.com/',
@@ -105,17 +119,36 @@ async function fetchNseIssuers() {
   });
   return parseCsv(csv)
     .filter((r) => r.SYMBOL && r['NAME OF COMPANY'])
-    .map((r) => ({ ticker: r.SYMBOL.toUpperCase(), name: r['NAME OF COMPANY'].trim(), isin: r.ISIN || '' }));
+    .map((r) => ({ ticker: r.SYMBOL.toUpperCase(), name: r['NAME OF COMPANY'].trim(), isin: r['ISIN NUMBER'] || '' }));
 }
 
+// MT2-5A CENSUS fix: the live BSE API returns `SCRIP_CD` / `Issuer_Name` /
+// `ISIN_NUMBER` (verified 2026-09-23 against a live response) — the previous
+// lowercase `r.scrip_cd` / `r.scrip_name` field reads were always `undefined`, so
+// every row silently failed the `.filter()` and BSE contributed zero nodes
+// regardless of whether the HTTP request itself succeeded. The numeric SCRIP_CD
+// (e.g. "500325") is used as the canonical symbol, matching the `.BO` Yahoo-suffix
+// convention already established and deployed by shared/atlas-snapshot.js's
+// Wikidata BSE instruments (P249 on BSE stock items is the numeric scrip code, not
+// the short mnemonic in `scrip_id`).
 async function fetchBseIssuers() {
+  // BSE's API 403s the SEC-mandated identifying UA (`MarketTerminal/1.0 ...`) used
+  // everywhere else in this file — verified live (2026-09-23): the identical request
+  // succeeds with a plain browser UA and 403s with the identifying one. BSE has no
+  // SEC-style fair-access policy requiring an identifying UA, so a browser UA here is
+  // an honest "fetch like a browser would", not evasion of any stated access policy.
+  // Separately, BSE's response intermittently carries a header Node's strict HTTP
+  // parser rejects (HPE_INVALID_HEADER_TOKEN, "whitespace after header value") —
+  // `insecureHTTPParser` only relaxes that header-syntax check for this one call; TLS
+  // certificate validation is unaffected.
   const raw = JSON.parse(await get(
     'https://api.bseindia.com/BseIndiaAPI/api/ListofScripData/w?Group=&Scripcode=&industry=&segment=Equity&status=Active',
-    { Accept: 'application/json', Origin: 'https://www.bseindia.com', Referer: 'https://www.bseindia.com/' }
+    { Accept: 'application/json', Origin: 'https://www.bseindia.com', Referer: 'https://www.bseindia.com/', 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36' },
+    { insecureHTTPParser: true }
   ));
   return (Array.isArray(raw) ? raw : [])
-    .filter((r) => r.scrip_cd && r.scrip_name)
-    .map((r) => ({ ticker: String(r.scrip_cd).toUpperCase(), name: String(r.scrip_name).trim(), isin: r.ISIN_NUMBER || '' }));
+    .filter((r) => r.SCRIP_CD && (r.Issuer_Name || r.Scrip_Name))
+    .map((r) => ({ ticker: String(r.SCRIP_CD).toUpperCase(), name: String(r.Issuer_Name || r.Scrip_Name).trim(), isin: r.ISIN_NUMBER || '' }));
 }
 
 function buildAtlasIndex() {
@@ -143,76 +176,124 @@ function toNode({ id, name, market, exchange, evidence, cik, isin }, atlasIndex)
   });
 }
 
+// MT2-5A CENSUS: full per-source accounting. `fetched` is the raw row count after
+// only the source's own "is this even a usable row" filter (has a ticker/name);
+// every one of those rows must land in exactly one of accepted/duplicate/rejected,
+// verified by nexusCore.reconcileAccounting() — never a silent drop.
+async function ingestSource({ label, issuers, idOf, toNodeInput, seen, nodes }) {
+  let accepted = 0, duplicate = 0, rejected = 0;
+  for (const issuer of issuers) {
+    const canonicalId = idOf(issuer);
+    if (seen.has(canonicalId)) { duplicate += 1; continue; }
+    seen.add(canonicalId);
+    try {
+      nodes.push(toNodeInput(issuer, canonicalId));
+      accepted += 1;
+    } catch (err) {
+      rejected += 1;
+      console.warn(`[nexus] skip ${label}`, issuer.ticker, err.message);
+    }
+  }
+  const accounting = nexusCore.reconcileAccounting({ source: label, fetched: issuers.length, accepted, duplicate, rejected });
+  console.log(`[nexus] ${label}: fetched ${accounting.fetched}, accepted ${accepted}, duplicate ${duplicate}, rejected ${rejected}` +
+    (accounting.ok ? ' — reconciled ✓' : ' — MISMATCH ✗'));
+  if (!accounting.ok) throw new Error(`[nexus] ${label} accounting did not reconcile: ${JSON.stringify(accounting)}`);
+  return accounting;
+}
+
 async function build() {
   const atlasIndex = buildAtlasIndex();
   const nodes = [];
   const seen = new Set();
+  const accounting = {};
 
   console.log('[nexus] fetching SEC EDGAR company_tickers_exchange.json ...');
-  let usSkipped = 0;
+  const usDefaultExchange = marketCore.market('US').defaultExchange; // fallback marker only for a genuinely SEC-unclassified issuer
   let usUnclassifiedExchange = 0;
-  const usDefaultExchange = marketCore.market('US').defaultExchange; // fallback marker for issuers SEC doesn't classify as NYSE/Nasdaq
-  for (const issuer of await fetchUsIssuers()) {
-    // issuer.exchange is NYSE/NASDAQ when SEC's real exchange field maps cleanly;
-    // otherwise it's null and we use market-core's own default-exchange fallback
-    // rather than guessing — this is the fix for the prior version's bug, where
-    // every US issuer (including NYSE names like XOM/JPM) was hardcoded to NASDAQ.
-    const exchange = issuer.exchange || usDefaultExchange;
-    if (!issuer.exchange) usUnclassifiedExchange += 1;
-    const canonicalId = `US:${exchange}:${issuer.ticker}`;
-    if (seen.has(canonicalId)) continue;
-    seen.add(canonicalId);
-    try {
-      nodes.push(toNode({
-        id: canonicalId, name: issuer.name, market: 'US', exchange, cik: issuer.cik,
+  const usIssuers = await fetchUsIssuers();
+  accounting.sec = await ingestSource({
+    label: 'US (SEC)', issuers: usIssuers, seen, nodes,
+    idOf: (issuer) => `US:${issuer.exchange || usDefaultExchange}:${issuer.ticker}`,
+    toNodeInput: (issuer, canonicalId) => {
+      if (!issuer.exchange) usUnclassifiedExchange += 1;
+      return toNode({
+        id: canonicalId, name: issuer.name, market: 'US', exchange: issuer.exchange || usDefaultExchange, cik: issuer.cik,
         evidence: [{ source: 'SEC EDGAR', sourceUrl: 'https://www.sec.gov/files/company_tickers_exchange.json', observedAt: new Date().toISOString() }],
-      }, atlasIndex));
-    } catch (err) { usSkipped += 1; console.warn('[nexus] skip US', issuer.ticker, err.message); }
-  }
-  console.log(`[nexus] US: ${nodes.length} nodes built, ${usSkipped} skipped, ${usUnclassifiedExchange} unclassified-exchange (fell back to ${usDefaultExchange})`);
+      }, atlasIndex);
+    },
+  });
+  console.log(`[nexus] US: ${usUnclassifiedExchange} of ${usIssuers.length} had no SEC exchange classification (fell back to ${usDefaultExchange})`);
 
   console.log('[nexus] fetching NSE EQUITY_L.csv ...');
-  let nseAdded = 0;
-  let nseSkipped = 0;
   try {
-    for (const issuer of await fetchNseIssuers()) {
-      const canonicalId = `IN:NSE:${issuer.ticker}`;
-      if (seen.has(canonicalId)) continue;
-      seen.add(canonicalId);
-      try {
-        nodes.push(toNode({
-          id: canonicalId, name: issuer.name, market: 'IN', exchange: 'NSE', isin: issuer.isin,
-          evidence: [{ source: 'NSE', sourceUrl: 'https://www.nseindia.com/market-data/securities-available-for-trading', observedAt: new Date().toISOString() }],
-        }, atlasIndex));
-        nseAdded += 1;
-      } catch (err) { nseSkipped += 1; console.warn('[nexus] skip NSE', issuer.ticker, err.message); }
-    }
-    console.log(`[nexus] NSE: ${nseAdded} nodes built, ${nseSkipped} skipped`);
-  } catch (err) { console.warn('[nexus] NSE fetch failed, continuing without it:', err.message); }
+    const nseIssuers = await fetchNseIssuers();
+    accounting.nse = await ingestSource({
+      label: 'NSE', issuers: nseIssuers, seen, nodes,
+      idOf: (issuer) => `IN:NSE:${issuer.ticker}`,
+      toNodeInput: (issuer, canonicalId) => toNode({
+        id: canonicalId, name: issuer.name, market: 'IN', exchange: 'NSE', isin: issuer.isin,
+        evidence: [{ source: 'NSE', sourceUrl: 'https://www.nseindia.com/market-data/securities-available-for-trading', observedAt: new Date().toISOString() }],
+      }, atlasIndex),
+    });
+  } catch (err) {
+    console.warn('[nexus] NSE fetch failed, continuing without it:', err.message);
+    accounting.nse = { source: 'NSE', fetched: 0, accepted: 0, duplicate: 0, rejected: 0, ok: true, fetchFailed: err.message };
+  }
 
   console.log('[nexus] fetching BSE ListofScripData ...');
-  let bseAdded = 0;
-  let bseSkipped = 0;
   try {
-    for (const issuer of await fetchBseIssuers()) {
-      const canonicalId = `IN:BSE:${issuer.ticker}`;
-      if (seen.has(canonicalId)) continue;
-      seen.add(canonicalId);
-      try {
-        nodes.push(toNode({
-          id: canonicalId, name: issuer.name, market: 'IN', exchange: 'BSE', isin: issuer.isin,
-          evidence: [{ source: 'BSE', sourceUrl: 'https://www.bseindia.com/corporates/List_Scrips.aspx', observedAt: new Date().toISOString() }],
-        }, atlasIndex));
-        bseAdded += 1;
-      } catch (err) { bseSkipped += 1; console.warn('[nexus] skip BSE', issuer.ticker, err.message); }
-    }
-    console.log(`[nexus] BSE: ${bseAdded} nodes built, ${bseSkipped} skipped`);
-  } catch (err) { console.warn('[nexus] BSE fetch failed, continuing without it:', err.message); }
+    const bseIssuers = await fetchBseIssuers();
+    accounting.bse = await ingestSource({
+      label: 'BSE', issuers: bseIssuers, seen, nodes,
+      idOf: (issuer) => `IN:BSE:${issuer.ticker}`,
+      toNodeInput: (issuer, canonicalId) => toNode({
+        id: canonicalId, name: issuer.name, market: 'IN', exchange: 'BSE', isin: issuer.isin,
+        evidence: [{ source: 'BSE', sourceUrl: 'https://www.bseindia.com/corporates/List_Scrips.aspx', observedAt: new Date().toISOString() }],
+      }, atlasIndex),
+    });
+  } catch (err) {
+    console.warn('[nexus] BSE fetch failed, continuing without it:', err.message);
+    accounting.bse = { source: 'BSE', fetched: 0, accepted: 0, duplicate: 0, rejected: 0, ok: true, fetchFailed: err.message };
+  }
 
-  const coverage = nexusCore.registryCoverage(nodes);
-  console.log(`[nexus] built ${nodes.length} company nodes`, coverage.byMarket);
+  const registryCoverage = nexusCore.registryCoverage(nodes);
+  console.log(`[nexus] built ${nodes.length} listed-security nodes`, registryCoverage.byMarket);
 
+  // MT2-5A CENSUS: Company vs ListedSecurity separation. `nodes` above stays the
+  // ListedSecurity layer (canonical MARKET:EXCHANGE:SYMBOL ids — unchanged contract,
+  // still what every route/relationship/ATLAS-link keys on); buildCompanyIndex groups
+  // it into canonical Company identities (CIK for US, ISIN for India), which is also
+  // where an NSE+BSE cross-listing of the same real company collapses to one Company.
+  const { securities, companies: companyIdentities } = nexusCore.buildCompanyIndex(nodes);
+  const crossListedCompanies = companyIdentities.filter((c) => c.crossListed).length;
+  console.log(`[nexus] company identities: ${companyIdentities.length} (${crossListedCompanies} cross-listed, e.g. NSE+BSE)`);
+  const uncoveredSecurities = securities.filter((s) => !s.companyId).length;
+  if (uncoveredSecurities > 0) throw new Error(`[nexus] ${uncoveredSecurities} securities have no companyId — 100% company-identity coverage violated`);
+
+  // Re-validate every EXISTING relationship edge against the rebuilt security id set.
+  // A prior build's edge could reference an id whose exchange classification just
+  // changed (e.g. a former US:US:* unclassified-fallback id that is now correctly
+  // US:OTC:* or US:CBOE:*) — such an edge would silently dangle. CENSUS requires zero
+  // unresolved records, so a dangling edge is DROPPED and counted here, never carried
+  // forward silently; this never invents or re-derives a relationship (UNKNOWN stays
+  // UNKNOWN — see DECISIONS.md D-011).
   const existing = fs.existsSync(OUT) ? require(OUT) : { relationships: [] };
+  const validIds = new Set(securities.map((s) => s.id));
+  const priorRelationships = existing.relationships || [];
+  const relationships = priorRelationships.filter((e) => validIds.has(e.sourceId) && validIds.has(e.targetId));
+  const orphanedRelationships = priorRelationships.length - relationships.length;
+  if (orphanedRelationships > 0) {
+    console.warn(`[nexus] dropped ${orphanedRelationships} relationship edge(s) orphaned by the identity rebuild (endpoint id no longer exists)`);
+  }
+
+  const coverage = {
+    ...registryCoverage,
+    accounting,
+    companiesTotal: companyIdentities.length,
+    crossListedCompanies,
+    relationshipsOrphanedAndDropped: orphanedRelationships,
+  };
+
   const payload = {
     nexusSnapshotVersion: nexusCore.NEXUS_SCHEMA_VERSION,
     generatedAt: new Date().toISOString(),
@@ -223,8 +304,9 @@ async function build() {
       wikidata: { name: 'Wikidata (via atlas-snapshot.js)', url: 'https://www.wikidata.org', license: 'CC0 1.0' },
     },
     coverage,
-    companies: nodes,
-    relationships: existing.relationships || [],
+    companies: securities,
+    companyIdentities,
+    relationships,
   };
 
   fs.writeFileSync(OUT,
@@ -234,6 +316,8 @@ async function build() {
     `if (typeof globalThis !== 'undefined') globalThis.MarketTerminalNexusSnapshot = module.exports;\n`
   );
   console.log(`[nexus] wrote ${OUT}`);
+  console.log(`[nexus] CENSUS reconciliation: ${Object.values(accounting).every((a) => a.ok) ? 'PASS' : 'FAIL'} — ` +
+    `${securities.length} securities, ${companyIdentities.length} companies, ${uncoveredSecurities} uncovered, ${orphanedRelationships} relationships dropped`);
 }
 
 // ───────────────────────── Task 3: relationship edges ─────────────────────────

@@ -6,7 +6,7 @@
   // Mirrors shared/atlas-core.js's conventions (frozen records, required evidence,
   // canonical TWINCORE ids). The generated dataset lives in shared/nexus-snapshot.js.
 
-  const NEXUS_SCHEMA_VERSION = '2026-09-20a';
+  const NEXUS_SCHEMA_VERSION = '2026-09-23a';
 
   const marketCore = (typeof module !== 'undefined' && module.exports)
     ? require('./market-core.js')
@@ -71,7 +71,99 @@
       cik: String(input.cik || ''),
       isin: String(input.isin || ''),
       geoEntityId: String(input.geoEntityId || ''),
+      companyId: String(input.companyId || ''),
       sourceEvidence: Object.freeze(v.evidence),
+    });
+  }
+
+  // ───────────────────────── Company identity (MT2-5A CENSUS) ─────────────────────────
+  //
+  // A CompanyNode above is, precisely, a ListedSecurity: one row per (market, exchange,
+  // symbol) — exactly what TWINCORE's canonical instrument identity already addresses,
+  // and what every route/relationship/ATLAS-link in this codebase keys on. It is
+  // deliberately NOT renamed here: that id contract is load-bearing across server.js,
+  // worker.js, public/nexus.js and 78 already-generated relationship edges. What CENSUS
+  // adds is the layer TWINCORE never had — a canonical Company identity that a security
+  // belongs to, so two listings of the same real company (NSE+BSE cross-listing, or a
+  // US dual-class pair sharing one CIK) resolve to one Company, not two unrelated nodes.
+  //
+  // Company.id is built from the ONE identifier each market's regulator actually
+  // publishes for this purpose: CIK (SEC EDGAR filer id) for US, ISIN for India. Every
+  // security is guaranteed a Company — when a security carries neither (should not
+  // happen for a real SEC/NSE/BSE row, but is possible for a hand-built test fixture or
+  // a future onboarded market), it becomes its own singleton Company keyed by its own
+  // security id, so "100% company-identity coverage" holds by construction, not by luck.
+
+  function companyIdentityKey(security) {
+    const market = String(security.market || '').toUpperCase();
+    const cik = String(security.cik || '').trim();
+    const isin = String(security.isin || '').trim();
+    if (market === 'US' && cik) return { key: `US:CIK:${cik}`, id: `company:us:cik:${cik}` };
+    if (isin) return { key: `${market}:ISIN:${isin}`, id: `company:${market.toLowerCase()}:isin:${isin}` };
+    // No regulator-issued cross-listing key on this row: it is its own Company.
+    // Namespaced by the security's own canonical id, so it can never collide with a
+    // real CIK/ISIN-keyed Company and is still always resolvable (never "UNKNOWN").
+    return { key: `SELF:${security.id}`, id: `company:security:${security.id.toLowerCase()}` };
+  }
+
+  /**
+   * Groups a flat list of ListedSecurity nodes into canonical Company identities.
+   * Pure and order-stable: does not fetch, does not invent a CIK/ISIN, and never drops
+   * a security — every input row appears in exactly one output security (stamped with
+   * its resolved companyId) and exactly one output company.
+   *
+   * @returns {{ securities: object[], companies: object[] }}
+   */
+  function buildCompanyIndex(securities) {
+    const groups = new Map(); // key -> { id, members: [] }
+    for (const security of securities || []) {
+      const { key, id } = companyIdentityKey(security);
+      if (!groups.has(key)) groups.set(key, { id, members: [] });
+      groups.get(key).members.push(security);
+    }
+
+    const companies = [];
+    const stampedSecurities = [];
+    for (const { id, members } of groups.values()) {
+      // Prefer each market's own default-exchange listing for the display name/sector/
+      // geo link when the group has one (NSE over BSE for a cross-listed Indian company);
+      // otherwise the first member in input order, which keeps the build deterministic.
+      const primary = members.find((m) => m.exchange === (marketCore.market(m.market) || {}).defaultExchange) || members[0];
+      const evidenceByKey = new Map();
+      for (const m of members) for (const ev of m.sourceEvidence || []) evidenceByKey.set(`${ev.source}|${ev.sourceUrl}|${ev.datasetId}`, ev);
+      companies.push(Object.freeze({
+        id,
+        name: primary.name,
+        markets: Object.freeze([...new Set(members.map((m) => m.market))]),
+        securityIds: Object.freeze(members.map((m) => m.id)),
+        primarySecurityId: primary.id,
+        crossListed: members.length > 1,
+        cik: members.find((m) => m.cik)?.cik || '',
+        isin: members.find((m) => m.isin)?.isin || '',
+        sector: members.find((m) => m.sector)?.sector || '',
+        geoEntityId: members.find((m) => m.geoEntityId)?.geoEntityId || '',
+        sourceEvidence: Object.freeze([...evidenceByKey.values()]),
+      }));
+      for (const m of members) stampedSecurities.push(Object.freeze({ ...m, companyId: id }));
+    }
+    return { securities: stampedSecurities, companies };
+  }
+
+  /**
+   * Full-accounting reconciliation for one ingestion source: every fetched raw row must
+   * land in exactly one of accepted / duplicate / rejected — never silently vanish.
+   * Pure (does not throw); the caller (the build script) decides whether a mismatch is
+   * fatal. `ok` is the CENSUS "zero silent drops" check for this source.
+   */
+  function reconcileAccounting({ source, fetched, accepted, duplicate, rejected }) {
+    const total = Number(accepted || 0) + Number(duplicate || 0) + Number(rejected || 0);
+    return Object.freeze({
+      source: String(source || ''),
+      fetched: Number(fetched || 0),
+      accepted: Number(accepted || 0),
+      duplicate: Number(duplicate || 0),
+      rejected: Number(rejected || 0),
+      ok: total === Number(fetched || 0),
     });
   }
 
@@ -188,6 +280,7 @@
     NEXUS_SCHEMA_VERSION, RELATION_TYPES, ENRICHMENT_TIERS, TIERS,
     createCompanyNode, createRelationshipEdge, computeConfidence,
     registryCoverage, filterGraph, nexusCacheKey,
+    companyIdentityKey, buildCompanyIndex, reconcileAccounting,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   globalThis.MarketTerminalNexus = api;

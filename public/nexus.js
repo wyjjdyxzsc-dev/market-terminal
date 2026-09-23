@@ -104,10 +104,24 @@
         ? `<div class="nexus-tier2-status nexus-tier2-ok">${tier2Edges.length} AI-extracted relationship${tier2Edges.length === 1 ? '' : 's'} included above, each bound to a cited source. Confidence and strength are computed deterministically, never taken from the model.</div>`
         : '');
 
-    // MT2-5 → MT2-4 drill-through. ~2,155 registry nodes carry a geoEntityId; only those
+    // MT2-5 → MT2-4 drill-through. ~2,217 registry nodes carry a geoEntityId; only those
     // can be shown on the ATLAS map, so the control appears only when one exists.
     const geoLink = company.geoEntityId
       ? `<button type="button" class="nexus-atlas-link" data-geo-entity="${esc(company.geoEntityId)}">View ${esc(company.symbol || company.name)} on the ATLAS map</button>`
+      : '';
+
+    // MT2-5A CENSUS: Company vs ListedSecurity separation — when this security's
+    // Company identity (CIK for US, ISIN for India) has more than one listing (an
+    // NSE+BSE cross-listing, or a US dual-class pair), show the siblings so the same
+    // real company is never mistaken for unrelated registry rows.
+    const identity = data.companyIdentity;
+    const crossListing = identity && identity.crossListed
+      ? `<div class="nexus-cross-listed">
+          <span class="nexus-cross-listed-label">Also listed as</span>
+          ${identity.securities.filter((s) => s.id !== company.id).map((s) =>
+            `<button type="button" class="nexus-cross-listed-sec num" data-nexus-open="${esc(s.id)}" role="button" tabindex="0">${esc(s.exchange)}:${esc(s.symbol)}</button>`
+          ).join('')}
+        </div>`
       : '';
 
     return `<div class="nexus-report">
@@ -116,6 +130,7 @@
         <div class="nexus-id num">${esc(company.id)} · ${esc(company.sector || 'sector unclassified')}</div>
         <div class="nexus-enrichment nexus-enrichment-${esc(company.enrichment)}">${esc(company.enrichment).toUpperCase()}</div>
       </div>
+      ${crossListing}
       ${geoLink}
       <div class="nexus-relationships">${relRows}</div>
       ${tier2Note}

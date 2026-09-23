@@ -57,7 +57,13 @@
       locale: 'en-US',
       timezone: 'America/New_York',
       tzLabel: 'ET',
-      exchanges: Object.freeze(['NYSE', 'NASDAQ']),
+      // MT2-5A CENSUS: SEC EDGAR's company_tickers_exchange.json classifies every
+      // US-listed issuer's exchange field as one of Nasdaq | NYSE | OTC | CBOE | null
+      // (unclassified). OTC and CBOE are real, distinct listing venues — folding them
+      // into the NYSE/NASDAQ fallback marker would misrepresent a known fact as
+      // "unknown". Only a genuinely null SEC exchange field falls through to
+      // `defaultExchange` ('US', the consolidated-tape marker) below.
+      exchanges: Object.freeze(['NYSE', 'NASDAQ', 'OTC', 'CBOE']),
       // US quotes come from the consolidated tape; the listing venue is only known once a
       // profile is loaded, so the canonical exchange segment is the consolidated marker.
       defaultExchange: 'US',

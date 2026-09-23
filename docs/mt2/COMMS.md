@@ -257,3 +257,43 @@ DECISION / REQUEST: none. MT2-5 NEXUS is NOT authorized by this report.
 EVIDENCE POINTER: EVIDENCE.md "MT2-4 ATLAS" (audit, datasets, implementation, production);
   DECISIONS D-010; BACKLOG B-028…B-033; ROADMAP corrected (ATLAS=MT2-4 … CONVERGENCE=MT2-13).
 ACTION REQUIRED: OWNER — record acceptance when convenient; archive the frozen iCloud copy.
+---
+TIMESTAMP: 2026-09-23T09:20Z
+FROM: OWNER
+TO: CLAUDE
+CHECKPOINT: MT2-5A CENSUS
+MESSAGE TYPE: STATE CORRECTION + AUTHORIZATION
+SUMMARY: Clarified that the pasted MT2-4 ATLAS closure report was historical evidence only, not
+  the current baseline — MT2-5 NEXUS had already been implemented, reviewed, deployed, and
+  production-verified after ATLAS (source commit 59a7bba, closure 173a979). Directed ground-truth
+  verification first, then execution of the CENSUS specification: complete US listed-security
+  reconciliation, BSE onboarding, NSE/BSE cross-listing deduplication, Company vs ListedSecurity
+  separation, 100% security-accounting and company-identity coverage, zero silent drops, zero
+  unresolved records at PASS. Explicitly: do not expand relationship coverage to inflate metrics
+  (UNKNOWN stays UNKNOWN); do not begin LAUNCHPAD.
+DECISION / REQUEST: execute CENSUS as specified.
+ACTION REQUIRED: CLAUDE — ground truth first (done: HEAD = origin/main = 173a979, no rollback),
+  then CENSUS.
+---
+TIMESTAMP: 2026-09-23T10:05Z
+FROM: CLAUDE
+TO: OWNER
+CHECKPOINT: MT2-5A CENSUS
+MESSAGE TYPE: STATUS — implementation complete, deploying for production acceptance
+SUMMARY: Ground truth confirmed (HEAD = origin/main = 173a979; all NEXUS commits preserved; no
+  reset performed). Found docs/mt2/STATE.md, COMMS.md, DECISIONS.md, ROADMAP.md had never been
+  updated for NEXUS's closure (only CLAUDE.md carried the record) — corrected ROADMAP.md
+  retroactively as part of this checkpoint's own seam work. Investigated before fixing: found
+  BSE had actually returned 200 (not 403 as the prior record claimed) once field-casing and User-
+  Agent were both corrected; found NSE's ISIN field was silently read as `undefined` the entire
+  time, meaning NSE/BSE cross-listing dedup was never structurally possible before this
+  checkpoint; found SEC's real OTC/CBOE exchange classifications were being folded into the
+  generic US fallback marker. All three fixed with an evidence trail (D-011). Registry rebuilt:
+  18,087 securities (BSE genuinely onboarded, 5,045 rows), 13,219 canonical Company identities
+  (3,903 cross-listed), 0 uncovered securities, full per-source accounting reconciled. No
+  relationship coverage was expanded — 76 of the prior 78 edges carried forward unchanged, 2
+  correctly dropped as orphaned by the exchange reclassification. Unit 151/151, local smoke
+  66/66, browser-verified India-mode NSE↔BSE cross-listing click-through.
+DECISION / REQUEST: none pending. Pushing main per policy.
+EVIDENCE POINTER: EVIDENCE.md "MT2-5A CENSUS"; DECISIONS D-011; BACKLOG B-034…B-036.
+ACTION REQUIRED: OWNER — none for this checkpoint.

@@ -1782,6 +1782,12 @@ function nexusRegistrySearch({ query = '', sector = '', market = '' }) {
   return {
     nexusSnapshotVersion: nexusSnapshot.nexusSnapshotVersion,
     coverage: nexusCore.registryCoverage(nexusSnapshot.companies),
+    // MT2-5A CENSUS: the full-reconciliation accounting only the generator can compute
+    // (per-source fetched/accepted/duplicate/rejected) — carried from the stored
+    // snapshot rather than recomputed, since it is not derivable from the live rows.
+    accounting: (nexusSnapshot.coverage && nexusSnapshot.coverage.accounting) || null,
+    companiesTotal: (nexusSnapshot.coverage && nexusSnapshot.coverage.companiesTotal) || 0,
+    crossListedCompanies: (nexusSnapshot.coverage && nexusSnapshot.coverage.crossListedCompanies) || 0,
     results: rows.slice(0, 200),
     truncated: rows.length > 200,
   };
@@ -1819,11 +1825,33 @@ function nexusResolveQuery(query, market = '') {
   return hit ? hit.id : null;
 }
 
+// MT2-5A CENSUS: id -> the Company identity it belongs to (CIK for US, ISIN for
+// India), so a lookup can surface sibling listings (e.g. an NSE+BSE cross-listing,
+// or a US dual-class pair sharing one CIK) without a second network round trip.
+let nexusCompanyIdentityByCompanyId = null;
+function nexusCompanyIdentityFor(security) {
+  if (!nexusCompanyIdentityByCompanyId) {
+    nexusCompanyIdentityByCompanyId = new Map((nexusSnapshot.companyIdentities || []).map((ci) => [ci.id, ci]));
+  }
+  const identity = security && security.companyId ? nexusCompanyIdentityByCompanyId.get(security.companyId) : null;
+  if (!identity) return null;
+  return {
+    id: identity.id, name: identity.name, markets: identity.markets, crossListed: identity.crossListed,
+    cik: identity.cik, isin: identity.isin,
+    // The security list a card can render without a further lookup per sibling.
+    securities: identity.securityIds.map((sid) => nexusSnapshot.companies.find((c) => c.id === sid)).filter(Boolean)
+      .map((c) => ({ id: c.id, market: c.market, exchange: c.exchange, symbol: c.symbol })),
+  };
+}
+
 function nexusCompanyDetail(id) {
   const company = nexusSnapshot.companies.find((c) => c.id === id);
   if (!company) return null;
   const relationships = nexusSnapshot.relationships.filter((e) => e.sourceId === id || e.targetId === id);
-  return { nexusSnapshotVersion: nexusSnapshot.nexusSnapshotVersion, company, relationships, relationshipCount: relationships.length };
+  return {
+    nexusSnapshotVersion: nexusSnapshot.nexusSnapshotVersion, company, relationships, relationshipCount: relationships.length,
+    companyIdentity: nexusCompanyIdentityFor(company),
+  };
 }
 
 function nexusRelationships(id, type) {

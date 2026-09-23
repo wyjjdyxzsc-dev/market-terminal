@@ -65,10 +65,25 @@ IN PROGRESS / PASS / PARTIAL / BLOCKED.
 - OUT OF SCOPE: relationship graph (NEXUS), IPO location (LAUNCHPAD), event collection (WORLDWIRE).
 
 ## MT2-5 — NEXUS — Supply (listed-company universe, suppliers/customers/competitors/facilities, dependency graph)
-- STATUS: NOT STARTED · ENTRY: MT2-4 closed; explicit authorization.
+- STATUS: PASS (closed 2026-09-22; source commit `59a7bba`; see CLAUDE.md "MT2-5 NEXUS" —
+  this file's own seam entries for the checkpoint were not written at the time; recorded
+  retroactively in MT2-5A CENSUS below from CLAUDE.md's already-production-verified record).
+- OBJECTIVE: canonical public-company registry + evidence-backed relationship graph replacing
+  the permanently-abstaining Supply Chain stub.
+- OUT OF SCOPE: full listed-security reconciliation, BSE onboarding, cross-listing identity
+  (all deferred to MT2-5A CENSUS below — NEXUS's own registry builder had undiscovered field-
+  mapping bugs that silently zeroed BSE and NSE ISIN; see D-011).
+
+## MT2-5A — CENSUS — Listed-Company Universe Completeness Lock
+- STATUS: PASS (closed 2026-09-23; D-011; EVIDENCE.md "MT2-5A CENSUS")
+- OBJECTIVE: hardening checkpoint, not a NEXUS rebuild — complete US listed-security
+  reconciliation (real SEC exchange classification, not a collapsed fallback), BSE onboarding,
+  NSE/BSE cross-listing deduplication, Company vs ListedSecurity separation, 100%
+  security-accounting and company-identity coverage, zero silent drops.
+- OUT OF SCOPE: expanding relationship coverage (UNKNOWN stays UNKNOWN); LAUNCHPAD.
 
 ## MT2-6 — LAUNCHPAD — IPOs
-- STATUS: NOT STARTED · ENTRY: MT2-5 closed; explicit authorization.
+- STATUS: NOT STARTED · ENTRY: MT2-5A closed; explicit authorization.
 
 ## MT2-7 — WORLDWIRE — News (large-scale geopolitical event collection into GeoEvent)
 - STATUS: NOT STARTED · ENTRY: explicit authorization.

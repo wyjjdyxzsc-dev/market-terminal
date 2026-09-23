@@ -241,3 +241,62 @@ Do not pre-decide future architecture; add records only when a real decision is 
   per market in `/api/map/atlas` and never claimed complete; the Worker bundle grows by the
   snapshot size.
 - STATUS: ACCEPTED
+
+## D-011 · 2026-09-23 · MT2-5A CENSUS · Company/ListedSecurity identity model, field-mapping bug fixes, exchange taxonomy
+- DECISION: NEXUS's existing canonical `MARKET:EXCHANGE:SYMBOL` id (established in MT2-5, and
+  load-bearing across server.js/worker.js routes, 76 relationship edges, and ATLAS's
+  `openSecurity()` drill-through) is kept **unchanged** and is now documented as the
+  **ListedSecurity** layer — one row per exchange listing. A new, additive **Company** layer sits
+  above it: `shared/nexus-core.js` `buildCompanyIndex()` groups ListedSecurity rows by the one
+  identifier each regulator actually publishes for this purpose — **CIK** (SEC EDGAR filer id)
+  for US, **ISIN** for India — into a canonical `Company` (`company:us:cik:<CIK>` /
+  `company:in:isin:<ISIN>`). A row with neither (should not occur for a real SEC/NSE/BSE record)
+  becomes its own singleton Company keyed by its own security id, so every security resolves to
+  exactly one Company by construction — 100% company-identity coverage without a special case.
+- THREE FIELD-MAPPING BUGS FOUND AND FIXED (verified live 2026-09-23), all pre-dating CENSUS:
+  1. **BSE returned zero nodes.** `tools/nexus-build-registry.js` read `r.scrip_cd`/`r.scrip_name`
+     (lowercase); BSE's live API returns `SCRIP_CD`/`Issuer_Name`/`ISIN_NUMBER`. Every row
+     silently failed the `.filter()`. The prior checkpoint's own record ("BSE contributed zero
+     nodes — its listing API 403'd") was itself wrong: a direct test showed BSE returns 200 with
+     the SEC-mandated identifying `User-Agent` header — the 403 was BSE rejecting that specific
+     UA string, not a network/build-environment block; a plain browser UA succeeds. Separately,
+     BSE's response intermittently trips Node's strict HTTP header parser
+     (`HPE_INVALID_HEADER_TOKEN`, "whitespace after header value") — worked around with
+     `insecureHTTPParser: true` on this one call only (TLS validation unaffected).
+  2. **NSE cross-listing could never be identified.** `fetchNseIssuers()` read `r.ISIN`; the real
+     EQUITY_L.csv column is `ISIN NUMBER`. Every NSE row silently carried an empty ISIN, so
+     `buildCompanyIndex()` (or any future equivalent) could never match an NSE listing to its BSE
+     counterpart — the exact capability CENSUS exists to deliver was structurally impossible
+     before this fix. Confirmed by RELIANCE: 0 cross-listed → correctly merged with `IN:BSE:500325`
+     under one Company after the fix; cross-listed-Company count went from 1,448 (US CIK
+     dual-class pairs only) to 3,903 once real NSE+BSE ISIN matches were possible.
+  3. **~2,579 US securities were mislabeled under a fake "US" exchange.** SEC's raw `exchange`
+     field distinguishes Nasdaq/NYSE/**OTC**/**CBOE**/null (verified: 4,360/3,301/2,535/44/219 of
+     10,459 rows); the generator's `SEC_EXCHANGE_MAP` only recognized Nasdaq/NYSE and silently
+     folded OTC and CBOE into `market-core.js`'s `defaultExchange` fallback (`'US'`, the
+     consolidated-tape marker) — collapsing two real, known exchanges into the same bucket used
+     for genuinely unclassified issuers. Fixed at both ends: `SEC_EXCHANGE_MAP` now maps OTC and
+     CBOE to themselves, and `MARKETS.US.exchanges` in `shared/market-core.js` was extended from
+     `['NYSE','NASDAQ']` to `['NYSE','NASDAQ','OTC','CBOE']` (additive; no test asserted the old
+     exact list; `parseInstrument()`'s canonical-form branch would otherwise silently coerce any
+     `US:OTC:*`/`US:CBOE:*` id back to the fallback marker regardless of what the generator sent
+     it). Only the 219 rows SEC itself leaves unclassified still use the fallback — an honest
+     "unknown", not a mislabel.
+- ACCOUNTING: `nexusCore.reconcileAccounting()` requires, per source, `fetched === accepted +
+  duplicate + rejected`; the build script throws if any source fails to reconcile. Every existing
+  relationship edge is re-validated against the rebuilt security-id set after the identity
+  rebuild (an edge whose endpoint id changed classification, e.g. a former `US:US:*` fallback id
+  now correctly `US:OTC:*`, would otherwise dangle) — 2 of 78 were orphaned by the exchange
+  reclassification and dropped, never left as a silent dangling reference. This does **not**
+  re-run or expand tier-1/tier-3 relationship discovery (out of scope per the OWNER brief:
+  "UNKNOWN relationships remain UNKNOWN") — it only guarantees the *existing* edges still point
+  at real nodes.
+- WHY NOT rename ListedSecurity.id: a canonical-id rename would break 76 live relationship edges,
+  every route contract, `public/nexus.js`, and the NEXUS↔ATLAS drill-through link
+  (`geoEntityId`/`openSecurity`) for no completeness gain — the identity gap CENSUS closes is
+  "which Company does this security belong to", not "what is this security called".
+- CONSEQUENCES: `shared/nexus-snapshot.js` schema `2026-09-23a`; 18,087 securities (US 10,459 /
+  IN 7,628: NSE 2,583 + BSE 5,045), 13,219 companies (3,903 cross-listed), coverage/accounting
+  exposed via `/api/nexus/registry`, sibling listings exposed via `/api/nexus/company`'s new
+  `companyIdentity` field and rendered in `public/nexus.js` ("Also listed as …").
+- STATUS: ACCEPTED

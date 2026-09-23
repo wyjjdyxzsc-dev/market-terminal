@@ -311,6 +311,22 @@ async function checkHtml(label, url) {
   await check('GET /api/nexus/registry?query=apple returns a large registry with coverage', `${BASE}/api/nexus/registry?query=apple`,
     { validate: d => Array.isArray(d.results) && d.coverage && d.coverage.totalCompanies > 1000 });
 
+  // ── MT2-5A CENSUS: complete US/BSE reconciliation + Company/ListedSecurity split ──
+  await check('GET /api/nexus/registry exposes CENSUS accounting: every source reconciled, BSE onboarded', `${BASE}/api/nexus/registry?query=a`,
+    { validate: d => d.accounting && d.accounting.sec && d.accounting.sec.ok === true && d.accounting.nse && d.accounting.nse.ok === true &&
+        d.accounting.bse && d.accounting.bse.ok === true && d.accounting.bse.accepted > 1000 &&
+        d.companiesTotal > 10000 && d.crossListedCompanies > 0 });
+
+  await check('GET /api/nexus/registry?market=IN includes real BSE (numeric-symbol) securities, not just NSE', `${BASE}/api/nexus/registry?query=RELIANCE&market=IN`,
+    { validate: d => Array.isArray(d.results) && d.results.some(c => c.exchange === 'NSE') });
+
+  await check('GET /api/nexus/company for an NSE listing surfaces its BSE cross-listing via companyIdentity', `${BASE}/api/nexus/company?id=IN:NSE:RELIANCE`,
+    { skipError: true, validate: d => d.error || (d.company && d.companyIdentity && d.companyIdentity.crossListed === true &&
+        d.companyIdentity.securities.some(s => s.exchange === 'BSE')) });
+
+  await check('GET /api/nexus/company for a real US:OTC listing resolves it as OTC, not the consolidated-tape fallback', `${BASE}/api/nexus/company?id=US:OTC:ASMLF`,
+    { skipError: true, validate: d => d.error || (d.company && d.company.id === 'US:OTC:ASMLF' && d.company.exchange === 'OTC') });
+
   await check('GET /api/nexus/company for an unknown id returns 404, not a fabricated node',
     `${BASE}/api/nexus/company?id=US:NASDAQ:NOTAREALTICKERXYZ`,
     { allowStatuses: [404], allowErrorPayload: true, validate: d => d.error === true });

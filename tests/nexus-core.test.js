@@ -178,3 +178,82 @@ test('fetchNexusTier2Relationships never spreads the raw AI relationship into cr
     assert.match(fn, /tier:\s*2\b/, `${file}: tier must be hardcoded to 2 for AI-extracted relationships`);
   }
 });
+
+// ───────────────────────── MT2-5A CENSUS: Company / ListedSecurity separation ─────────────────────────
+
+function sec(over) {
+  return nexus.createCompanyNode({
+    id: over.id, name: over.name, market: over.market, exchange: over.exchange,
+    enrichment: over.enrichment || 'node-only', cik: over.cik || '', isin: over.isin || '',
+    geoEntityId: over.geoEntityId || '', sector: over.sector || '',
+    sourceEvidence: over.sourceEvidence || [{ source: 'SEC EDGAR', sourceUrl: 'https://www.sec.gov/files/company_tickers_exchange.json' }],
+  });
+}
+
+test('buildCompanyIndex groups a US dual-class pair sharing one CIK into a single crossListed Company', () => {
+  const a = sec({ id: 'US:NASDAQ:GOOGL', name: 'Alphabet Inc.', market: 'US', exchange: 'NASDAQ', cik: '0001652044' });
+  const b = sec({ id: 'US:NASDAQ:GOOG', name: 'Alphabet Inc.', market: 'US', exchange: 'NASDAQ', cik: '0001652044' });
+  const { companies, securities } = nexus.buildCompanyIndex([a, b]);
+  assert.equal(companies.length, 1);
+  assert.equal(companies[0].id, 'company:us:cik:0001652044');
+  assert.equal(companies[0].crossListed, true);
+  assert.deepEqual([...companies[0].securityIds].sort(), ['US:NASDAQ:GOOG', 'US:NASDAQ:GOOGL']);
+  assert.ok(securities.every((s) => s.companyId === 'company:us:cik:0001652044'));
+});
+
+test('buildCompanyIndex merges an NSE+BSE cross-listing by ISIN, preferring the NSE (default-exchange) listing for name/sector', () => {
+  const nse = sec({ id: 'IN:NSE:RELIANCE', name: 'RELIANCE INDUSTRIES LIMITED', market: 'IN', exchange: 'NSE', isin: 'INE002A01018', sector: 'Energy', geoEntityId: 'company:Q1215884' });
+  const bse = sec({ id: 'IN:BSE:500325', name: 'Reliance Industries Ltd', market: 'IN', exchange: 'BSE', isin: 'INE002A01018' });
+  const { companies } = nexus.buildCompanyIndex([bse, nse]); // order-independent: BSE listed first here
+  assert.equal(companies.length, 1);
+  assert.equal(companies[0].id, 'company:in:isin:INE002A01018');
+  assert.equal(companies[0].crossListed, true);
+  assert.equal(companies[0].name, 'RELIANCE INDUSTRIES LIMITED', 'NSE (the IN default exchange) wins the display name');
+  assert.equal(companies[0].sector, 'Energy');
+  assert.equal(companies[0].geoEntityId, 'company:Q1215884');
+  assert.deepEqual([...companies[0].securityIds].sort(), ['IN:BSE:500325', 'IN:NSE:RELIANCE']);
+});
+
+test('NEGATIVE CONTROL: two real companies that merely share a name are never merged — only CIK/ISIN identity merges', () => {
+  const usPfizer = sec({ id: 'US:NYSE:PFE', name: 'Pfizer Inc.', market: 'US', exchange: 'NYSE', cik: '0000078003' });
+  const inPfizer = sec({ id: 'IN:NSE:PFIZER', name: 'Pfizer Limited', market: 'IN', exchange: 'NSE', isin: 'INE182A01018' });
+  const { companies } = nexus.buildCompanyIndex([usPfizer, inPfizer]);
+  assert.equal(companies.length, 2, 'no shared CIK or ISIN => no merge, regardless of name similarity');
+  assert.ok(companies.every((c) => c.crossListed === false));
+});
+
+test('100% company-identity coverage: every security resolves to a Company, even with neither CIK nor ISIN (never UNKNOWN)', () => {
+  const bare = sec({ id: 'US:OTC:SHELLCO', name: 'Shell Co', market: 'US', exchange: 'OTC' }); // no cik supplied
+  const { companies, securities } = nexus.buildCompanyIndex([bare]);
+  assert.equal(companies.length, 1);
+  assert.equal(companies[0].id, 'company:security:us:otc:shellco');
+  assert.equal(companies[0].crossListed, false);
+  assert.equal(securities[0].companyId, companies[0].id);
+});
+
+test('buildCompanyIndex never drops or duplicates an input security', () => {
+  const rows = [
+    sec({ id: 'US:NASDAQ:A', name: 'A Corp', market: 'US', exchange: 'NASDAQ', cik: '1' }),
+    sec({ id: 'US:NYSE:B', name: 'B Corp', market: 'US', exchange: 'NYSE', cik: '2' }),
+    sec({ id: 'IN:NSE:C', name: 'C Ltd', market: 'IN', exchange: 'NSE', isin: 'INE000000001' }),
+    sec({ id: 'IN:BSE:999', name: 'C Ltd', market: 'IN', exchange: 'BSE', isin: 'INE000000001' }),
+  ];
+  const { securities, companies } = nexus.buildCompanyIndex(rows);
+  assert.equal(securities.length, rows.length, 'every input row appears exactly once in the output');
+  assert.deepEqual(securities.map((s) => s.id).sort(), rows.map((r) => r.id).sort());
+  const totalSecurityIdsAcrossCompanies = companies.reduce((n, c) => n + c.securityIds.length, 0);
+  assert.equal(totalSecurityIdsAcrossCompanies, rows.length, 'every security belongs to exactly one company');
+});
+
+test('reconcileAccounting: balanced counts pass, an undercount or overcount fails (zero silent drops)', () => {
+  assert.equal(nexus.reconcileAccounting({ source: 'sec', fetched: 100, accepted: 97, duplicate: 2, rejected: 1 }).ok, true);
+  assert.equal(nexus.reconcileAccounting({ source: 'sec', fetched: 100, accepted: 97, duplicate: 2, rejected: 0 }).ok, false, 'NEGATIVE CONTROL: an unaccounted-for row must fail reconciliation');
+  assert.equal(nexus.reconcileAccounting({ source: 'sec', fetched: 100, accepted: 97, duplicate: 2, rejected: 5 }).ok, false, 'NEGATIVE CONTROL: double-counting must also fail reconciliation');
+});
+
+test('OTC and CBOE are real US exchanges now, not silently folded into the consolidated-tape marker', () => {
+  const marketCore = require('../shared/market-core.js');
+  assert.equal(marketCore.parseInstrument('US:OTC:SHELLCO').exchange, 'OTC');
+  assert.equal(marketCore.parseInstrument('US:CBOE:XYZ').exchange, 'CBOE');
+  assert.notEqual(marketCore.parseInstrument('US:OTC:SHELLCO').canonical, 'US:US:SHELLCO');
+});

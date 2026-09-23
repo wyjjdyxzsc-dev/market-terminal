@@ -96,3 +96,23 @@
   - `ff58850` `Add static asset security headers`
   - `e161369` `Add prompt continuation log`
   - `55e014c` `Replace social scraper with market sentiment composite`
+
+## 2026-09-23 — MT2-5A CENSUS
+
+- Fixed three silent field-mapping bugs in `tools/nexus-build-registry.js`, all pre-dating this
+  checkpoint: BSE's listing API returned zero nodes (wrong field casing, not the 403 the prior
+  record claimed); NSE's ISIN column was read under the wrong key, so NSE/BSE cross-listing
+  dedup was never structurally possible; SEC's real OTC/CBOE exchange classifications were
+  silently folded into the generic consolidated-tape fallback marker.
+- Added `shared/nexus-core.js` `buildCompanyIndex()`: canonical Company identity (CIK for US,
+  ISIN for India) grouping ListedSecurity rows — an NSE+BSE cross-listing of the same company
+  now resolves to one Company, not two unrelated registry rows. `reconcileAccounting()` enforces
+  fetched = accepted + duplicate + rejected per source; the build fails loudly on any mismatch.
+- Extended `shared/market-core.js`'s US exchange list with OTC and CBOE (real SEC-classified
+  exchanges, not a guess).
+- Registry rebuilt: 18,087 securities (US 10,459 / India 7,628 — NSE 2,583 + BSE 5,045, BSE
+  genuinely onboarded for the first time), 13,219 canonical companies (3,903 cross-listed), zero
+  uncovered securities, zero silent drops. No relationship coverage was expanded.
+- `/api/nexus/company` and `/api/nexus/registry` expose the new Company identity and full
+  accounting; `public/nexus.js` shows cross-listed siblings ("Also listed as …") with a working
+  click-through in both directions.

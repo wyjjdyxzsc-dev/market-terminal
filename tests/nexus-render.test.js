@@ -173,3 +173,30 @@ test('public/style.css defines a rule for every class public/nexus.js emits', ()
   const missing = [...emitted].filter((c) => !css.includes(`.${c}`));
   assert.deepEqual(missing, [], `style.css has no rule for: ${missing.join(', ')}`);
 });
+
+// ───────────────────────── MT2-5A CENSUS: cross-listed Company identity ─────────────────────────
+
+test('renderNexusCompany shows sibling listings when the Company identity is cross-listed', () => {
+  const html = render.renderNexusCompany({
+    company: { id: 'IN:NSE:RELIANCE', name: 'Reliance Industries Limited', market: 'IN', exchange: 'NSE', symbol: 'RELIANCE', enrichment: 'geo-linked', sector: 'Energy' },
+    relationships: [], relationshipCount: 0, tier2: { abstained: true, reason: 'x' },
+    companyIdentity: {
+      id: 'company:in:isin:INE002A01018', name: 'Reliance Industries Limited', crossListed: true,
+      securities: [
+        { id: 'IN:NSE:RELIANCE', market: 'IN', exchange: 'NSE', symbol: 'RELIANCE' },
+        { id: 'IN:BSE:500325', market: 'IN', exchange: 'BSE', symbol: '500325' },
+      ],
+    },
+  });
+  assert.match(html, /Also listed as/i);
+  assert.match(html, /data-nexus-open="IN:BSE:500325"/);
+  assert.doesNotMatch(html, /data-nexus-open="IN:NSE:RELIANCE"/, 'the security being viewed is not listed as its own sibling');
+});
+
+test('renderNexusCompany omits the cross-listed row for a single-listing Company', () => {
+  const html = render.renderNexusCompany({
+    company: APPLE, relationships: [], relationshipCount: 0, tier2: { abstained: true, reason: 'x' },
+    companyIdentity: { id: 'company:us:cik:0000320193', name: 'Apple Inc.', crossListed: false, securities: [{ id: 'US:NASDAQ:AAPL', market: 'US', exchange: 'NASDAQ', symbol: 'AAPL' }] },
+  });
+  assert.doesNotMatch(html, /Also listed as/i);
+});
