@@ -63,6 +63,8 @@
   function iso(s) { const n=typeof s==='number'?s:Date.parse(s); return Number.isFinite(n) ? new Date(n).toISOString() : null; }
   function tokens(s) { return [...new Set(String(s||'').toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g,'').match(/[\p{L}\p{N}]+/gu)?.map(w=>DICT[w]||w).filter(w=>w.length>2&&!STOP.has(w))||[])].sort(); }
   function categories(text, provider, raw=[]) { const out=new Set(); if (provider==='USGS'||provider==='EONET'||provider==='NWS') out.add('CLIMATE_NATURAL_DISASTERS'); for (const [cat,re] of RULES) if (re.test(text)) out.add(cat); if (/\bIndia(n)?\b/i.test(text)) out.add('INDIA'); if (/\b(United States|U\.S\.|US government)\b/i.test(text)) out.add('UNITED_STATES'); for (const r of raw) if (CATEGORIES.includes(r)) out.add(r); return [...out]; }
+  function sourceClass(provider,url) { if(provider!=='GDELT') return 'PRIMARY_OFFICIAL'; const host=new URL(url).hostname.replace(/^www\./,''); return ['reuters.com','apnews.com','afp.com'].includes(host)?'MAJOR_WIRE':'UNKNOWN'; }
+  function sourceSummary(signal) { return signal.provider==='GDELT'?`Unverified article signal from ${signal.sourceName}: ${signal.title}`:signal.title; }
   function normalizeSignal(raw, now=new Date().toISOString()) {
     if (!raw||!SOURCES[raw.provider]?.enabled) return null;
     const sourceUrl=canonicalUrl(raw.sourceUrl), title=String(raw.title||'').trim().slice(0,240);
@@ -71,7 +73,7 @@
     const coords=raw.geo && Number.isFinite(Number(raw.geo.lat))&&Number.isFinite(Number(raw.geo.lon))&&Math.abs(Number(raw.geo.lat))<=90&&Math.abs(Number(raw.geo.lon))<=180 ? { lat:Number(raw.geo.lat), lon:Number(raw.geo.lon), source:provider } : null;
     const officialId=String(raw.officialId||'').trim().slice(0,100);
     const id='sig:'+hash(provider+'|'+(officialId||sourceUrl));
-    return { id, provider, sourceName:String(raw.sourceName||SOURCES[provider].owner).slice(0,100), sourceUrl, canonicalUrl:sourceUrl, title, originalTitle:title, translatedTitle:raw.translatedTitle?String(raw.translatedTitle).slice(0,240):null, publishedAt, observedAt, lastUpdated:iso(raw.updatedAt)||publishedAt||observedAt, lastVerified:provider==='GDELT'?null:observedAt, language:String(raw.language||'und').slice(0,20), country:String(raw.country||'').toUpperCase().slice(0,3)||null, sourceCountry:String(raw.sourceCountry||'').slice(0,80)||null, region:String(raw.region||'').slice(0,100)||null, rawCategories:Array.isArray(raw.rawCategories)?raw.rawCategories.slice(0,8):[], categories:categories(title+' '+(raw.translatedTitle||''),provider,raw.rawCategories||[]), geo:coords, officialId:officialId||null, magnitude:Number.isFinite(Number(raw.magnitude))?Number(raw.magnitude):null, severity:String(raw.severity||'').toUpperCase()||null, credibilityClass:provider==='GDELT'?'UNKNOWN':'PRIMARY_OFFICIAL', fingerprint:hash((officialId||sourceUrl).toLowerCase()), extractedEntities:[], eventCandidateId:null, disputedClaims:provider==='GDELT'?[]:(Array.isArray(raw.disputedClaims)?raw.disputedClaims.slice(0,4).map(x=>String(x).slice(0,160)):[]) };
+    return { id, provider, sourceName:String(raw.sourceName||SOURCES[provider].owner).slice(0,100), sourceUrl, canonicalUrl:sourceUrl, title, originalTitle:title, translatedTitle:raw.translatedTitle?String(raw.translatedTitle).slice(0,240):null, publishedAt, observedAt, lastUpdated:iso(raw.updatedAt)||publishedAt||observedAt, lastVerified:provider==='GDELT'?null:observedAt, language:String(raw.language||'und').slice(0,20), country:String(raw.country||'').toUpperCase().slice(0,3)||null, sourceCountry:String(raw.sourceCountry||'').slice(0,80)||null, region:String(raw.region||'').slice(0,100)||null, rawCategories:Array.isArray(raw.rawCategories)?raw.rawCategories.slice(0,8):[], categories:categories(title+' '+(raw.translatedTitle||''),provider,raw.rawCategories||[]), geo:coords, officialId:officialId||null, magnitude:Number.isFinite(Number(raw.magnitude))?Number(raw.magnitude):null, severity:String(raw.severity||'').toUpperCase()||null, credibilityClass:sourceClass(provider,sourceUrl), fingerprint:hash((officialId||sourceUrl).toLowerCase()), extractedEntities:[], eventCandidateId:null, disputedClaims:provider==='GDELT'?[]:(Array.isArray(raw.disputedClaims)?raw.disputedClaims.slice(0,4).map(x=>String(x).slice(0,160)):[]) };
   }
   function eventKey(signal) { if (signal.officialId) return signal.provider+':'+signal.officialId; const t=tokens(signal.translatedTitle||signal.title); return [signal.categories[0]||'OTHER',signal.country||'',signal.region?.toLowerCase()||'',(signal.publishedAt||signal.observedAt).slice(0,10),t.slice(0,5).join(':')].join('|'); }
   function similarity(a,b) { const x=tokens(a.translatedTitle||a.title), y=tokens(b.translatedTitle||b.title); const overlap=x.filter(t=>y.includes(t)).length; return {overlap, ratio:overlap/Math.max(1,Math.min(x.length,y.length))}; }
@@ -110,7 +112,7 @@
     event.sourceCount=event.sourceSignals.length; event.independentSourceCount=representatives.length;
     const official=event.sourceSignals.some(s=>s.credibilityClass==='PRIMARY_OFFICIAL');
     event.corroboration={officialSourcePresent:official,primarySourcePresent:official,independentSourceCount:representatives.length,crossRegionCorroboration:new Set(event.sourceSignals.map(s=>s.country).filter(Boolean)).size>1};
-    event.credibility=official?'PRIMARY_OFFICIAL':representatives.length>=2?'MULTIPLE_INDEPENDENT':'UNVERIFIED_NEWS_SIGNAL';
+    event.credibility=official?'PRIMARY_OFFICIAL':event.sourceSignals.some(s=>s.credibilityClass==='MAJOR_WIRE')?'MAJOR_WIRE':'UNKNOWN';
     const age=(Date.parse(now)-Date.parse(event.updatedAt||event.occurredAt||event.firstObservedAt))/3600000;
     event.freshness=age<2?'RECENT':age<24?'TODAY':age<72?'AGING':'STALE';
     if (event.disputedClaims.length) event.status='DISPUTED'; else if (age>=72) event.status='STALE'; else if (official) event.status='CONFIRMED'; else event.status='DEVELOPING';
@@ -125,7 +127,7 @@
   }
   function createEvent(signal,now,refs) {
     const key=eventKey(signal), id='ww:'+hash(signal.id);
-    const event={ id, fingerprint:hash(key), title:signal.title, summary:signal.title, status:'DEVELOPING', firstObservedAt:signal.observedAt, lastObservedAt:signal.observedAt, occurredAt:signal.publishedAt, updatedAt:signal.lastUpdated, categories:[...signal.categories], subcategories:[], countries:signal.country?[signal.country]:[], regions:signal.region?[signal.region]:[], geo:signal.geo?[signal.geo]:[], atlasEntityIds:[], people:[], organizations:[], companies:[], nexusCompanyIds:[], nexusSecurityIds:[], sectors:[], industries:[], commodities:[], currencies:[], launchpadIpoIds:[], sourceSignals:[signal], evidence:[{source:signal.sourceName,url:signal.sourceUrl,publishedAt:signal.publishedAt,credibilityClass:signal.credibilityClass}], sourceCount:1, independentSourceCount:1, credibility:'',corroboration:{},novelty:'NEW_EVENT',materiality:'UNKNOWN',urgency:'MODERATE',freshness:'',disputedClaims:[...signal.disputedClaims],unresolvedEntities:[],updates:[{kind:'NEW_EVENT',at:signal.observedAt,signalId:signal.id}] };
+    const event={ id, fingerprint:hash(key), title:signal.title, summary:sourceSummary(signal), status:'DEVELOPING', firstObservedAt:signal.observedAt, lastObservedAt:signal.observedAt, occurredAt:signal.publishedAt, updatedAt:signal.lastUpdated, categories:[...signal.categories], subcategories:[], countries:signal.country?[signal.country]:[], regions:signal.region?[signal.region]:[], geo:signal.geo?[signal.geo]:[], atlasEntityIds:[], people:[], organizations:[], companies:[], nexusCompanyIds:[], nexusSecurityIds:[], sectors:[], industries:[], commodities:[], currencies:[], launchpadIpoIds:[], sourceSignals:[signal], evidence:[{source:signal.sourceName,url:signal.sourceUrl,publishedAt:signal.publishedAt,credibilityClass:signal.credibilityClass}], sourceCount:1, independentSourceCount:1, credibility:'',corroboration:{},novelty:'NEW_EVENT',materiality:'UNKNOWN',urgency:'MODERATE',freshness:'',disputedClaims:[...signal.disputedClaims],unresolvedEntities:[],updates:[{kind:'NEW_EVENT',at:signal.observedAt,signalId:signal.id}] };
     linkEntities(event,refs); score(event,now); return event;
   }
   function ingest(previous,rawSignals,refs={},now=new Date().toISOString()) {
@@ -147,7 +149,7 @@
         }
         e.sourceSignals=e.sourceSignals.map(x=>x.id===s.id?s:x);
         e.novelty='CORRECTION'; e.updates.push({kind:'CORRECTION',at:s.observedAt,signalId:s.id});
-        e.title=s.title; e.summary=s.title; e.updatedAt=s.lastUpdated; e.lastObservedAt=s.observedAt;
+        e.title=s.title; e.summary=sourceSummary(s); e.updatedAt=s.lastUpdated; e.lastObservedAt=s.observedAt;
         e.disputedClaims=[...new Set([...e.disputedClaims,...s.disputedClaims])];
         score(e,now); metrics.materialUpdates++; continue;
       }

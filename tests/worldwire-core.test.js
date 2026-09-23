@@ -16,6 +16,7 @@ test('negative control: headline changes and translations do not create extra ev
   const b=article('Powerful quake hits Taiwan','https://bbc.com/quake');
   const c=article('Terremoto golpea Taiwan','https://local.tw/quake',{language:'Spanish',translatedTitle:'Earthquake strikes Taiwan'});
   const out=core.ingest(null,[a,b,c],{},NOW); assert.equal(out.events.length,1); assert.equal(out.events[0].sourceCount,3); assert.equal(out.events[0].independentSourceCount,2);
+  assert.equal(out.events[0].sourceSignals[0].credibilityClass,'MAJOR_WIRE'); assert.equal(out.events[0].credibility,'MAJOR_WIRE'); assert.match(out.events[0].summary,/Unverified article signal/); assert.equal(out.events[0].status,'DEVELOPING');
 });
 test('negative control: unrelated same-day events and distinct official quake IDs stay apart',()=>{
   const a=article('Earthquake strikes Taiwan Hualien','https://a.example/1');
