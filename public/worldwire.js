@@ -49,7 +49,7 @@
       $('wwStream').querySelectorAll('.ww-event').forEach(b=>b.onclick=()=>open(b.dataset.id));
       if (!next&&data.events.length) open(data.events.some(e=>e.id===selected)?selected:data.events[0].id);
       if (!next&&!data.events.length) detail(null);
-      if (!next) { const c=await fetch('/api/worldwire/coverage').then(r=>r.json()); $('wwCoverage').dataset.lastIngest=c.lastIngestAt||''; $('wwCoverage').textContent=`${c.coverage||'Connected-source coverage'} · ${c.sourceCount||0} enabled sources · ${c.events24h||0} events updated in 24h · last ingest ${date(c.lastIngestAt)}`; }
+      if (!next) { const c=await fetch('/api/worldwire/coverage').then(r=>r.json()); $('wwCoverage').dataset.lastIngest=c.lastIngestAt||''; const degraded=Object.entries(c.sourceHealth||{}).filter(([,status])=>status!=='HEALTHY').map(([name,status])=>`${name} ${status}`); $('wwCoverage').textContent=`${c.coverage||'Connected-source coverage'} · ${c.sourceCount||0} enabled sources · ${c.events24h||0} events updated in 24h · last ingest ${date(c.lastIngestAt)}${degraded.length?' · '+degraded.join(', '):''}`; if (!c.lastIngestAt&&!data.total) $('wwStatus').textContent='Awaiting the first scheduled source cycle.'; }
     } catch(e) { $('wwStatus').textContent='WORLDWIRE unavailable: '+e.message; }
     finally { loading=false; if(pending){pending=false;load();} }
   }

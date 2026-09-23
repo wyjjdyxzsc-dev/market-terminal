@@ -76,6 +76,7 @@ test('API bounds, search ranking and market relevance preserve global results',(
   assert.equal(core.query(out,{market:'IN'}).events[0].countries[0],'IN');
   assert.equal(core.query(out,{q:'COPPER'}).events[0].countries[0],'IN');
   assert.equal(runtime.respond('/api/worldwire/event',out,{id:'absent'}).event,null);
+  assert.equal(runtime.respond('/api/worldwire/coverage',{...out,health:{GDELT:{status:'DEGRADED'}}}).sourceHealth.GDELT,'DEGRADED');
 });
 test('ATLAS projection requires source coordinates and shares WORLDWIRE id',()=>{
   const good={provider:'USGS',officialId:'xyz',sourceUrl:'https://earthquake.usgs.gov/earthquakes/eventpage/xyz',title:'M6.0 earthquake — Taiwan',publishedAt:NOW,geo:{lat:23,lon:121},magnitude:6};
