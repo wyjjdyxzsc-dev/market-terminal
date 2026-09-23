@@ -34,7 +34,7 @@
     const events = payload.events || [];
     status.textContent = payload.market === 'US'
       ? `${events.length} calendar events · US · ${payload.truth === 'CACHED' ? 'cached snapshot' : 'source snapshot'} · ${payload.from} to ${payload.to}`
-      : `${events.length} IPO records · ${payload.market} · source snapshot · verified ${payload.lastVerified || 'UNKNOWN'}`;
+      : `${events.length} IPO ${events.length === 1 ? 'record' : 'records'} · ${payload.market} · source snapshot · verified ${payload.lastVerified || 'UNKNOWN'}`;
     if (!events.length) { list.innerHTML = '<div class="status empty">No IPO events returned for this window.</div>'; detail.innerHTML = ''; return; }
     if (!events.some(e => e.id === selectedId)) selectedId = payload.selectedId || events[0].id;
     list.innerHTML = events.map(e => `<button type="button" class="launchpad-event${e.id === selectedId ? ' active' : ''}" data-ipo-id="${esc(e.id)}" aria-pressed="${e.id === selectedId}">

@@ -285,7 +285,9 @@ Check `wrangler.toml` for KV binding (`MT_KV`), AI binding, asset serving.
 - `/api/launchpad/ipos?market=US|IN` is in both runtimes. US uses the configured Finnhub key and 15-minute cache; India explicitly returns `UNAVAILABLE` until a verified feed is configured (D-012/B-037).
 - `public/launchpad.js` mounts Research → IPOs, source/field disclosures and the graph. Local unit 154/154, smoke 68/68, AI fixtures, Wrangler dry-run, desktop/mobile browser checks passed. Source commit `190e754` deployed assets `20260923b`, returned 33 live-calendar records, passed production smoke 71/71 and production desktop/mobile browser checks with a clean console. Closure assets `20260923c`.
 
-**MT2-6A PADLOCK (2026-09-23; local implementation, production pending)**:
+**MT2-6A PADLOCK (2026-09-23; production verified)**:
 - `tools/launchpad-build-snapshot.js` validates current SEBI public-issues listing families and atomically writes `shared/launchpad-snapshot.js` only after structure, nonzero record and accounting checks. The combined snapshot preserves US events and India filing history. Run `node tools/launchpad-build-snapshot.js` to refresh before a deployment; inspect the printed reconciliation.
 - `/api/launchpad/ipos?market=IN|ALL` serves India regulatory filing objects and the combined view from the same shared core in Express and Worker. India source URLs, filing states, timelines, currency INR and unknown fields are explicit. US Finnhub live route is unchanged. `public/launchpad.js` adds the India workspace detail within the existing Research → IPOs view.
 - SEBI listing metadata and direct links only; do not mirror PDF text. SEBI site policy requires permission for reproduction. NSE/BSE bulk feeds are not connected; listing confirmation requires official exchange URL + ISIN and CENSUS identity. See D-013/B-037.
+
+- Source commit `7b1fd07` deployed assets `20260923d`: 58 India IPOs, 33 US IPOs, 91 combined; 161/161 unit, AI fixtures, 67/67 local smoke, Wrangler dry-run, 72/72 production smoke and desktop/mobile/landscape browser checks passed with a clean console. Closure assets `20260923e`. MT2-7 WORLDWIRE is not authorized.

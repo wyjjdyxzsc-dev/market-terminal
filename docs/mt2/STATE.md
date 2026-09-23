@@ -2,9 +2,9 @@
 
 PROJECT: Market Terminal 2.0 — Project Meridian
 CHECKPOINT: MT2-6A PADLOCK — India IPO Feed Completion
-STATUS: IMPLEMENTED LOCALLY — production verification pending. MT2-6 LAUNCHPAD remains PASS.
-CURRENT: main baseline 0f573ea (verified against origin/main). A validated SEBI public-issues metadata adapter builds one combined US+India LAUNCHPAD snapshot. Local source reconciliation: 100 fetched, 57 accepted current issuers, 18 duplicate/amendment rows, 25 excluded ambiguous Other Documents, zero unresolved/errors; 58 India registry objects including one prior historical record. Existing US live Finnhub route remains in place; source snapshot contains 33 US records. Unit, AI evaluation, local smoke and browser checks in progress. Owner untracked files preserved.
-NEXT EXACT ACTION: finish local acceptance, deploy via GitHub main, verify Cloudflare runtime and browser, then close PADLOCK seam. MT2-7 WORLDWIRE remains NOT AUTHORIZED.
+STATUS: PASS — CLOSED 2026-09-23. MT2-6 LAUNCHPAD remains PASS. Source commit 7b1fd07 deployed; 72/72 production smoke and desktop/mobile browser pass with clean console. Closure assets 20260923e.
+CURRENT: main baseline 0f573ea was verified against origin/main; 7b1fd07 is the PADLOCK implementation source. Validated SEBI public-issue listing metadata populates the canonical combined LAUNCHPAD snapshot: 100 fetched, 57 accepted current issuers, 18 duplicate/amendment, 25 excluded ambiguous Other Documents, zero unresolved/errors; 58 India registry objects including one preserved earlier filing. US live Finnhub route returns 33 records; ALL returns 91 snapshot records. India official filing URLs, dates, lifecycle/timeline, INR and explicit UNKNOWN offer/listing/impact fields are visible. The source-failure build preserves prior good bytes. Local 161/161 unit, AI fixtures, 67/67 local smoke, Wrangler dry-run passed; production 72/72 smoke, desktop and 375x812 / 430x932 / 812x375 browser checks passed. Three unrelated owner untracked files remain untouched.
+NEXT EXACT ACTION: none. MT2-6A is closed. MT2-7 WORLDWIRE is NOT AUTHORIZED. B-037 remains open only for future exchange/offer enrichment with a separate usage decision.
 PREVIOUS: MT2-5 NEXUS — PASS (source commit `59a7bba`, closure commit `173a979`; production-
   verified per CLAUDE.md — this file's own STATE/COMMS/DECISIONS entries for NEXUS were never
   written at the time, only CLAUDE.md was updated; ROADMAP.md corrected retroactively this

@@ -282,7 +282,7 @@ accessibility/degraded-state defect · P3 minor.
 - SUGGESTED: no action expected; note only so a future audit does not re-flag these 219 as a
   regression of the OTC/CBOE fix in D-011.
 
-## B-037 · P2 · LAUNCHPAD · India IPO metadata source resolved; exchange/offer enrichment remains bounded
+## B-037 · P2 · LAUNCHPAD · India IPO metadata source resolved; exchange/offer enrichment remains bounded (PADLOCK source gap CLOSED)
 - OBSERVATION: before PADLOCK, the active Finnhub IPO calendar yielded only US exchange events. PADLOCK now ingests validated SEBI public-issue filing metadata. NSE/BSE exchange bulk data still requires a source/usage decision before ingestion.
 - CURRENT BEHAVIOUR: PADLOCK uses validated SEBI filing metadata and direct links; India records appear under `?market=IN`. Missing dates, offer terms and listing identity remain UNKNOWN. US events are never relabelled India.
 - SUGGESTED: assess official NSE/BSE listing-data usage rights and an approved adapter for issue terms, dates, ISIN and listing transition. Do not infer these from filing-list metadata.
