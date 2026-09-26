@@ -69,7 +69,8 @@ test('source policy disables ACLED, parser error pages fail, official adapters v
   assert.throws(()=>runtime.gdelt({html:'error'}),/schema/); assert.throws(()=>runtime.usgs({features:[]}),/schema/); assert.throws(()=>runtime.eonet({events:null}),/schema/); assert.throws(()=>runtime.nws({features:[]}),/schema/);
   assert.equal(runtime.usgs({type:'FeatureCollection',features:[{id:'abc',geometry:{type:'Point',coordinates:[121,23]},properties:{url:'https://earthquake.usgs.gov/a',mag:5,place:'Taiwan',time:Date.parse(NOW)}}]})[0].officialId,'abc');
   assert.equal(runtime.usgs({type:'FeatureCollection',features:[{id:'ar',geometry:{type:'Point',coordinates:[-66,-28]},properties:{url:'https://earthquake.usgs.gov/ar',mag:5,place:'51 km WSW of Arauco, Argentina',time:Date.parse(NOW)}}]})[0].country,'AR');
-  assert.equal(runtime.eonet({events:[{id:'x',title:'Wildfire',link:'https://eonet.gsfc.nasa.gov/x',geometry:[{type:'Point',coordinates:[2,1],date:NOW}]}]})[0].geo.lat,1);
+  const eonet=runtime.eonet({events:[{id:'x',title:'Wildfire',link:'https://eonet.gsfc.nasa.gov/x',sources:[{url:'https://third-party.example/report'}],geometry:[{type:'Point',coordinates:[2,1],date:NOW}]}]})[0];
+  assert.equal(eonet.geo.lat,1); assert.equal(eonet.sourceUrl,'https://eonet.gsfc.nasa.gov/x'); assert.equal(eonet.sourceName,'NASA EONET');
   assert.equal(runtime.nws({type:'FeatureCollection',features:[{id:'x',properties:{headline:'Storm warning',id:'https://api.weather.gov/a',sent:NOW},geometry:null}]} )[0].country,'US');
   assert.equal(runtime.nws({type:'FeatureCollection',features:[{id:'t',properties:{event:'Test Message',headline:'Test Message',id:'https://api.weather.gov/test',sent:NOW}}]}).length,0);
 });

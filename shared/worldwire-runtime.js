@@ -47,7 +47,7 @@
   }
   function eonet(j) {
     if (!Array.isArray(j.events)) throw Object.assign(new Error('EONET schema changed'),{kind:'SCHEMA_CHANGE'});
-    return j.events.slice(0,300).map(e=>{ const g=e.geometry?.at(-1), source=e.sources?.[0]?.url||e.link; return {provider:'EONET',officialId:e.id,sourceName:'NASA EONET',sourceUrl:source,title:e.title,publishedAt:g?.date,updatedAt:g?.date,geo:g?.type==='Point'&&Array.isArray(g.coordinates)?{lat:g.coordinates[1],lon:g.coordinates[0]}:null,rawCategories:['CLIMATE_NATURAL_DISASTERS']}; });
+    return j.events.slice(0,300).map(e=>{ const g=e.geometry?.at(-1), officialUrl=e.link, linkedSource=e.sources?.[0]?.url; return {provider:'EONET',officialId:e.id,sourceName:officialUrl?'NASA EONET':'EONET linked source',sourceUrl:officialUrl||linkedSource,title:e.title,publishedAt:g?.date,updatedAt:g?.date,geo:g?.type==='Point'&&Array.isArray(g.coordinates)?{lat:g.coordinates[1],lon:g.coordinates[0]}:null,rawCategories:['CLIMATE_NATURAL_DISASTERS']}; });
   }
   function nws(j) {
     if (j.type!=='FeatureCollection'||!Array.isArray(j.features)) throw Object.assign(new Error('NWS schema changed'),{kind:'SCHEMA_CHANGE'});
