@@ -59,8 +59,10 @@ test('negative control: duplicate official signal yields one event and correctio
 test('negative controls: stale not breaking, unknown materiality distinct from zero, disputes visible',()=>{
   const old=article('Taiwan semiconductor policy consultation','https://a.example/old',{publishedAt:'2026-09-01T10:00:00Z',observedAt:'2026-09-01T10:00:00Z'});
   const e=core.ingest(null,[old],{},NOW).events[0]; assert.equal(e.status,'STALE'); assert.equal(e.freshness,'STALE'); assert.equal(e.materiality,'UNKNOWN');
+  assert.equal(e.lastVerified,null);
   const disputed=core.ingest(null,[{provider:'USGS',officialId:'abc',sourceUrl:'https://earthquake.usgs.gov/a',title:'Earthquake Taiwan',publishedAt:NOW,disputedClaims:['Magnitude under revision']}],{},NOW).events[0];
   assert.equal(disputed.status,'DISPUTED'); assert.deepEqual(disputed.disputedClaims,['Magnitude under revision']);
+  assert.equal(disputed.lastVerified,NOW);
 });
 test('negative controls: fabricated links, unverified coordinates and AI URLs are rejected',()=>{
   const s=article('Acme Oil refinery outage','https://a.example/1');

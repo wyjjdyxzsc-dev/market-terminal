@@ -128,6 +128,7 @@
       if (!copy) representatives.push(s);
     }
     event.sourceCount=event.sourceSignals.length; event.independentSourceCount=representatives.length;
+    event.lastVerified=event.sourceSignals.map(s=>s.lastVerified).filter(Boolean).sort().at(-1)||null;
     const official=event.sourceSignals.some(s=>s.credibilityClass==='PRIMARY_OFFICIAL');
     event.corroboration={officialSourcePresent:official,primarySourcePresent:official,independentSourceCount:representatives.length,crossRegionCorroboration:new Set(event.sourceSignals.map(s=>s.country).filter(Boolean)).size>1};
     event.credibility=official?'PRIMARY_OFFICIAL':event.sourceSignals.some(s=>s.credibilityClass==='MAJOR_WIRE')?'MAJOR_WIRE':'UNKNOWN';
@@ -145,7 +146,7 @@
   }
   function createEvent(signal,now,refs) {
     const key=eventKey(signal), id='ww:'+hash(signal.id);
-    const event={ id, fingerprint:hash(key), title:signal.title, summary:sourceSummary(signal), status:'DEVELOPING', firstObservedAt:signal.observedAt, lastObservedAt:signal.observedAt, occurredAt:signal.publishedAt, updatedAt:signal.lastUpdated, categories:[...signal.categories], subcategories:[], countries:signal.country?[signal.country]:[], regions:signal.region?[signal.region]:[], geo:signal.geo?[signal.geo]:[], atlasEntityIds:[], people:[], organizations:[], companies:[], nexusCompanyIds:[], nexusSecurityIds:[], sectors:[], industries:[], commodities:[], currencies:[], launchpadIpoIds:[], sourceSignals:[signal], evidence:[{source:signal.sourceName,url:signal.sourceUrl,publishedAt:signal.publishedAt,observedAt:signal.observedAt,credibilityClass:signal.credibilityClass}], sourceCount:1, independentSourceCount:1, credibility:'',corroboration:{},novelty:'NEW_EVENT',materiality:'UNKNOWN',urgency:'MODERATE',freshness:'',disputedClaims:[...signal.disputedClaims],unresolvedEntities:[],updates:[{kind:'NEW_EVENT',at:signal.observedAt,signalId:signal.id}] };
+    const event={ id, fingerprint:hash(key), title:signal.title, summary:sourceSummary(signal), status:'DEVELOPING', firstObservedAt:signal.observedAt, lastObservedAt:signal.observedAt, occurredAt:signal.publishedAt, updatedAt:signal.lastUpdated, lastVerified:signal.lastVerified, categories:[...signal.categories], subcategories:[], countries:signal.country?[signal.country]:[], regions:signal.region?[signal.region]:[], geo:signal.geo?[signal.geo]:[], atlasEntityIds:[], people:[], organizations:[], companies:[], nexusCompanyIds:[], nexusSecurityIds:[], sectors:[], industries:[], commodities:[], currencies:[], launchpadIpoIds:[], sourceSignals:[signal], evidence:[{source:signal.sourceName,url:signal.sourceUrl,publishedAt:signal.publishedAt,observedAt:signal.observedAt,credibilityClass:signal.credibilityClass}], sourceCount:1, independentSourceCount:1, credibility:'',corroboration:{},novelty:'NEW_EVENT',materiality:'UNKNOWN',urgency:'MODERATE',freshness:'',disputedClaims:[...signal.disputedClaims],unresolvedEntities:[],updates:[{kind:'NEW_EVENT',at:signal.observedAt,signalId:signal.id}] };
     linkEntities(event,refs); score(event,now); return event;
   }
   function ingest(previous,rawSignals,refs={},now=new Date().toISOString()) {
