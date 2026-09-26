@@ -43,7 +43,9 @@
     finally { clearTimeout(timer); }
   }
   function xmlText(s) { return String(s||'').replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g,'$1').replace(/&(#x[0-9a-f]+|#\d+|amp|lt|gt|quot|apos);/gi,(_,x)=>{if(x[0]==='#'){const n=x[1].toLowerCase()==='x'?parseInt(x.slice(2),16):Number(x.slice(1));return n>0&&n<=0x10ffff?String.fromCodePoint(n):'';}return {amp:'&',lt:'<',gt:'>',quot:'"',apos:"'"}[x.toLowerCase()]||'';}); }
-  const EVENT_ACTION=/\b(killed|injured|strik(?:e|es|ing)|struck|attack(?:s|ed)?|bombed|bombing|earthquake|quake|wildfire|hurricane|typhoon|cyclone|tsunami|erupts?|explosion|outage|blackout|ceasefire|flood(?:s|ed|ing)?|collapses?|collapsed|announces?|announced|approves?|approved|rejects?|rejected|launches?|launched|files?|filed|delays?|delayed|withdraws?|withdrawn|disrupts?|disrupted|disruption|shutdown|closes?|closed|reopens?|reopened|breaches?|breached|hacks?|hacked|discovers?|discovered|acquires?|acquired|merges?|merged|takeover|raises?|cuts?|hikes?|slashes?|falls?|drops?|surges?|rises?|declines?|defaults?|halts?|cancels?|suspends?|resumes?|signs?|agrees?|passes?|votes?|wins?|loses?|pricing|warns?|warned|proposes?|proposed|succeeds?|succeeded)\b/i;
+  const EVENT_ACTION=/\b(killed|injured|strik(?:e|es|ing)|struck|attack(?:s|ed)?|bombed|bombing|erupts?|collapses?|collapsed|announces?|announced|approves?|approved|rejects?|rejected|launches?|launched|files?|filed|delays?|delayed|withdraws?|withdrawn|disrupts?|disrupted|disruption|shutdown|closes?|closed|reopens?|reopened|breaches?|breached|hacks?|hacked|discovers?|discovered|acquires?|acquired|merges?|merged|takeover|raises?|cuts?|hikes?|slashes?|falls?|drops?|surges?|rises?|declines?|defaults?|halts?|cancels?|suspends?|resumes?|signs?|agrees?|passes?|votes?|wins?|loses?|pricing|warns?|warned|proposes?|proposed|succeeds?|succeeded)\b/i;
+  const EDITORIAL_CONTEXT=/\b(don't miss|how to|top\s*\d+|years? later|anniversary|on this day|looking back|what to know|guide to|explainer|watch tonight)\b/i;
+  const galCandidate=title=>!EDITORIAL_CONTEXT.test(title)&&EVENT_ACTION.test(title)&&!(/^earthquake in\b/i.test(title)&&/\b(urges?|leaders?|political)\b/i.test(title));
   function galRss(body,now=new Date().toISOString()) {
     if(!/^\s*<\?xml\b/i.test(body)||!/<rss\b/i.test(body)||!/<channel\b/i.test(body)||!/<\/rss>\s*$/i.test(body)) throw Object.assign(new Error('GDELT GAL RSS schema changed'),{kind:'SCHEMA_CHANGE'});
     const built=/<lastBuildDate>([^<]+)<\/lastBuildDate>/i.exec(body)?.[1];
@@ -53,7 +55,7 @@
     while((item=itemRe.exec(body))!==null){
       itemCount++; const title=field(item[1],'title'),sourceUrl=field(item[1],'link'),observedAt=field(item[1],'pubDate');
       const signal=core.normalizeSignal({provider:'GDELT',sourceUrl,title,observedAt},now);
-      if(!signal||!signal.categories.some(c=>!['INDIA','UNITED_STATES','SECOND_ORDER_EFFECTS'].includes(c))||!EVENT_ACTION.test(title)||seenUrls.has(signal.id)) continue;
+      if(!signal||!signal.categories.some(c=>!['INDIA','UNITED_STATES','SECOND_ORDER_EFFECTS'].includes(c))||!galCandidate(title)||seenUrls.has(signal.id)) continue;
       seenUrls.add(signal.id);
       rows.push({provider:'GDELT',sourceName:new URL(signal.sourceUrl).hostname.replace(/^www\./,'')+' via GDELT',sourceUrl:signal.sourceUrl,title,publishedAt:null,observedAt,language:'und',rawCategories:[]});
       if(rows.length>=250) break;
@@ -87,6 +89,9 @@
   }
   async function run(storage,refs={},now=new Date().toISOString(),providers=null) {
     const previous=await storage.get(KEY)||{events:[],metrics:{},health:{}};
+    // Revalidate title-only discoveries when the conservative candidate gate
+    // changes; official structured events are never removed by this migration.
+    previous.events=(previous.events||[]).filter(e=>e.sourceSignals?.some(s=>s.provider!=='GDELT'||galCandidate(s.title)));
     let health=previous.health||{}, signals=[]; const sourceResults={};
     if(health.GDELT?.adapterVersion!==GDELT_ADAPTER_VERSION) health={...health,GDELT:{consecutiveFailures:0}};
     for (const [provider,fetcher] of Object.entries(ADAPTERS)) {

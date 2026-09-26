@@ -98,7 +98,7 @@ test('source policy disables ACLED, parser error pages fail, official adapters v
   assert.equal(runtime.nws({type:'FeatureCollection',features:[{id:'t',properties:{event:'Test Message',headline:'Test Message',id:'https://api.weather.gov/test',sent:NOW}}]}).length,0);
 });
 test('provider failure isolation, health backoff and zero-result guard preserve state',async()=>{
-  let stored={events:core.ingest(null,[article('Earthquake strikes Taiwan','https://a.example/1')],{},NOW).events,health:{},totals:{}};
+  let stored={events:core.ingest(null,[article('Earthquake strikes Taiwan','https://a.example/1'),article("Don't miss Harvest Moon rise tonight",'https://a.example/moon',{rawCategories:['AGRICULTURE_FOOD']})],{},NOW).events,health:{},totals:{}};
   let writes=0; const storage={get:async()=>stored,put:async(_k,v)=>{stored=v;writes++;}};
   const fetch0=global.fetch; global.fetch=async()=>{throw new Error('down');};
   try { const out=await runtime.run(storage,{},NOW); assert.equal(out.events.length,1); assert.equal(out.health.USGS.status,'DEGRADED'); assert.equal(out.health.GDELT.status,'DEGRADED'); assert.equal(writes,1); assert.ok(Date.parse(out.health.USGS.nextAttemptAt)>Date.parse(NOW)); }
@@ -106,7 +106,7 @@ test('provider failure isolation, health backoff and zero-result guard preserve 
   assert.equal(runtime.respond('/api/worldwire/health',{scheduledAttempt:NOW}).scheduledAttempt,NOW);
 });
 test('GDELT GAL adapter accepts bounded RSS and rejects an HTML error page',async()=>{
-  const rss=`<?xml version="1.0"?><rss><channel><lastBuildDate>${new Date(NOW).toUTCString()}</lastBuildDate><item><title>Oil tanker attacked near Strait of Hormuz</title><link>https://example.org/tanker</link><pubDate>${new Date(NOW).toUTCString()}</pubDate></item></channel></rss>`;
+  const rss=`<?xml version="1.0"?><rss><channel><lastBuildDate>${new Date(NOW).toUTCString()}</lastBuildDate><item><title>Oil tanker attacked near Strait of Hormuz</title><link>https://example.org/tanker</link><pubDate>${new Date(NOW).toUTCString()}</pubDate></item><item><title>Don't miss Harvest Moon rise tonight</title><link>https://example.org/moon</link></item><item><title>EARTHQUAKE IN NYANZA: politician urges leaders to act</title><link>https://example.org/metaphor</link></item><item><title>Top 5 Hurricane cleanup stories two years later</title><link>https://example.org/roundup</link></item></channel></rss>`;
   const original=global.fetch;
   try {
     global.fetch=async()=>new Response(rss,{headers:{'content-type':'application/rss+xml'}});
