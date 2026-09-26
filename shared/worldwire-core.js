@@ -191,6 +191,15 @@
         e.atlasEntityIds=[]; e.nexusCompanyIds=[]; e.nexusSecurityIds=[];
         e.companies=[]; e.sectors=[]; e.launchpadIpoIds=[];
       }
+      if(e.updates?.some(update=>update.kind==='MATERIAL_UPDATE')) {
+        const prior=[],materialSignalIds=new Set();
+        for (const signal of e.sourceSignals) {
+          if (prior.length&&!prior.some(earlier=>syndicatedCopy(earlier,signal))) materialSignalIds.add(signal.id);
+          prior.push(signal);
+        }
+        e.updates=e.updates.filter(update=>update.kind!=='MATERIAL_UPDATE'||materialSignalIds.has(update.signalId));
+        if(e.novelty==='MATERIAL_UPDATE'&&!e.updates.some(update=>update.kind==='MATERIAL_UPDATE')) e.novelty='MINOR_UPDATE';
+      }
       score(e,now);
     }
     events.sort((a,b)=>(b.lastObservedAt||'').localeCompare(a.lastObservedAt||'')||(b.updatedAt||b.occurredAt||'').localeCompare(a.updatedAt||a.occurredAt||''));

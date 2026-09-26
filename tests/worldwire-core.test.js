@@ -37,6 +37,10 @@ test('negative control: syndication and source mirrors do not inflate independen
   const variant=core.ingest(null,[article('Donald Trump rejects Iran proposal to reopen Strait of Hormuz','https://one.example/hormuz',{country:null,rawCategories:['MARITIME']}),article('Trump rejects Iran proposal to reopen the Strait of Hormuz','https://two.example/hormuz',{country:null,rawCategories:['MARITIME']})],{},NOW);
   assert.equal(variant.events.length,1); assert.equal(variant.events[0].independentSourceCount,1);
   assert.equal(variant.metrics.materialUpdates,0); assert.equal(variant.metrics.duplicatesSuppressed,1);
+  variant.events[0].updates.push({kind:'MATERIAL_UPDATE',at:NOW,signalId:variant.events[0].sourceSignals[1].id});
+  variant.events[0].novelty='MATERIAL_UPDATE';
+  const repaired=core.ingest(variant,[],{},NOW).events[0];
+  assert.deepEqual(repaired.updates.map(u=>u.kind),['NEW_EVENT']); assert.equal(repaired.novelty,'MINOR_UPDATE');
   const revised=core.ingest(null,[article('Storm kills 50 people in Taiwan','https://same.example/story'),article('Storm kills 100 people in Taiwan','https://same.example/story')],{},NOW);
   assert.equal(revised.events.length,1); assert.equal(revised.events[0].novelty,'CORRECTION');
 });
