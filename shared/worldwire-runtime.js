@@ -91,7 +91,7 @@
     const previous=await storage.get(KEY)||{events:[],metrics:{},health:{}};
     // Revalidate title-only discoveries when the conservative candidate gate
     // changes; official structured events are never removed by this migration.
-    previous.events=(previous.events||[]).filter(e=>e.sourceSignals?.some(s=>s.provider!=='GDELT'||galCandidate(s.title)));
+    previous.events=(previous.events||[]).filter(e=>e.sourceSignals?.some(s=>s.provider!=='GDELT'||(galCandidate(s.title)&&core.normalizeSignal(s,now)?.categories.some(c=>!['INDIA','UNITED_STATES','SECOND_ORDER_EFFECTS'].includes(c)))));
     let health=previous.health||{}, signals=[]; const sourceResults={};
     if(health.GDELT?.adapterVersion!==GDELT_ADAPTER_VERSION) health={...health,GDELT:{consecutiveFailures:0}};
     for (const [provider,fetcher] of Object.entries(ADAPTERS)) {

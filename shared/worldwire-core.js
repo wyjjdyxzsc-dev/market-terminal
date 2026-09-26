@@ -62,7 +62,7 @@
   function canonicalUrl(s) { const url=validUrl(s); if (!url) return null; const u=new URL(url); u.hash=''; for (const k of [...u.searchParams.keys()]) if (/^(utm_|fbclid|gclid|ref$)/i.test(k)) u.searchParams.delete(k); return u.toString().replace(/\/$/,''); }
   function iso(s) { const n=typeof s==='number'?s:Date.parse(s); return Number.isFinite(n) ? new Date(n).toISOString() : null; }
   function tokens(s) { return [...new Set(String(s||'').toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g,'').match(/[\p{L}\p{N}]+/gu)?.map(w=>DICT[w]||w).filter(w=>w.length>2&&!STOP.has(w))||[])].sort(); }
-  function categories(text, provider, raw=[]) { const out=new Set(); if (provider==='USGS'||provider==='EONET'||provider==='NWS') out.add('CLIMATE_NATURAL_DISASTERS'); for (const [cat,re] of RULES) if (re.test(text)) out.add(cat); if (/\bIndia(n)?\b/i.test(text)) out.add('INDIA'); if (/\b(United States|U\.S\.|US government)\b/i.test(text)) out.add('UNITED_STATES'); for (const r of raw) if (CATEGORIES.includes(r)) out.add(r); return [...out]; }
+  function categories(text, provider, raw=[]) { const out=new Set(); if (provider==='USGS'||provider==='EONET'||provider==='NWS') out.add('CLIMATE_NATURAL_DISASTERS'); for (const [cat,re] of RULES) if (re.test(text)) out.add(cat); if (/\b(postal|mail|parcel|packages?)\b/i.test(text)&&!/\b(port|tanker|vessel|maritime|ships?|sea)\b/i.test(text)) out.delete('MARITIME'); if (/\bIndia(n)?\b/i.test(text)) out.add('INDIA'); if (/\b(United States|U\.S\.|US government)\b/i.test(text)) out.add('UNITED_STATES'); for (const r of raw) if (CATEGORIES.includes(r)) out.add(r); return [...out]; }
   function sourceClass(provider,url) { if(provider!=='GDELT') return 'PRIMARY_OFFICIAL'; const host=new URL(url).hostname.replace(/^www\./,''); return ['reuters.com','apnews.com','afp.com'].includes(host)?'MAJOR_WIRE':'UNKNOWN'; }
   function sourceSummary(signal) { return signal.provider==='GDELT'?`Unverified article signal from ${signal.sourceName}: ${signal.title}`:signal.title; }
   function normalizeSignal(raw, now=new Date().toISOString()) {
@@ -194,7 +194,10 @@
         e.atlasEntityIds=[]; e.nexusCompanyIds=[]; e.nexusSecurityIds=[];
         e.companies=[]; e.sectors=[]; e.launchpadIpoIds=[];
       } else if ((e.atlasEntityIds.length||e.nexusSecurityIds.length)&&(refs.atlas||refs.atlasIndex||refs.nexus||refs.nexusIndex)) linkEntities(e,refs);
-      if(!e.categories.includes('TECHNOLOGY')&&e.sourceSignals.some(s=>s.provider==='GDELT'&&/\bAI\b/.test(s.title))) e.categories.push('TECHNOLOGY');
+      if(e.sourceSignals.some(s=>s.provider==='GDELT')) {
+        for(const signal of e.sourceSignals) if(signal.provider==='GDELT') signal.categories=categories(signal.title+' '+(signal.translatedTitle||''),'GDELT',signal.rawCategories);
+        e.categories=[...new Set(e.sourceSignals.flatMap(s=>s.categories))];
+      }
       if(e.updates?.some(update=>update.kind==='MATERIAL_UPDATE')) {
         const prior=[],materialSignalIds=new Set();
         for (const signal of e.sourceSignals) {
