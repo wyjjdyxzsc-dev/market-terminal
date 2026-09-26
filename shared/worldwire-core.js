@@ -113,7 +113,7 @@
     const indexed=(index,fallback)=>index instanceof Map?[...new Set(textTokens.flatMap(t=>index.get(t)||[]))]:(fallback||[]);
     event.atlasEntityIds=structuredHazard?[]:indexed(refs.atlasIndex,refs.atlas).filter(e=>e&&e.id&&matchName(e.name)&&Array.isArray(e.sourceEvidence)&&e.sourceEvidence.length).slice(0,8).map(e=>e.id);
     const candidates=structuredHazard?[]:indexed(refs.nexusIndex,refs.nexus);
-    const companies=candidates.filter(c=>c&&c.id&&(matchName(c.name)||(c.aliasUnique&&matchName(c.alias)))&&Array.isArray(c.sourceEvidence)&&c.sourceEvidence.length).slice(0,8);
+    const companies=candidates.filter(c=>c&&c.id&&matchName(c.name)&&Array.isArray(c.sourceEvidence)&&c.sourceEvidence.length).slice(0,8);
     event.nexusSecurityIds=companies.map(c=>c.id); event.nexusCompanyIds=[...new Set(companies.map(c=>c.companyId).filter(Boolean))]; event.companies=companies.map(c=>({id:c.id,name:c.name,symbol:c.symbol,sector:c.sector||null}));
     event.sectors=[...new Set(companies.map(c=>c.sector).filter(Boolean))];
     event.launchpadIpoIds=(refs.launchpad||[]).filter(i=>i&&i.id&&matchName(i.name)&&event.categories.includes('IPO_CAPITAL_RAISING')&&((Array.isArray(i.evidence)&&i.evidence.length)||validUrl(i.source?.url))).slice(0,5).map(i=>i.id);

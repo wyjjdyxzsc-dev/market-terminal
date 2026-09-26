@@ -64,6 +64,8 @@ test('negative controls: fabricated links, unverified coordinates and AI URLs ar
   const e=core.ingest(null,[s],refs,NOW).events[0]; assert.deepEqual(e.nexusSecurityIds,[]); assert.deepEqual(e.atlasEntityIds,[]); assert.deepEqual(e.launchpadIpoIds,[]);
   assert.equal(core.normalizeSignal({...s,geo:{lat:999,lon:999}},NOW).geo,null);
   assert.equal(core.normalizeSignal({...s,sourceUrl:'javascript:alert(1)'},NOW),null);
+  const common=core.ingest(null,[article('Missile attack strikes target near harbor','https://a.example/target',{rawCategories:['WAR_SECURITY']})],{nexus:[{id:'US:NYSE:TGT',name:'Target Corporation',alias:'Target',aliasUnique:true,sourceEvidence:[{sourceUrl:'https://sec.gov/tgt'}]}]},NOW).events[0];
+  assert.deepEqual(common.nexusSecurityIds,[]);
 });
 test('evidence-backed NEXUS, ATLAS, LAUNCHPAD and commodity links are bounded',()=>{
   const s=article('Acme Copper IPO at New York Port','https://a.example/1',{rawCategories:['IPO_CAPITAL_RAISING']});
