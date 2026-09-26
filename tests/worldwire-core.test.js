@@ -70,6 +70,11 @@ test('negative controls: fabricated links, unverified coordinates and AI URLs ar
   assert.equal(core.normalizeSignal({...s,sourceUrl:'javascript:alert(1)'},NOW),null);
   const common=core.ingest(null,[article('Missile attack strikes target near harbor','https://a.example/target',{rawCategories:['WAR_SECURITY']})],{nexus:[{id:'US:NYSE:TGT',name:'Target Corporation',alias:'Target',aliasUnique:true,sourceEvidence:[{sourceUrl:'https://sec.gov/tgt'}]}]},NOW).events[0];
   assert.deepEqual(common.nexusSecurityIds,[]);
+  const cityRefs={atlas:[{id:'port:london',name:'London',type:'PORT',sourceEvidence:[{sourceUrl:'https://naturalearthdata.com/ports'}]}]};
+  const city=core.ingest(null,[article('Family attacked on London train','https://a.example/train',{rawCategories:['WAR_SECURITY']})],cityRefs,NOW).events[0];
+  assert.deepEqual(city.atlasEntityIds,[]);
+  city.atlasEntityIds=['port:london'];
+  assert.deepEqual(core.ingest({events:[city]},[],cityRefs,NOW).events[0].atlasEntityIds,[]);
 });
 test('evidence-backed NEXUS, ATLAS, LAUNCHPAD and commodity links are bounded',()=>{
   const s=article('Acme Copper IPO at New York Port','https://a.example/1',{rawCategories:['IPO_CAPITAL_RAISING']});
@@ -110,7 +115,7 @@ test('provider failure isolation, health backoff and zero-result guard preserve 
   assert.equal(runtime.respond('/api/worldwire/health',{scheduledAttempt:NOW}).scheduledAttempt,NOW);
 });
 test('GDELT GAL adapter accepts bounded RSS and rejects an HTML error page',async()=>{
-  const rss=`<?xml version="1.0"?><rss><channel><lastBuildDate>${new Date(NOW).toUTCString()}</lastBuildDate><item><title>Oil tanker attacked near Strait of Hormuz</title><link>https://example.org/tanker</link><pubDate>${new Date(NOW).toUTCString()}</pubDate></item><item><title>Don't miss Harvest Moon rise tonight</title><link>https://example.org/moon</link></item><item><title>EARTHQUAKE IN NYANZA: politician urges leaders to act</title><link>https://example.org/metaphor</link></item><item><title>Top 5 Hurricane cleanup stories two years later</title><link>https://example.org/roundup</link></item></channel></rss>`;
+  const rss=`<?xml version="1.0"?><rss><channel><lastBuildDate>${new Date(NOW).toUTCString()}</lastBuildDate><item><title>Oil tanker attacked near Strait of Hormuz</title><link>https://example.org/tanker</link><pubDate>${new Date(NOW).toUTCString()}</pubDate></item><item><title>Don't miss Harvest Moon rise tonight</title><link>https://example.org/moon</link></item><item><title>EARTHQUAKE IN NYANZA: politician urges leaders to act</title><link>https://example.org/metaphor</link></item><item><title>Top 5 Hurricane cleanup stories two years later</title><link>https://example.org/roundup</link></item><item><title>Today's Headlines: attacks and a port deal</title><link>https://example.org/headlines</link></item></channel></rss>`;
   const original=global.fetch;
   try {
     global.fetch=async()=>new Response(rss,{headers:{'content-type':'application/rss+xml'}});
