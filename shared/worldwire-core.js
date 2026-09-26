@@ -93,7 +93,8 @@
   }
   function independenceKey(s) { const u=new URL(s.canonicalUrl); const wire=/\b(reuters|associated press|ap news|afp|bloomberg)\b/i.exec(s.sourceName+' '+s.title); return wire?'wire:'+wire[1].toLowerCase():u.hostname.replace(/^www\./,''); }
   function syndicatedCopy(a,b) {
-    const aTitle=tokens(a.translatedTitle||a.title).join('|'), bTitle=tokens(b.translatedTitle||b.title).join('|');
+    const headlineKey=s=>String(s.translatedTitle||s.title).toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g,'').match(/[\p{L}\p{N}]+/gu)?.join('|')||'';
+    const aTitle=headlineKey(a), bTitle=headlineKey(b);
     const aNumbers=(a.title.match(/\d+(?:[.,]\d+)*/g)||[]).join('|'), bNumbers=(b.title.match(/\d+(?:[.,]\d+)*/g)||[]).join('|');
     if(aNumbers!==bNumbers) return false;
     if(Math.abs(Date.parse(a.publishedAt||a.observedAt)-Date.parse(b.publishedAt||b.observedAt))>=7200000) return false;
