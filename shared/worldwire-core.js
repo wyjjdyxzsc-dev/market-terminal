@@ -22,7 +22,7 @@
     ['WAR_SECURITY',/\b(war|attacks?|attacked|missiles?|drones?|battle|ceasefire|military|terror|strike on|bombing)\b/i],
     ['GEOPOLITICS',/\b(sanctions?|diplomat|election|territorial|government policy)\b/i],
     ['ENERGY',/\b(oil|brent|wti|opec|lng|natural gas|refiner|pipeline|electric grid|power outage)\b/i],
-    ['TECHNOLOGY',/\b(artificial intelligence|semiconductor|chipmaker|cloud computing|robotic|quantum|telecom)\b/i],
+    ['TECHNOLOGY',/\b(AI|artificial intelligence|semiconductor|chipmaker|cloud computing|robotic|quantum|telecom)\b/i],
     ['MARITIME',/\b(tanker|ship|shipping|port|strait|subsea|seabed|piracy|maritime)\b/i],
     ['HOSPITALITY_TRAVEL',/\b(hotel|tourism|airline|airport|cruise|casino|travel disruption)\b/i],
     ['BREAKTHROUGHS',/\b(breakthrough|discovery|clinical trial|new material|fusion milestone)\b/i],
@@ -193,6 +193,7 @@
         e.atlasEntityIds=[]; e.nexusCompanyIds=[]; e.nexusSecurityIds=[];
         e.companies=[]; e.sectors=[]; e.launchpadIpoIds=[];
       } else if ((e.atlasEntityIds.length||e.nexusSecurityIds.length)&&(refs.atlas||refs.atlasIndex||refs.nexus||refs.nexusIndex)) linkEntities(e,refs);
+      if(!e.categories.includes('TECHNOLOGY')&&e.sourceSignals.some(s=>s.provider==='GDELT'&&/\bAI\b/.test(s.title))) e.categories.push('TECHNOLOGY');
       if(e.updates?.some(update=>update.kind==='MATERIAL_UPDATE')) {
         const prior=[],materialSignalIds=new Set();
         for (const signal of e.sourceSignals) {
