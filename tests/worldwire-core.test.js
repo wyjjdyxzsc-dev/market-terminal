@@ -34,6 +34,11 @@ test('negative control: syndication and source mirrors do not inflate independen
   assert.deepEqual(e.updates.map(u=>u.kind),['NEW_EVENT']);
   const c=article('Earthquake strikes Taiwan','https://mirror-three.example/c',{sourceName:'Mirror Three'});
   assert.equal(core.ingest(null,[a,c],{},NOW).events[0].independentSourceCount,1);
+  const variant=core.ingest(null,[article('Donald Trump rejects Iran proposal to reopen Strait of Hormuz','https://one.example/hormuz',{country:null,rawCategories:['MARITIME']}),article('Trump rejects Iran proposal to reopen the Strait of Hormuz','https://two.example/hormuz',{country:null,rawCategories:['MARITIME']})],{},NOW);
+  assert.equal(variant.events.length,1); assert.equal(variant.events[0].independentSourceCount,1);
+  assert.equal(variant.metrics.materialUpdates,0); assert.equal(variant.metrics.duplicatesSuppressed,1);
+  const revised=core.ingest(null,[article('Storm kills 50 people in Taiwan','https://same.example/story'),article('Storm kills 100 people in Taiwan','https://same.example/story')],{},NOW);
+  assert.equal(revised.events.length,1); assert.equal(revised.events[0].novelty,'CORRECTION');
 });
 test('extended categories classify explicit event terms without inventing impact',()=>{
   const cases={SPACE_AEROSPACE:'Satellite launch delayed',HEALTHCARE_BIOTECH:'Drug approval announced',FX_SOVEREIGN_DEBT:'Sovereign bond auction',BANKING_CREDIT:'Bank failure reported',COMMODITIES:'Copper mine shutdown',AGRICULTURE_FOOD:'Wheat crop failure',SUPPLY_CHAINS:'Supplier disruption at factory',REGULATION:'Regulatory ban proposed',DEFENSE:'Defense contract awarded',AUTOMOTIVE:'Electric vehicle production halted',CONSUMER_RETAIL:'Retail sales fall',REAL_ESTATE_CONSTRUCTION:'Housing starts decline',MEDIA_ENTERTAINMENT:'Film studio merger',MA:'Takeover bid announced',EARNINGS_CORPORATE:'Quarterly results released',LABOR:'Labor strike called',INFRASTRUCTURE:'Bridge collapse reported',CRITICAL_MINERALS:'Lithium mine closed',WATER:'Water shortage declared',NUCLEAR:'Nuclear reactor offline',DIGITAL_ASSETS:'Stablecoin rule proposed',EMERGING_MARKETS:'Emerging market debt sale'};

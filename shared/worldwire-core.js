@@ -92,6 +92,15 @@
     return sim.overlap>=2&&sim.ratio>=0.8&&(!!first.country||!!first.region||sim.overlap>=4);
   }
   function independenceKey(s) { const u=new URL(s.canonicalUrl); const wire=/\b(reuters|associated press|ap news|afp|bloomberg)\b/i.exec(s.sourceName+' '+s.title); return wire?'wire:'+wire[1].toLowerCase():u.hostname.replace(/^www\./,''); }
+  function syndicatedCopy(a,b) {
+    const aTitle=tokens(a.translatedTitle||a.title).join('|'), bTitle=tokens(b.translatedTitle||b.title).join('|');
+    const aNumbers=(a.title.match(/\d+(?:[.,]\d+)*/g)||[]).join('|'), bNumbers=(b.title.match(/\d+(?:[.,]\d+)*/g)||[]).join('|');
+    if(aNumbers!==bNumbers) return false;
+    if(Math.abs(Date.parse(a.publishedAt||a.observedAt)-Date.parse(b.publishedAt||b.observedAt))>=7200000) return false;
+    if(aTitle===bTitle) return true;
+    const sim=similarity(a,b);
+    return sim.overlap>=4&&sim.ratio>=0.8&&(independenceKey(a)===independenceKey(b)||(a.provider==='GDELT'&&b.provider==='GDELT'));
+  }
   function linkEntities(event, refs={}) {
     const text=(event.title+' '+event.sourceSignals.map(s=>s.title).join(' ')).toLowerCase();
     // Hazard feed titles often include an issuing office or nearby city. Those
@@ -112,7 +121,7 @@
   function score(event,now) {
     const representatives=[];
     for (const s of event.sourceSignals) {
-      const copy=representatives.some(r=>independenceKey(r)===independenceKey(s)||(Math.abs(Date.parse(r.publishedAt||r.observedAt)-Date.parse(s.publishedAt||s.observedAt))<7200000&&tokens(r.title).join('|')===tokens(s.title).join('|')));
+      const copy=representatives.some(r=>independenceKey(r)===independenceKey(s)||syndicatedCopy(r,s));
       if (!copy) representatives.push(s);
     }
     event.sourceCount=event.sourceSignals.length; event.independentSourceCount=representatives.length;
@@ -162,9 +171,7 @@
         e.disputedClaims=[...new Set([...e.disputedClaims,...s.disputedClaims])];
         score(e,now); metrics.materialUpdates++; continue;
       }
-      const syndicated=e.sourceSignals.some(r=>independenceKey(r)===independenceKey(s)||(
-        Math.abs(Date.parse(r.publishedAt||r.observedAt)-Date.parse(s.publishedAt||s.observedAt))<7200000&&
-        tokens(r.title).join('|')===tokens(s.title).join('|')));
+      const syndicated=e.sourceSignals.some(r=>syndicatedCopy(r,s));
       e.sourceSignals.push(s); e.sourceSignals=e.sourceSignals.slice(-MAX_SIGNALS);
       bySignal.set(s.id,e);
       e.evidence=e.sourceSignals.map(x=>({source:x.sourceName,url:x.sourceUrl,publishedAt:x.publishedAt,observedAt:x.observedAt,credibilityClass:x.credibilityClass}));
