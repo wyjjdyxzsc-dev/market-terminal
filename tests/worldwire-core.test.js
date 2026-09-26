@@ -28,7 +28,10 @@ test('negative control: unrelated same-day events and distinct official quake ID
 test('negative control: syndication and source mirrors do not inflate independent count',()=>{
   const a=article('Earthquake strikes Taiwan','https://mirror-one.example/a',{sourceName:'Reuters'});
   const b=article('Earthquake strikes Taiwan','https://mirror-two.example/b',{sourceName:'Reuters mirror'});
-  const e=core.ingest(null,[a,b],{},NOW).events[0]; assert.equal(e.sourceCount,2); assert.equal(e.independentSourceCount,1); assert.equal(e.status,'DEVELOPING');
+  const merged=core.ingest(null,[a,b],{},NOW);
+  const e=merged.events[0]; assert.equal(e.sourceCount,2); assert.equal(e.independentSourceCount,1); assert.equal(e.status,'DEVELOPING');
+  assert.equal(merged.metrics.materialUpdates,0); assert.equal(merged.metrics.duplicatesSuppressed,1);
+  assert.deepEqual(e.updates.map(u=>u.kind),['NEW_EVENT']);
   const c=article('Earthquake strikes Taiwan','https://mirror-three.example/c',{sourceName:'Mirror Three'});
   assert.equal(core.ingest(null,[a,c],{},NOW).events[0].independentSourceCount,1);
 });

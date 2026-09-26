@@ -162,10 +162,15 @@
         e.disputedClaims=[...new Set([...e.disputedClaims,...s.disputedClaims])];
         score(e,now); metrics.materialUpdates++; continue;
       }
+      const syndicated=e.sourceSignals.some(r=>independenceKey(r)===independenceKey(s)||(
+        Math.abs(Date.parse(r.publishedAt||r.observedAt)-Date.parse(s.publishedAt||s.observedAt))<7200000&&
+        tokens(r.title).join('|')===tokens(s.title).join('|')));
       e.sourceSignals.push(s); e.sourceSignals=e.sourceSignals.slice(-MAX_SIGNALS);
       bySignal.set(s.id,e);
       e.evidence=e.sourceSignals.map(x=>({source:x.sourceName,url:x.sourceUrl,publishedAt:x.publishedAt,observedAt:x.observedAt,credibilityClass:x.credibilityClass}));
-      e.lastObservedAt=s.observedAt; e.updatedAt=s.lastUpdated; e.categories=[...new Set([...e.categories,...s.categories])];
+      e.lastObservedAt=s.observedAt;
+      if (syndicated) { metrics.duplicatesSuppressed++; score(e,now); continue; }
+      e.updatedAt=s.lastUpdated; e.categories=[...new Set([...e.categories,...s.categories])];
       if (s.country&&!e.countries.includes(s.country)) e.countries.push(s.country);
       if (s.region&&!e.regions.includes(s.region)) e.regions.push(s.region);
       if (s.geo&&!e.geo.some(g=>g.lat===s.geo.lat&&g.lon===s.geo.lon)) e.geo.push(s.geo);
