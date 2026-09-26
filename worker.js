@@ -4763,19 +4763,23 @@ export default {
     return withSecurityHeaders(await env.ASSETS.fetch(request));
   },
 
-  // Hourly cron: refresh the news cache and push any new breaking alerts.
+  // Fifteen-minute discovery; official feeds and legacy news warm once hourly.
   async scheduled(event, env, ctx) {
     ctx.waitUntil((async () => {
+      let officialDue=false;
       try {
-        await worldwireStorage(env).put(worldwire.HEARTBEAT_KEY,{at:new Date().toISOString()});
+        const storage=worldwireStorage(env), now=new Date().toISOString();
+        await storage.put(worldwire.HEARTBEAT_KEY,{at:now});
+        const previous=await storage.get(worldwire.KEY);
+        officialDue=new Date(event.scheduledTime||Date.now()).getUTCMinutes()===5||!previous?.lastIngestAt;
         worldwireRefs ||= worldwire.makeRefs(atlasCore, atlasSnapshot, nexusSnapshot, launchpadSnapshot);
-        await worldwire.run(worldwireStorage(env), worldwireRefs);
+        await worldwire.run(storage,worldwireRefs,now,officialDue?null:['GDELT']);
       } catch (e) { console.error('[worldwire] scheduled ingest failed', e); }
-      try {
-        const items = await fetchIntelNews(env);
-        await env.MT_KV.put(`cache:news:${NEWS_ENRICHMENT_SCHEMA_VERSION}`, JSON.stringify({ data: items, freshUntil: Date.now() + CACHE_MS })).catch(() => {});
-        await detectAlerts(env, items);
-      } catch (e) { /* swallow — next tick retries */ }
+      if(officialDue) try {
+        const items=await fetchIntelNews(env);
+        await env.MT_KV.put(`cache:news:${NEWS_ENRICHMENT_SCHEMA_VERSION}`,JSON.stringify({data:items,freshUntil:Date.now()+CACHE_MS})).catch(()=>{});
+        await detectAlerts(env,items);
+      } catch(e) { /* existing warmer retries at the next hourly tick */ }
     })());
   },
 };

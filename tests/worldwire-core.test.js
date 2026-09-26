@@ -75,7 +75,11 @@ test('negative control: an issuing weather office cannot imply a port or company
 });
 test('source policy disables ACLED, parser error pages fail, official adapters validate schema',()=>{
   assert.equal(core.SOURCES.ACLED.enabled,false); assert.equal(core.normalizeSignal({provider:'ACLED',sourceUrl:'https://acleddata.com/a',title:'test'},NOW),null);
-  assert.throws(()=>runtime.gdelt({html:'error'}),/schema/); assert.throws(()=>runtime.usgs({features:[]}),/schema/); assert.throws(()=>runtime.eonet({events:null}),/schema/); assert.throws(()=>runtime.nws({features:[]}),/schema/);
+  assert.throws(()=>runtime.galRss('<html>error</html>',NOW),/schema/); assert.throws(()=>runtime.usgs({features:[]}),/schema/); assert.throws(()=>runtime.eonet({events:null}),/schema/); assert.throws(()=>runtime.nws({features:[]}),/schema/);
+  const rss=`<?xml version="1.0"?><rss><channel><lastBuildDate>${new Date(NOW).toUTCString()}</lastBuildDate><item><title>Oil tanker attacked near Strait of Hormuz</title><link>https://example.org/tanker</link><pubDate>${new Date(NOW).toUTCString()}</pubDate></item><item><title>Local pizza special</title><link>https://example.org/pizza</link><pubDate>${new Date(NOW).toUTCString()}</pubDate></item><item><title>Adding clover creates drought-tolerant lawn</title><link>https://example.org/garden</link><pubDate>${new Date(NOW).toUTCString()}</pubDate></item></channel></rss>`;
+  const discovered=runtime.galRss(rss,NOW); assert.equal(discovered.length,1); assert.equal(discovered[0].publishedAt,null); assert.match(discovered[0].sourceName,/via GDELT/);
+  assert.ok(core.normalizeSignal(discovered[0],NOW).categories.includes('WAR_SECURITY'));
+  assert.throws(()=>runtime.galRss(rss,'2026-09-26T00:00:00Z'),/stale/);
   assert.equal(runtime.usgs({type:'FeatureCollection',features:[{id:'abc',geometry:{type:'Point',coordinates:[121,23]},properties:{url:'https://earthquake.usgs.gov/a',mag:5,place:'Taiwan',time:Date.parse(NOW)}}]})[0].officialId,'abc');
   assert.equal(runtime.usgs({type:'FeatureCollection',features:[{id:'ar',geometry:{type:'Point',coordinates:[-66,-28]},properties:{url:'https://earthquake.usgs.gov/ar',mag:5,place:'51 km WSW of Arauco, Argentina',time:Date.parse(NOW)}}]})[0].country,'AR');
   const eonet=runtime.eonet({events:[{id:'x',title:'Wildfire',link:'https://eonet.gsfc.nasa.gov/x',sources:[{url:'https://third-party.example/report'}],geometry:[{type:'Point',coordinates:[2,1],date:NOW}]}]})[0];
@@ -90,6 +94,16 @@ test('provider failure isolation, health backoff and zero-result guard preserve 
   try { const out=await runtime.run(storage,{},NOW); assert.equal(out.events.length,1); assert.equal(out.health.USGS.status,'DEGRADED'); assert.equal(out.health.GDELT.status,'DEGRADED'); assert.equal(writes,1); assert.ok(Date.parse(out.health.USGS.nextAttemptAt)>Date.parse(NOW)); }
   finally { global.fetch=fetch0; }
   assert.equal(runtime.respond('/api/worldwire/health',{scheduledAttempt:NOW}).scheduledAttempt,NOW);
+});
+test('GDELT GAL adapter accepts bounded RSS and rejects an HTML error page',async()=>{
+  const rss=`<?xml version="1.0"?><rss><channel><lastBuildDate>${new Date(NOW).toUTCString()}</lastBuildDate><item><title>Oil tanker attacked near Strait of Hormuz</title><link>https://example.org/tanker</link><pubDate>${new Date(NOW).toUTCString()}</pubDate></item></channel></rss>`;
+  const original=global.fetch;
+  try {
+    global.fetch=async()=>new Response(rss,{headers:{'content-type':'application/rss+xml'}});
+    const rows=await runtime.ADAPTERS.GDELT(NOW); assert.equal(rows.length,1); assert.equal(rows[0].sourceUrl,'https://example.org/tanker');
+    global.fetch=async()=>new Response('<html>error</html>',{headers:{'content-type':'text/html'}});
+    await assert.rejects(runtime.ADAPTERS.GDELT(NOW),e=>e.kind==='PARSER');
+  } finally { global.fetch=original; }
 });
 test('API bounds, search ranking and market relevance preserve global results',()=>{
   const a=article('US oil pipeline outage','https://a.example/us',{country:'US'});
