@@ -64,6 +64,15 @@ test('evidence-backed NEXUS, ATLAS, LAUNCHPAD and commodity links are bounded',(
   const indexed=runtime.makeRefs({buildFromSnapshot:()=>({entities:[{...refs.atlas[0],authoritative:true,type:'PORT'}]})},{},{companies:refs.nexus},{markets:{US:{records:refs.launchpad}}});
   const viaIndex=core.ingest(null,[s],indexed,NOW).events[0]; assert.deepEqual(viaIndex.nexusSecurityIds,e.nexusSecurityIds); assert.deepEqual(viaIndex.atlasEntityIds,e.atlasEntityIds);
 });
+test('negative control: an issuing weather office cannot imply a port or company exposure',()=>{
+  const refs={atlas:[{id:'port:boston',name:'Boston',sourceEvidence:[{sourceUrl:'https://naturalearthdata.com/ports'}]}],nexus:[{id:'US:NYSE:BOSTON',companyId:'company:boston',name:'Boston Holdings',sourceEvidence:[{sourceUrl:'https://sec.gov/a'}]}]};
+  const raw={provider:'NWS',officialId:'alert-1',sourceName:'National Weather Service',sourceUrl:'https://api.weather.gov/alerts/alert-1',title:'Storm Warning issued by NWS Boston',publishedAt:NOW,region:'Nantucket Sound',country:'US',geo:{lat:41.5,lon:-70.5}};
+  let event=core.ingest(null,[raw],refs,NOW).events[0];
+  assert.deepEqual(event.atlasEntityIds,[]); assert.deepEqual(event.nexusSecurityIds,[]); assert.deepEqual(event.companies,[]);
+  event.atlasEntityIds=['port:boston']; event.nexusSecurityIds=['US:NYSE:BOSTON']; event.companies=[{id:'US:NYSE:BOSTON',name:'Boston Holdings'}];
+  event=core.ingest({events:[event]},[raw],refs,NOW).events[0];
+  assert.deepEqual(event.atlasEntityIds,[]); assert.deepEqual(event.nexusSecurityIds,[]); assert.deepEqual(event.companies,[]);
+});
 test('source policy disables ACLED, parser error pages fail, official adapters validate schema',()=>{
   assert.equal(core.SOURCES.ACLED.enabled,false); assert.equal(core.normalizeSignal({provider:'ACLED',sourceUrl:'https://acleddata.com/a',title:'test'},NOW),null);
   assert.throws(()=>runtime.gdelt({html:'error'}),/schema/); assert.throws(()=>runtime.usgs({features:[]}),/schema/); assert.throws(()=>runtime.eonet({events:null}),/schema/); assert.throws(()=>runtime.nws({features:[]}),/schema/);

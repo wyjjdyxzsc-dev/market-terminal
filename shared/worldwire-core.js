@@ -94,12 +94,15 @@
   function independenceKey(s) { const u=new URL(s.canonicalUrl); const wire=/\b(reuters|associated press|ap news|afp|bloomberg)\b/i.exec(s.sourceName+' '+s.title); return wire?'wire:'+wire[1].toLowerCase():u.hostname.replace(/^www\./,''); }
   function linkEntities(event, refs={}) {
     const text=(event.title+' '+event.sourceSignals.map(s=>s.title).join(' ')).toLowerCase();
+    // Hazard feed titles often include an issuing office or nearby city. Those
+    // names do not establish that a facility or company was affected.
+    const structuredHazard=event.sourceSignals.every(s=>['USGS','EONET','NWS'].includes(s.provider));
     const matchName=(name)=>{ if(!name||name.length<5) return false; const escaped=name.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g,'\\$&'); return new RegExp('(^|[^a-z0-9])'+escaped+'(?=$|[^a-z0-9])').test(text); };
     event.commodities=Object.entries(COMMODITIES).filter(([,re])=>re.test(text)).map(([c])=>c);
     const textTokens=tokens(text);
     const indexed=(index,fallback)=>index instanceof Map?[...new Set(textTokens.flatMap(t=>index.get(t)||[]))]:(fallback||[]);
-    event.atlasEntityIds=indexed(refs.atlasIndex,refs.atlas).filter(e=>e&&e.id&&matchName(e.name)&&Array.isArray(e.sourceEvidence)&&e.sourceEvidence.length).slice(0,8).map(e=>e.id);
-    const candidates=indexed(refs.nexusIndex,refs.nexus);
+    event.atlasEntityIds=structuredHazard?[]:indexed(refs.atlasIndex,refs.atlas).filter(e=>e&&e.id&&matchName(e.name)&&Array.isArray(e.sourceEvidence)&&e.sourceEvidence.length).slice(0,8).map(e=>e.id);
+    const candidates=structuredHazard?[]:indexed(refs.nexusIndex,refs.nexus);
     const companies=candidates.filter(c=>c&&c.id&&(matchName(c.name)||(c.aliasUnique&&matchName(c.alias)))&&Array.isArray(c.sourceEvidence)&&c.sourceEvidence.length).slice(0,8);
     event.nexusSecurityIds=companies.map(c=>c.id); event.nexusCompanyIds=[...new Set(companies.map(c=>c.companyId).filter(Boolean))]; event.companies=companies.map(c=>({id:c.id,name:c.name,symbol:c.symbol,sector:c.sector||null}));
     event.sectors=[...new Set(companies.map(c=>c.sector).filter(Boolean))];
@@ -170,7 +173,13 @@
       e.disputedClaims=[...new Set([...e.disputedClaims,...s.disputedClaims])];
       linkEntities(e,refs); score(e,now);
     }
-    for (const e of events) score(e,now);
+    for (const e of events) {
+      if (e.sourceSignals.every(s=>['USGS','EONET','NWS'].includes(s.provider))) {
+        e.atlasEntityIds=[]; e.nexusCompanyIds=[]; e.nexusSecurityIds=[];
+        e.companies=[]; e.sectors=[]; e.launchpadIpoIds=[];
+      }
+      score(e,now);
+    }
     events.sort((a,b)=>(b.lastObservedAt||'').localeCompare(a.lastObservedAt||'')||(b.updatedAt||b.occurredAt||'').localeCompare(a.updatedAt||a.occurredAt||''));
     const older=events.slice(MAX_EVENTS).filter(e=>['MODERATE','HIGH','CRITICAL'].includes(e.materiality));
     const archive=[...(previous?.archive||[]),...older.map(e=>({id:e.id,title:e.title,status:e.status,lastObservedAt:e.lastObservedAt,updatedAt:e.updatedAt,materiality:e.materiality,evidence:e.evidence.slice(0,3),archived:true}))]
