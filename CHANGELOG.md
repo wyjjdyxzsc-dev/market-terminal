@@ -134,3 +134,8 @@
 - Added GDELT, USGS, NASA EONET and US-only NWS adapters with source health, backoff, response validation and isolated failure; ACLED remains disabled.
 - Reused hourly Cloudflare Cron and KV for batched background ingest; added eight bounded, shared-runtime WORLDWIRE API routes and responsive Global Intelligence event stream/detail with ATLAS/NEXUS/LAUNCHPAD seams.
 - Removed the existing unauthenticated ACLED map fallback; retained source provenance and no full article text.
+
+## 2026-09-26 continuation
+
+- Indexed canonical ATLAS/NEXUS references before linking events and preserved identical links in a 584-event replay.
+- Fixed hourly duplicate churn by retaining 1,000 recently observed hot events and a bounded 48-hour signal ledger; added a Cron attempt heartbeat for production diagnosis.

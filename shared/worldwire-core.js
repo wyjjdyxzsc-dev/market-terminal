@@ -5,9 +5,9 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   'use strict';
   const VERSION = '2026-09-23a';
-  const MAX_EVENTS = 600;
+  const MAX_EVENTS = 1000;
   const MAX_SIGNALS = 12;
-  const RETENTION = Object.freeze({hotEvents:600,warmMaterialEvents:400,warmDays:90,archiveMetadataOnly:true});
+  const RETENTION = Object.freeze({hotEvents:1000,warmMaterialEvents:400,warmDays:90,seenSignalHours:48,seenSignalLimit:10000,archiveMetadataOnly:true});
   const CATEGORIES = Object.freeze(['GEOPOLITICS','WAR_SECURITY','ENERGY','TECHNOLOGY','MARITIME','HOSPITALITY_TRAVEL','BREAKTHROUGHS','SPACE_AEROSPACE','HEALTHCARE_BIOTECH','MACRO','CENTRAL_BANKS','FX_SOVEREIGN_DEBT','BANKING_CREDIT','COMMODITIES','AGRICULTURE_FOOD','CLIMATE_NATURAL_DISASTERS','SUPPLY_CHAINS','TRADE','REGULATION','DEFENSE','CYBER','AUTOMOTIVE','CONSUMER_RETAIL','REAL_ESTATE_CONSTRUCTION','MEDIA_ENTERTAINMENT','MA','IPO_CAPITAL_RAISING','EARNINGS_CORPORATE','LABOR','INFRASTRUCTURE','CRITICAL_MINERALS','WATER','NUCLEAR','DIGITAL_ASSETS','EMERGING_MARKETS','INDIA','UNITED_STATES','SECOND_ORDER_EFFECTS']);
   const SOURCES = Object.freeze({
     GDELT: { owner:'GDELT Project', url:'https://api.gdeltproject.org/api/v2/doc/doc', type:'news discovery', coverage:'global, multilingual sampled articles', freshness:'15-minute indexed cycles', auth:'none', license:'Public API; original publishers retain article rights', attribution:'GDELT discovery and original publisher link', limitations:'Search result sampling, uncertain publication metadata; article signal is not verified event fact', enabled:true },
@@ -96,8 +96,11 @@
     const text=(event.title+' '+event.sourceSignals.map(s=>s.title).join(' ')).toLowerCase();
     const matchName=(name)=>{ if(!name||name.length<5) return false; const escaped=name.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g,'\\$&'); return new RegExp('(^|[^a-z0-9])'+escaped+'(?=$|[^a-z0-9])').test(text); };
     event.commodities=Object.entries(COMMODITIES).filter(([,re])=>re.test(text)).map(([c])=>c);
-    event.atlasEntityIds=(refs.atlas||[]).filter(e=>e&&e.id&&matchName(e.name)&&Array.isArray(e.sourceEvidence)&&e.sourceEvidence.length).slice(0,8).map(e=>e.id);
-    const companies=(refs.nexus||[]).filter(c=>c&&c.id&&(matchName(c.name)||(c.aliasUnique&&matchName(c.alias)))&&Array.isArray(c.sourceEvidence)&&c.sourceEvidence.length).slice(0,8);
+    const textTokens=tokens(text);
+    const indexed=(index,fallback)=>index instanceof Map?[...new Set(textTokens.flatMap(t=>index.get(t)||[]))]:(fallback||[]);
+    event.atlasEntityIds=indexed(refs.atlasIndex,refs.atlas).filter(e=>e&&e.id&&matchName(e.name)&&Array.isArray(e.sourceEvidence)&&e.sourceEvidence.length).slice(0,8).map(e=>e.id);
+    const candidates=indexed(refs.nexusIndex,refs.nexus);
+    const companies=candidates.filter(c=>c&&c.id&&(matchName(c.name)||(c.aliasUnique&&matchName(c.alias)))&&Array.isArray(c.sourceEvidence)&&c.sourceEvidence.length).slice(0,8);
     event.nexusSecurityIds=companies.map(c=>c.id); event.nexusCompanyIds=[...new Set(companies.map(c=>c.companyId).filter(Boolean))]; event.companies=companies.map(c=>({id:c.id,name:c.name,symbol:c.symbol,sector:c.sector||null}));
     event.sectors=[...new Set(companies.map(c=>c.sector).filter(Boolean))];
     event.launchpadIpoIds=(refs.launchpad||[]).filter(i=>i&&i.id&&matchName(i.name)&&event.categories.includes('IPO_CAPITAL_RAISING')&&((Array.isArray(i.evidence)&&i.evidence.length)||validUrl(i.source?.url))).slice(0,5).map(i=>i.id);
@@ -133,6 +136,7 @@
   function ingest(previous,rawSignals,refs={},now=new Date().toISOString()) {
     const events=Array.isArray(previous?.events)?previous.events.filter(e=>e&&Array.isArray(e.sourceSignals)&&!e.sourceSignals.some(s=>s.provider==='NWS'&&/\b(test|exercise|demo)\b/i.test(s.title))):[];
     const bySignal=new Map(), byBucket=new Map(), ids=new Set(events.map(e=>e.id));
+    const seenSignals=new Map(Object.entries(previous?.seenSignals||{}).filter(([,at])=>Date.parse(now)-Date.parse(at)<RETENTION.seenSignalHours*3600000));
     const bucket=s=>{ const t=tokens(s.translatedTitle||s.title); return [s.categories[0]||'OTHER',s.country||'',(s.publishedAt||s.observedAt).slice(0,10),t.find(x=>/\d/.test(x))||t.at(-1)||''].join('|'); };
     const index=e=>{ for (const x of e.sourceSignals) bySignal.set(x.id,e); const first=e.sourceSignals[0]; if(first) { const k=bucket(first); const list=byBucket.get(k)||[]; if(!list.includes(e)) list.push(e); byBucket.set(k,list); } };
     for (const e of events) index(e);
@@ -140,6 +144,8 @@
     for (const raw of rawSignals.slice(0,1000)) {
       const s=normalizeSignal(raw,now); if (!s) continue; metrics.accepted++;
       let e=bySignal.get(s.id)||(byBucket.get(bucket(s))||[]).find(e=>mayMerge(e,s));
+      if (!e&&seenSignals.has(s.id)) { metrics.duplicatesSuppressed++; seenSignals.set(s.id,now); continue; }
+      seenSignals.set(s.id,now);
       if (!e) { e=createEvent(s,now,refs); if (ids.has(e.id)) e.id+=':'+s.fingerprint; ids.add(e.id); events.push(e); index(e); metrics.clustersCreated++; continue; }
       const existing=e.sourceSignals.find(x=>x.id===s.id);
       if (existing) {
@@ -165,15 +171,16 @@
       linkEntities(e,refs); score(e,now);
     }
     for (const e of events) score(e,now);
-    events.sort((a,b)=>(b.updatedAt||b.occurredAt||'').localeCompare(a.updatedAt||a.occurredAt||''));
+    events.sort((a,b)=>(b.lastObservedAt||'').localeCompare(a.lastObservedAt||'')||(b.updatedAt||b.occurredAt||'').localeCompare(a.updatedAt||a.occurredAt||''));
     const older=events.slice(MAX_EVENTS).filter(e=>['MODERATE','HIGH','CRITICAL'].includes(e.materiality));
     const archive=[...(previous?.archive||[]),...older.map(e=>({id:e.id,title:e.title,status:e.status,lastObservedAt:e.lastObservedAt,updatedAt:e.updatedAt,materiality:e.materiality,evidence:e.evidence.slice(0,3),archived:true}))]
       .filter(e=>Date.parse(now)-Date.parse(e.lastObservedAt)<RETENTION.warmDays*86400000);
     const warm=[...new Map(archive.map(e=>[e.id,e])).values()].sort((a,b)=>b.lastObservedAt.localeCompare(a.lastObservedAt)).slice(0,RETENTION.warmMaterialEvents);
-    return {schemaVersion:VERSION,coverage:'MAXIMUM PRACTICAL CONNECTED-SOURCE COVERAGE',retention:RETENTION,events:events.slice(0,MAX_EVENTS),archive:warm,metrics,lastIngestAt:now};
+    const recentSeen=[...seenSignals.entries()].sort((a,b)=>b[1].localeCompare(a[1])).slice(0,RETENTION.seenSignalLimit);
+    return {schemaVersion:VERSION,coverage:'MAXIMUM PRACTICAL CONNECTED-SOURCE COVERAGE',retention:RETENTION,events:events.slice(0,MAX_EVENTS),archive:warm,seenSignals:Object.fromEntries(recentSeen),metrics,lastIngestAt:now};
   }
   function query(store,params={}) {
-    const limit=Math.min(50,Math.max(1,Number(params.limit)||25)), offset=Math.min(600,Math.max(0,Number(params.cursor)||0));
+    const limit=Math.min(50,Math.max(1,Number(params.limit)||25)), offset=Math.min(MAX_EVENTS,Math.max(0,Number(params.cursor)||0));
     let out=store?.events||[];
     const now=Date.now(), maxAge={'24h':86400000,'7d':7*86400000,'30d':30*86400000}[params.time];
     if(maxAge) out=out.filter(e=>now-Date.parse(e.updatedAt||e.occurredAt)<=maxAge);

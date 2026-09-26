@@ -3554,7 +3554,8 @@ async function handleApi(request, env, ctx, url) {
 
   if (p.startsWith('/api/worldwire/')) {
     const store = await worldwireStorage(env).get(worldwire.KEY);
-    const out = worldwire.respond(p, store, Object.fromEntries(qs.entries()));
+    const scheduledAttempt = p === '/api/worldwire/health' ? (await worldwireStorage(env).get(worldwire.HEARTBEAT_KEY))?.at : null;
+    const out = worldwire.respond(p, p === '/api/worldwire/health' ? {...store,scheduledAttempt} : store, Object.fromEntries(qs.entries()));
     if (p === '/api/worldwire/event' && !out.event) return json({ error: true, code: 'not_found', message: 'Unknown WORLDWIRE event id.' }, 404);
     return json(out);
   }
@@ -4766,6 +4767,7 @@ export default {
   async scheduled(event, env, ctx) {
     ctx.waitUntil((async () => {
       try {
+        await worldwireStorage(env).put(worldwire.HEARTBEAT_KEY,{at:new Date().toISOString()});
         worldwireRefs ||= worldwire.makeRefs(atlasCore, atlasSnapshot, nexusSnapshot, launchpadSnapshot);
         await worldwire.run(worldwireStorage(env), worldwireRefs);
       } catch (e) { console.error('[worldwire] scheduled ingest failed', e); }

@@ -54,9 +54,11 @@ const worldwireStorage = {
 };
 let worldwireRefs;
 let worldwireRunning = false;
+let worldwireScheduledAttempt = null;
 async function ingestWorldwireLocal() {
   if (worldwireRunning) return;
   worldwireRunning = true;
+  worldwireScheduledAttempt = new Date().toISOString();
   try {
     worldwireRefs ||= worldwire.makeRefs(atlasCore, atlasSnapshot, nexusSnapshot, launchpadSnapshot);
     await worldwire.run(worldwireStorage, worldwireRefs);
@@ -4428,7 +4430,7 @@ app.get('/api/map/atlas', publicRateLimit, route(async (req, res) => { res.json(
 for (const name of ['events','event','search','categories','sources','coverage','health','changes']) {
   app.get(`/api/worldwire/${name}`, publicRateLimit, route(async (req,res) => {
     const store=await worldwireStorage.get(worldwire.KEY);
-    const out=worldwire.respond(`/api/worldwire/${name}`,store,req.query);
+    const out=worldwire.respond(`/api/worldwire/${name}`,name==='health'?{...store,scheduledAttempt:worldwireScheduledAttempt}:store,req.query);
     if (name==='event'&&!out.event) return res.status(404).json({error:true,code:'not_found',message:'Unknown WORLDWIRE event id.'});
     res.json(out);
   }));

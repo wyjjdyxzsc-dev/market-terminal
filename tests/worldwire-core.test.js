@@ -61,6 +61,8 @@ test('evidence-backed NEXUS, ATLAS, LAUNCHPAD and commodity links are bounded',(
   const s=article('Acme Copper IPO at New York Port','https://a.example/1',{rawCategories:['IPO_CAPITAL_RAISING']});
   const refs={nexus:[{id:'US:NYSE:ACME',companyId:'company:us:acme',name:'Acme Copper',symbol:'ACME',sector:'Materials',sourceEvidence:[{sourceUrl:'https://sec.gov/a'}]}],atlas:[{id:'ref:port:ny',name:'New York Port',sourceEvidence:[{sourceUrl:'https://wikidata.org/a'}]}],launchpad:[{id:'US:IPO:ACME',name:'Acme Copper',evidence:[{url:'https://sec.gov/b'}]}]};
   const e=core.ingest(null,[s],refs,NOW).events[0]; assert.deepEqual(e.nexusSecurityIds,['US:NYSE:ACME']); assert.deepEqual(e.atlasEntityIds,['ref:port:ny']); assert.deepEqual(e.launchpadIpoIds,['US:IPO:ACME']); assert.deepEqual(e.commodities,['COPPER']);
+  const indexed=runtime.makeRefs({buildFromSnapshot:()=>({entities:[{...refs.atlas[0],authoritative:true,type:'PORT'}]})},{},{companies:refs.nexus},{markets:{US:{records:refs.launchpad}}});
+  const viaIndex=core.ingest(null,[s],indexed,NOW).events[0]; assert.deepEqual(viaIndex.nexusSecurityIds,e.nexusSecurityIds); assert.deepEqual(viaIndex.atlasEntityIds,e.atlasEntityIds);
 });
 test('source policy disables ACLED, parser error pages fail, official adapters validate schema',()=>{
   assert.equal(core.SOURCES.ACLED.enabled,false); assert.equal(core.normalizeSignal({provider:'ACLED',sourceUrl:'https://acleddata.com/a',title:'test'},NOW),null);
@@ -77,6 +79,7 @@ test('provider failure isolation, health backoff and zero-result guard preserve 
   const fetch0=global.fetch; global.fetch=async()=>{throw new Error('down');};
   try { const out=await runtime.run(storage,{},NOW); assert.equal(out.events.length,1); assert.equal(out.health.USGS.status,'DEGRADED'); assert.equal(out.health.GDELT.status,'DEGRADED'); assert.equal(writes,1); assert.ok(Date.parse(out.health.USGS.nextAttemptAt)>Date.parse(NOW)); }
   finally { global.fetch=fetch0; }
+  assert.equal(runtime.respond('/api/worldwire/health',{scheduledAttempt:NOW}).scheduledAttempt,NOW);
 });
 test('API bounds, search ranking and market relevance preserve global results',()=>{
   const a=article('US oil pipeline outage','https://a.example/us',{country:'US'});
@@ -98,16 +101,25 @@ test('ATLAS projection requires source coordinates and shares WORLDWIRE id',()=>
 });
 test('server and Worker route and ATLAS projection call the same shared runtime',()=>{
   const server=fs.readFileSync(require.resolve('../server.js'),'utf8'),worker=fs.readFileSync(require.resolve('../worker.js'),'utf8');
-  for(const s of [server,worker]) { assert.match(s,/worldwire\.respond\(/); assert.match(s,/worldwire\.mergeGeoEvents\(/); assert.match(s,/worldwire\.run\(/); assert.match(s,/map:conflict:gdelt-only/); assert.doesNotMatch(s,/acleddata\.com\/api\/acled/); }
+  for(const s of [server,worker]) { assert.match(s,/worldwire\.respond\(/); assert.match(s,/worldwire\.mergeGeoEvents\(/); assert.match(s,/worldwire\.run\(/); assert.match(s,/scheduledAttempt/); assert.match(s,/map:conflict:gdelt-only/); assert.doesNotMatch(s,/acleddata\.com\/api\/acled/); }
 });
 test('retention bounds hot events and keeps material overflow as warm metadata',()=>{
   const sample=core.ingest(null,[{provider:'USGS',officialId:'mine',sourceUrl:'https://earthquake.usgs.gov/mine',title:'M5 earthquake Taiwan',publishedAt:NOW,geo:{lat:23,lon:121},magnitude:5}],{},NOW).events[0];
-  const prior={events:Array.from({length:601},(_,i)=>({...sample,id:'e:'+i,materiality:'MODERATE',updatedAt:new Date(Date.parse(NOW)-i*60000).toISOString()}))};
-  const out=core.ingest(prior,[],{},NOW); assert.equal(out.events.length,600); assert.equal(out.archive.length,1); assert.equal(out.archive[0].archived,true); assert.equal(out.retention.warmDays,90);
+  const prior={events:Array.from({length:1001},(_,i)=>({...sample,id:'e:'+i,materiality:'MODERATE',updatedAt:new Date(Date.parse(NOW)-i*60000).toISOString()}))};
+  const out=core.ingest(prior,[],{},NOW); assert.equal(out.events.length,1000); assert.equal(out.archive.length,1); assert.equal(out.archive[0].archived,true); assert.equal(out.retention.warmDays,90);
+});
+test('evicted signals remain deduplicated across scheduled cycles',()=>{
+  const batch=n=>Array.from({length:1000},(_,i)=>article('Distinct incident '+(n+i),'https://example.org/incident/'+(n+i),{country:(n+i)%2?'US':'IN'}));
+  let state=core.ingest(null,batch(0),{},NOW);
+  state=core.ingest(state,batch(1000),{},'2026-09-23T13:00:00Z');
+  assert.equal(state.events.length,1000);
+  const again=core.ingest(state,batch(0),{},'2026-09-23T14:00:00Z');
+  assert.equal(again.metrics.clustersCreated,0); assert.equal(again.metrics.duplicatesSuppressed,1000);
 });
 test('100k signals and 10k events process in batches without an unbounded response',()=>{
   let store={events:[]}; for(let i=0;i<100000;i+=1000) { const raw=Array.from({length:1000},(_,j)=>article('Earthquake near region '+(i+j),'https://example.org/'+(i+j),{country:(i+j)%2?'US':'IN'})); store=core.ingest(store,raw,{},NOW); }
   assert.ok(store.events.length<=core.MAX_EVENTS); assert.ok(core.query(store,{limit:10000}).events.length<=50);
   const many={events:Array.from({length:10000},(_,i)=>({...store.events[0],id:'synthetic:'+i}))};
   assert.equal(core.query(many,{limit:10000}).events.length,50);
+  assert.equal(core.query({events:many.events.slice(0,1000)},{cursor:'950',limit:50}).events.length,50);
 });

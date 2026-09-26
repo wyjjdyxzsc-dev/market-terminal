@@ -5,6 +5,7 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function (core) {
   'use strict';
   const KEY = 'worldwire:state:v1';
+  const HEARTBEAT_KEY = 'worldwire:cron:last-attempt';
   const QUERIES = [
     '(earthquake OR flood OR wildfire OR storm OR volcano)',
     '(war OR missile OR drone OR sanctions OR ceasefire)',
@@ -57,7 +58,10 @@
     const companies=(nexusSnapshot.companies||[]).filter(c=>c.name?.length>=6);
     const alias=c=>c.name.replace(/\b(incorporated|corporation|corp|inc|limited|ltd|plc|company|co)\.?$/i,'').trim();
     const counts=new Map(); for(const c of companies){const a=alias(c).toLowerCase();counts.set(a,(counts.get(a)||0)+1);}
-    return {atlas:atlasCore.buildFromSnapshot(atlasSnapshot).entities.filter(e=>e.authoritative&&['PORT','SHIPPING_CHOKEPOINT','REFINERY','POWER_PLANT','AIRPORT','NUCLEAR_PLANT'].includes(e.type)),nexus:companies.map(c=>({...c,alias:alias(c),aliasUnique:counts.get(alias(c).toLowerCase())===1})),launchpad:[...(launchpadSnapshot.markets?.IN?.records||[]),...(launchpadSnapshot.markets?.US?.records||[])]};
+    const nexus=companies.map(c=>({...c,alias:alias(c),aliasUnique:counts.get(alias(c).toLowerCase())===1}));
+    const atlas=atlasCore.buildFromSnapshot(atlasSnapshot).entities.filter(e=>e.authoritative&&['PORT','SHIPPING_CHOKEPOINT','REFINERY','POWER_PLANT','AIRPORT','NUCLEAR_PLANT'].includes(e.type));
+    const index=items=>{const out=new Map();for(const item of items){const words=item.name.toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g,'').match(/[\p{L}\p{N}]{3,}/gu)||[];const key=words.find(w=>!['the','new','and','for','with'].includes(w));if(!key)continue;const list=out.get(key)||[];list.push(item);out.set(key,list);}return out;};
+    return {atlas,atlasIndex:index(atlas),nexus,nexusIndex:index(nexus),launchpad:[...(launchpadSnapshot.markets?.IN?.records||[]),...(launchpadSnapshot.markets?.US?.records||[])]};
   }
   async function run(storage,refs={},now=new Date().toISOString()) {
     const previous=await storage.get(KEY)||{events:[],metrics:{},health:{}};
@@ -79,7 +83,7 @@
     const safe=store||{events:[],health:{},metrics:{},totals:{},lastIngestAt:null};
     if (path.endsWith('/sources')) return {sources:core.SOURCES};
     if (path.endsWith('/categories')) return {categories:core.CATEGORIES};
-    if (path.endsWith('/health')) return {health:safe.health||{},lastIngestAt:safe.lastIngestAt||null};
+    if (path.endsWith('/health')) return {health:safe.health||{},lastIngestAt:safe.lastIngestAt||null,scheduledAttempt:safe.scheduledAttempt||null};
     if (path.endsWith('/coverage')) {
       const events=safe.events||[], within24=events.filter(e=>Date.now()-Date.parse(e.lastObservedAt)<86400000);
       const regions=[...new Set(events.flatMap(e=>e.regions))], categories=[...new Set(events.flatMap(e=>e.categories))];
@@ -105,5 +109,5 @@
     const unique=(legacy||[]).filter(x=>!recent.some(y=>x.type===y.type&&Math.abs(x.location.lat-y.location.lat)<0.03&&Math.abs(x.location.lon-y.location.lon)<0.03&&Math.abs(Date.parse(x.startedAt)-Date.parse(y.startedAt))<3600000));
     return [...recent,...unique].slice(0,800);
   }
-  return Object.freeze({KEY,QUERIES,ADAPTERS,gdelt,usgs,eonet,nws,makeRefs,run,respond,geoEvents,mergeGeoEvents});
+  return Object.freeze({KEY,HEARTBEAT_KEY,QUERIES,ADAPTERS,gdelt,usgs,eonet,nws,makeRefs,run,respond,geoEvents,mergeGeoEvents});
 });

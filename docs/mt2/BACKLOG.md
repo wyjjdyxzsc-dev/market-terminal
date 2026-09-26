@@ -293,3 +293,6 @@ accessibility/degraded-state defect · P3 minor.
 
 ## B-039 · P2 · WORLDWIRE · Global entity and language depth
 - Initial multilingual normalization covers selected event words; non-English source titles are retained unchanged. Country, organization and sector resolution is conservative. Expand tested language/geo vocabularies and licensed authoritative sources before claiming comprehensive global coverage.
+
+## B-040 · P1 · WORLDWIRE · Cloudflare plan and Cron CPU verification
+- The account plan could not be read because Wrangler authentication had expired and the dashboard required sign-in. Cloudflare publishes a 10 ms CPU cap for Free Cron invocations; an optimized full initial event replay measured ~284 ms CPU in Node including reference indexes. No paid feature or upgrade was enabled. Verify the account's existing Workers plan and the actual scheduled invocation before claiming quota fit or PASS.
