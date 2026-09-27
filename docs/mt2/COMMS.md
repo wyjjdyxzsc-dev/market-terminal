@@ -6,12 +6,12 @@ session resume correctly. Not a command diary.
 Actors: OWNER · CLAUDE · CODEX · HUMAN ACCEPTANCE
 
 ---
-TIMESTAMP: 2026-09-27T07:04Z
+TIMESTAMP: 2026-09-27T07:07Z
 FROM: CODEX
 TO: OWNER
 CHECKPOINT: MT2-7 WORLDWIRE
 MESSAGE TYPE: PARTIAL CLOSURE / PRODUCTION ACCEPTANCE GAP
-SUMMARY: WORLDWIRE is deployed with four source adapters, deterministic event graph, bounded KV/Cron/API/UI and evidence-gated entity/map links. Production asset 20260927a and 79/79 smoke passed; 181/181 unit and populated desktop/mobile browser passed. Cron last ingested at 02:35 UTC despite 06:35 heartbeat, then recovered at 06:50; EONET is rate-limited. Actual Cloudflare plan and Cron CPU entitlement remain unread, so continuous stability and free-plan fit are not claimed as PASS. Three owner untracked files were preserved.
+SUMMARY: WORLDWIRE is deployed with four source adapters, deterministic event graph, bounded KV/Cron/API/UI and evidence-gated entity/map links. Production asset 20260927b and 79/79 smoke passed; 181/181 unit and populated desktop/mobile browser passed. Cron last ingested at 02:35 UTC despite 06:35 heartbeat, then recovered at 06:50; all four sources were HEALTHY at the 07:05 hourly cycle. Actual Cloudflare plan and Cron CPU entitlement remain unread, so continuous stability and free-plan fit are not claimed as PASS. Three owner untracked files were preserved.
 DECISION / REQUEST: Keep MT2-7 PARTIAL until B-040/B-041 are resolved using the existing account dashboard/metrics and consecutive scheduled cycles. Do not begin ORACLE or SENTINEL.
 EVIDENCE POINTER: D-014; EVIDENCE.md MT2-7 continuation; B-040/B-041.
 ACTION REQUIRED: OWNER account sign-in for read-only plan/CPU verification; CODEX or later authorized continuation can inspect metrics and close only after stability evidence.

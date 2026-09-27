@@ -146,3 +146,4 @@
 
 - Added Cron failure-stage health marker after a four-hour ingest gap, preserving last valid event state. Removed an unreachable legacy ACLED attribution branch from local and Worker map projections. Asset `20260926o` deployed through GitHub; 180/180 unit and 79/79 production smoke passed. The 06:50 UTC Cron recovered; plan/CPU and continuous stability remain open, so MT2-7 is PARTIAL.
 - Changed WORLDWIRE KV/local-state reads to propagate failures, so a transient read error cannot be interpreted as an empty history and overwrite last-good events. Final closure asset `20260927a`.
+- The 07:05 UTC production Cron completed with all four adapters HEALTHY. A docs-only closure push moves the asset marker to `20260927b`; MT2-7 remains PARTIAL pending plan/CPU and overnight-gap investigation.
