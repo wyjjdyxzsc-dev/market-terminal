@@ -3127,7 +3127,7 @@ async function fetchGeoEvents() {
     if (!c) continue;
     push({ id: `event:conflict:${atlasCore.entityId('war', p.title, c[1], c[0])}`, type: p.eventType === 'MILITARY' ? 'MILITARY' : 'WAR', title: p.title || 'Conflict report cluster',
       location: { lat: c[1], lon: c[0], name: '' }, startedAt: new Date(now).toISOString(), updatedAt: new Date(now).toISOString(), severity: 'unknown',
-      sourceEvidence: [{ source: p.source || 'GDELT', sourceUrl: p.source === 'ACLED' ? 'https://acleddata.com' : 'https://api.gdeltproject.org/api/v2/geo/geo', confidence: 'MEDIUM', observedAt: new Date(now).toISOString(), lastVerified: new Date(now).toISOString(), note: 'News-report cluster (last 24 h), not a verified incident record' }],
+      sourceEvidence: [{ source: 'GDELT', sourceUrl: 'https://api.gdeltproject.org/api/v2/geo/geo', confidence: 'MEDIUM', observedAt: new Date(now).toISOString(), lastVerified: new Date(now).toISOString(), note: 'News-report cluster (last 24 h), not a verified incident record' }],
       attributes: { tone: p.tone } });
   }
   return events;
@@ -3554,8 +3554,8 @@ async function handleApi(request, env, ctx, url) {
 
   if (p.startsWith('/api/worldwire/')) {
     const store = await worldwireStorage(env).get(worldwire.KEY);
-    const scheduledAttempt = p === '/api/worldwire/health' ? (await worldwireStorage(env).get(worldwire.HEARTBEAT_KEY))?.at : null;
-    const out = worldwire.respond(p, p === '/api/worldwire/health' ? {...store,scheduledAttempt} : store, Object.fromEntries(qs.entries()));
+    const heartbeat = p === '/api/worldwire/health' ? await worldwireStorage(env).get(worldwire.HEARTBEAT_KEY) : null;
+    const out = worldwire.respond(p, p === '/api/worldwire/health' ? {...store,scheduledAttempt:heartbeat?.at,scheduledError:heartbeat?.error||null} : store, Object.fromEntries(qs.entries()));
     if (p === '/api/worldwire/event' && !out.event) return json({ error: true, code: 'not_found', message: 'Unknown WORLDWIRE event id.' }, 404);
     return json(out);
   }
@@ -4766,15 +4766,21 @@ export default {
   // Fifteen-minute discovery; official feeds and legacy news warm once hourly.
   async scheduled(event, env, ctx) {
     ctx.waitUntil((async () => {
-      let officialDue=false;
+      let officialDue=false, stage='HEARTBEAT', storage;
       try {
-        const storage=worldwireStorage(env), now=new Date().toISOString();
+        storage=worldwireStorage(env); const now=new Date().toISOString();
         await storage.put(worldwire.HEARTBEAT_KEY,{at:now});
+        stage='READ_STATE';
         const previous=await storage.get(worldwire.KEY);
         officialDue=new Date(event.scheduledTime||Date.now()).getUTCMinutes()===5||!previous?.lastIngestAt;
+        stage='BUILD_REFERENCES';
         worldwireRefs ||= worldwire.makeRefs(atlasCore, atlasSnapshot, nexusSnapshot, launchpadSnapshot);
+        stage='INGEST';
         await worldwire.run(storage,worldwireRefs,now,officialDue?null:['GDELT']);
-      } catch (e) { console.error('[worldwire] scheduled ingest failed', e); }
+      } catch (e) {
+        console.error('[worldwire] scheduled ingest failed', e);
+        if(storage) await storage.put(worldwire.HEARTBEAT_KEY,{at:new Date().toISOString(),error:{stage,class:String(e?.name||'UNKNOWN').slice(0,40)}}).catch(()=>{});
+      }
       if(officialDue) try {
         const items=await fetchIntelNews(env);
         await env.MT_KV.put(`cache:news:${NEWS_ENRICHMENT_SCHEMA_VERSION}`,JSON.stringify({data:items,freshUntil:Date.now()+CACHE_MS})).catch(()=>{});

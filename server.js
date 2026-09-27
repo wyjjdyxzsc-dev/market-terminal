@@ -4375,7 +4375,7 @@ async function fetchGeoEvents() {
     if (!c) continue;
     push({ id: `event:conflict:${atlasCore.entityId('war', p.title, c[1], c[0])}`, type: p.eventType === 'MILITARY' ? 'MILITARY' : 'WAR', title: p.title || 'Conflict report cluster',
       location: { lat: c[1], lon: c[0], name: '' }, startedAt: new Date(now).toISOString(), updatedAt: new Date(now).toISOString(), severity: 'unknown',
-      sourceEvidence: [{ source: p.source || 'GDELT', sourceUrl: p.source === 'ACLED' ? 'https://acleddata.com' : 'https://api.gdeltproject.org/api/v2/geo/geo', confidence: 'MEDIUM', observedAt: new Date(now).toISOString(), lastVerified: new Date(now).toISOString(), note: 'News-report cluster (last 24 h), not a verified incident record' }],
+      sourceEvidence: [{ source: 'GDELT', sourceUrl: 'https://api.gdeltproject.org/api/v2/geo/geo', confidence: 'MEDIUM', observedAt: new Date(now).toISOString(), lastVerified: new Date(now).toISOString(), note: 'News-report cluster (last 24 h), not a verified incident record' }],
       attributes: { tone: p.tone } });
   }
   return events;

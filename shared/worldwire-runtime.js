@@ -114,7 +114,7 @@
     const safe=store||{events:[],health:{},metrics:{},totals:{},lastIngestAt:null};
     if (path.endsWith('/sources')) return {sources:core.SOURCES};
     if (path.endsWith('/categories')) return {categories:core.CATEGORIES};
-    if (path.endsWith('/health')) return {health:safe.health||{},lastIngestAt:safe.lastIngestAt||null,scheduledAttempt:safe.scheduledAttempt||null};
+    if (path.endsWith('/health')) return {health:safe.health||{},lastIngestAt:safe.lastIngestAt||null,scheduledAttempt:safe.scheduledAttempt||null,scheduledError:safe.scheduledError||null};
     if (path.endsWith('/coverage')) {
       const events=safe.events||[], within24=events.filter(e=>Date.now()-Date.parse(e.lastObservedAt)<86400000);
       const regions=[...new Set(events.flatMap(e=>e.regions))], categories=[...new Set(events.flatMap(e=>e.categories))];
