@@ -49,7 +49,7 @@ const launchpadSnapshot = require('./shared/launchpad-snapshot.js');
 const worldwire = require('./shared/worldwire-runtime.js');
 const WORLDWIRE_FILE = path.join(__dirname, '.worldwire-local.json');
 const worldwireStorage = {
-  get: async () => { try { return JSON.parse(await fs.promises.readFile(WORLDWIRE_FILE, 'utf8')); } catch { return null; } },
+  get: async () => { try { return JSON.parse(await fs.promises.readFile(WORLDWIRE_FILE, 'utf8')); } catch (e) { if (e.code === 'ENOENT') return null; throw e; } },
   put: async (_key, value) => { await fs.promises.writeFile(WORLDWIRE_FILE + '.tmp', JSON.stringify(value)); await fs.promises.rename(WORLDWIRE_FILE + '.tmp', WORLDWIRE_FILE); },
 };
 let worldwireRefs;

@@ -132,10 +132,17 @@
 
 - Added canonical SourceSignal and WorldEvent models, deterministic clustering/deduplication, source-independent corroboration, explicit uncertainty, materiality and urgency, bounded retention and entity linking.
 - Added GDELT, USGS, NASA EONET and US-only NWS adapters with source health, backoff, response validation and isolated failure; ACLED remains disabled.
-- Reused hourly Cloudflare Cron and KV for batched background ingest; added eight bounded, shared-runtime WORLDWIRE API routes and responsive Global Intelligence event stream/detail with ATLAS/NEXUS/LAUNCHPAD seams.
+- Reused Cloudflare Cron and KV for batched background ingest; GDELT discovery now runs every 15 minutes and official feeds hourly. Added eight bounded, shared-runtime WORLDWIRE API routes and responsive Global Intelligence event stream/detail with ATLAS/NEXUS/LAUNCHPAD seams.
 - Removed the existing unauthenticated ACLED map fallback; retained source provenance and no full article text.
 
 ## 2026-09-26 continuation
 
 - Indexed canonical ATLAS/NEXUS references before linking events and preserved identical links in a 584-event replay.
 - Fixed hourly duplicate churn by retaining 1,000 recently observed hot events and a bounded 48-hour signal ledger; added a Cron attempt heartbeat for production diagnosis.
+- Replaced the timing-out GDELT DOC adapter with the official GAL RSS title/link feed. Two production 15-minute cycles ingested article candidates while official sources remained healthy. Added conservative editorial-title rejection, source-mirror suppression, bounded update-history repair and facility/company context gates after populated browser review.
+- Production browser and 375×812, 393×852, 430×932 and 812×375 layout checks passed with no horizontal overflow or console warnings. Cloudflare account plan/CPU entitlement awaits owner sign-in; no paid feature was enabled.
+
+## 2026-09-27 — MT2-7 production diagnostic
+
+- Added Cron failure-stage health marker after a four-hour ingest gap, preserving last valid event state. Removed an unreachable legacy ACLED attribution branch from local and Worker map projections. Asset `20260926o` deployed through GitHub; 180/180 unit and 79/79 production smoke passed. The 06:50 UTC Cron recovered; plan/CPU and continuous stability remain open, so MT2-7 is PARTIAL.
+- Changed WORLDWIRE KV/local-state reads to propagate failures, so a transient read error cannot be interpreted as an empty history and overwrite last-good events. Final closure asset `20260927a`.

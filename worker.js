@@ -44,7 +44,7 @@ const launchpadSnapshot = globalThis.MarketTerminalLaunchpadSnapshot;
 const worldwire = globalThis.MarketTerminalWorldwireRuntime;
 let worldwireRefs;
 const worldwireStorage = (env) => ({
-  get: async (key) => { try { return await env.MT_KV.get(key, 'json'); } catch { return null; } },
+  get: (key) => env.MT_KV.get(key, 'json'),
   put: (key, value) => env.MT_KV.put(key, JSON.stringify(value), { expirationTtl: 90 * 86400 }),
 });
 const CACHE_MS = 15 * 60 * 1000; // news refreshes every 15 min

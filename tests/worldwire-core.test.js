@@ -6,6 +6,11 @@ const atlas=require('../shared/atlas-core.js');
 const fs=require('node:fs');
 const NOW='2026-09-23T12:00:00.000Z';
 const article=(title,url,extra={})=>({provider:'GDELT',sourceName:new URL(url).hostname,sourceUrl:url,title,publishedAt:'2026-09-23T11:00:00Z',observedAt:NOW,country:'TW',language:'English',...extra});
+test('state read failure aborts before any replacement write',async()=>{
+  let writes=0;
+  await assert.rejects(runtime.run({get:async()=>{throw new Error('KV read failed');},put:async()=>{writes++;}}, {},NOW),/KV read failed/);
+  assert.equal(writes,0);
+});
 test('SourceSignal identity is URL based, canonical, and retains multilingual original',()=>{
   const s=core.normalizeSignal(article('Terremoto golpea Taiwan','https://news.example/a?utm_source=x',{language:'Spanish',translatedTitle:'Earthquake strikes Taiwan'}),NOW);
   assert.equal(s.title,'Terremoto golpea Taiwan'); assert.equal(s.language,'Spanish'); assert.equal(s.translatedTitle,'Earthquake strikes Taiwan'); assert.equal(s.canonicalUrl,'https://news.example/a');
